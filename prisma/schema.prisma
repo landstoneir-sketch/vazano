@@ -164,6 +164,25 @@ enum NotificationDispatchStatus {
   FAILED
 }
 
+enum AttachmentStatus {
+  PENDING_UPLOAD
+  PENDING_SCAN
+  READY
+  QUARANTINED
+  REJECTED
+  DELETED
+}
+
+enum AttachmentPurpose {
+  GENERAL
+  PRODUCT_IMAGE
+  DRAWING
+  BILL_OF_QUANTITIES
+  SPECIFICATION
+  PROFORMA
+  CERTIFICATE
+}
+
 enum PaymentProvider {
   ZARINPAL
   MOCK
@@ -231,26 +250,27 @@ enum QuotationStatus {
 }
 
 model User {
-  id                String               @id @default(cuid())
-  mobile            String               @unique
-  email             String?              @unique
-  firstName         String?              @map("first_name")
-  lastName          String?              @map("last_name")
-  locale            String               @default("fa-IR")
-  status            UserStatus           @default(ACTIVE)
-  mobileVerifiedAt  DateTime?            @map("mobile_verified_at") @db.Timestamptz(3)
-  emailVerifiedAt   DateTime?            @map("email_verified_at") @db.Timestamptz(3)
-  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt         DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
-  memberships       OrganizationMember[]
-  sessions          Session[]
-  userRoles         UserRole[]
-  auditLogs         AuditLog[]
-  createdRfqs       Rfq[]                @relation("RfqCreator")
-  buyerContactRfqs  Rfq[]                @relation("RfqBuyerContact")
-  operatedRfqs      Rfq[]                @relation("RfqOperator")
-  createdQuotations Quotation[]          @relation("QuotationCreator")
-  notifications     Notification[]
+  id                  String               @id @default(cuid())
+  mobile              String               @unique
+  email               String?              @unique
+  firstName           String?              @map("first_name")
+  lastName            String?              @map("last_name")
+  locale              String               @default("fa-IR")
+  status              UserStatus           @default(ACTIVE)
+  mobileVerifiedAt    DateTime?            @map("mobile_verified_at") @db.Timestamptz(3)
+  emailVerifiedAt     DateTime?            @map("email_verified_at") @db.Timestamptz(3)
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  memberships         OrganizationMember[]
+  sessions            Session[]
+  userRoles           UserRole[]
+  auditLogs           AuditLog[]
+  createdRfqs         Rfq[]                @relation("RfqCreator")
+  buyerContactRfqs    Rfq[]                @relation("RfqBuyerContact")
+  operatedRfqs        Rfq[]                @relation("RfqOperator")
+  createdQuotations   Quotation[]          @relation("QuotationCreator")
+  notifications       Notification[]
+  uploadedAttachments Attachment[]         @relation("AttachmentUploader")
 
   @@map("users")
 }
@@ -276,6 +296,7 @@ model Organization {
   rfqInvitations  RfqInvitation[]      @relation("InvitedSupplier")
   quotations      Quotation[]          @relation("SupplierQuotations")
   notifications   Notification[]
+  attachments     Attachment[]
 
   @@index([kind, status])
   @@map("organizations")
@@ -562,6 +583,7 @@ model Rfq {
   qualityControlRequest     QualityControlRequest?
   invitations               RfqInvitation[]
   quotations                Quotation[]
+  attachments               Attachment[]
 
   @@index([buyerOrganizationId, createdAt])
   @@index([lifecycleState, operationalStatus])
@@ -668,6 +690,7 @@ model Quotation {
   supplierOrganization   Organization    @relation("SupplierQuotations", fields: [supplierOrganizationId], references: [id], onDelete: Restrict)
   createdBy              User            @relation("QuotationCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
   items                  QuotationItem[]
+  attachments            Attachment[]
 
   @@unique([rfqId, supplierOrganizationId, version])
   @@index([rfqId, status, submittedAt])
@@ -694,6 +717,38 @@ model QuotationItem {
   @@unique([quotationId, rfqItemId])
   @@index([rfqItemId])
   @@map("quotation_items")
+}
+
+model Attachment {
+  id               String            @id @default(cuid())
+  organizationId   String            @map("organization_id")
+  uploadedByUserId String            @map("uploaded_by_user_id")
+  rfqId            String?           @map("rfq_id")
+  quotationId      String?           @map("quotation_id")
+  purpose          AttachmentPurpose @default(GENERAL)
+  status           AttachmentStatus  @default(PENDING_UPLOAD)
+  bucket           String
+  storageKey       String            @unique @map("storage_key")
+  originalName     String            @map("original_name")
+  mimeType         String            @map("mime_type")
+  sizeBytes        Int               @map("size_bytes")
+  checksumSha256   String?           @map("checksum_sha256")
+  scanProvider     String?           @map("scan_provider")
+  scanReason       String?           @map("scan_reason")
+  uploadedAt       DateTime?         @map("uploaded_at") @db.Timestamptz(3)
+  scannedAt        DateTime?         @map("scanned_at") @db.Timestamptz(3)
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  uploadedBy       User              @relation("AttachmentUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  rfq              Rfq?              @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  quotation        Quotation?        @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  @@index([rfqId, status, createdAt])
+  @@index([quotationId, status, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([status, createdAt])
+  @@map("attachments")
 }
 
 model SubscriptionPlan {

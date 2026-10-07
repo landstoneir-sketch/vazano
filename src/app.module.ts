@@ -12,10 +12,11 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { QuotationsModule } from './modules/quotations/quotations.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { AttachmentsModule } from './modules/attachments/attachments.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, cache: true }),
+    ConfigModule.forRoot({ isGlobal: true, cache: true, envFilePath: ['.env', '../../.env'] }),
     PrismaModule,
     AuthModule,
     UsersModule,
@@ -27,6 +28,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     SuppliersModule,
     QuotationsModule,
     NotificationsModule,
+    AttachmentsModule,
   ],
   controllers: [HealthController],
 })
