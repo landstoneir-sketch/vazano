@@ -11,6 +11,7 @@ import { SubscriptionsModule } from './modules/subscriptions/subscriptions.modul
 import { PaymentsModule } from './modules/payments/payments.module';
 import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { QuotationsModule } from './modules/quotations/quotations.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { QuotationsModule } from './modules/quotations/quotations.module';
     PaymentsModule,
     SuppliersModule,
     QuotationsModule,
+    NotificationsModule,
   ],
   controllers: [HealthController],
 })

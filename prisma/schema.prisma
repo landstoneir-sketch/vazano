@@ -145,6 +145,25 @@ enum ReminderStatus {
   FAILED
 }
 
+enum NotificationChannel {
+  IN_APP
+  SMS
+  EMAIL
+  PUSH
+}
+
+enum NotificationStatus {
+  READY
+  DELIVERED
+  FAILED
+  CANCELLED
+}
+
+enum NotificationDispatchStatus {
+  PROCESSED
+  FAILED
+}
+
 enum PaymentProvider {
   ZARINPAL
   MOCK
@@ -231,6 +250,7 @@ model User {
   buyerContactRfqs  Rfq[]                @relation("RfqBuyerContact")
   operatedRfqs      Rfq[]                @relation("RfqOperator")
   createdQuotations Quotation[]          @relation("QuotationCreator")
+  notifications     Notification[]
 
   @@map("users")
 }
@@ -255,6 +275,7 @@ model Organization {
   supplierProfile SupplierProfile?
   rfqInvitations  RfqInvitation[]      @relation("InvitedSupplier")
   quotations      Quotation[]          @relation("SupplierQuotations")
+  notifications   Notification[]
 
   @@index([kind, status])
   @@map("organizations")
@@ -368,19 +389,84 @@ model AuditLog {
 }
 
 model OutboxEvent {
-  id            String       @id @default(cuid())
-  aggregateType String       @map("aggregate_type")
-  aggregateId   String       @map("aggregate_id")
-  eventType     String       @map("event_type")
-  payload       Json
-  status        OutboxStatus @default(PENDING)
-  attempts      Int          @default(0)
-  availableAt   DateTime     @default(now()) @map("available_at") @db.Timestamptz(3)
-  processedAt   DateTime?    @map("processed_at") @db.Timestamptz(3)
-  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  id                     String                 @id @default(cuid())
+  aggregateType          String                 @map("aggregate_type")
+  aggregateId            String                 @map("aggregate_id")
+  eventType              String                 @map("event_type")
+  payload                Json
+  status                 OutboxStatus           @default(PENDING)
+  attempts               Int                    @default(0)
+  availableAt            DateTime               @default(now()) @map("available_at") @db.Timestamptz(3)
+  processedAt            DateTime?              @map("processed_at") @db.Timestamptz(3)
+  createdAt              DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  notifications          Notification[]
+  notificationDispatches NotificationDispatch[]
 
   @@index([status, availableAt])
   @@map("outbox_events")
+}
+
+model NotificationTemplate {
+  id                 String              @id @default(cuid())
+  code               String              @unique
+  eventType          String              @map("event_type")
+  channel            NotificationChannel
+  locale             String              @default("fa-IR")
+  titleTemplate      String              @map("title_template")
+  bodyTemplate       String              @map("body_template")
+  actionPathTemplate String?             @map("action_path_template")
+  isActive           Boolean             @default(true) @map("is_active")
+  version            Int                 @default(1)
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  notifications      Notification[]
+
+  @@unique([eventType, channel, locale])
+  @@index([channel, isActive])
+  @@map("notification_templates")
+}
+
+model NotificationDispatch {
+  id             String                     @id @default(cuid())
+  sourceEventId  String                     @map("source_event_id")
+  channel        NotificationChannel
+  status         NotificationDispatchStatus @default(PROCESSED)
+  recipientCount Int                        @default(0) @map("recipient_count")
+  failureReason  String?                    @map("failure_reason")
+  processedAt    DateTime                   @default(now()) @map("processed_at") @db.Timestamptz(3)
+  sourceEvent    OutboxEvent                @relation(fields: [sourceEventId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceEventId, channel])
+  @@index([status, processedAt])
+  @@map("notification_dispatches")
+}
+
+model Notification {
+  id              String                @id @default(cuid())
+  recipientUserId String                @map("recipient_user_id")
+  organizationId  String?               @map("organization_id")
+  sourceEventId   String                @map("source_event_id")
+  templateId      String?               @map("template_id")
+  eventType       String                @map("event_type")
+  channel         NotificationChannel   @default(IN_APP)
+  status          NotificationStatus    @default(DELIVERED)
+  title           String
+  body            String
+  actionPath      String?               @map("action_path")
+  metadata        Json                  @default("{}")
+  readAt          DateTime?             @map("read_at") @db.Timestamptz(3)
+  deliveredAt     DateTime?             @default(now()) @map("delivered_at") @db.Timestamptz(3)
+  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  recipient       User                  @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
+  organization    Organization?         @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  sourceEvent     OutboxEvent           @relation(fields: [sourceEventId], references: [id], onDelete: Cascade)
+  template        NotificationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@unique([sourceEventId, recipientUserId, channel])
+  @@index([recipientUserId, readAt, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([status, createdAt])
+  @@map("notifications")
 }
 
 model Industry {
