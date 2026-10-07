@@ -13,6 +13,7 @@ import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { QuotationsModule } from './modules/quotations/quotations.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AttachmentsModule } from './modules/attachments/attachments.module';
+import { AdminConfigModule } from './modules/admin-config/admin-config.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { AttachmentsModule } from './modules/attachments/attachments.module';
     QuotationsModule,
     NotificationsModule,
     AttachmentsModule,
+    AdminConfigModule,
   ],
   controllers: [HealthController],
 })
