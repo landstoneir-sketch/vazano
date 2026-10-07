@@ -2,11 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import type { Route } from 'next';
 import { apiRequest } from '@/lib/api';
 
 type RequestOtpResult = { expiresInSeconds: number; debugCode?: string };
 
-export function LoginForm() {
+export function LoginForm({ returnTo = '/dashboard' }: { returnTo?: string }) {
   const router = useRouter();
   const [mobile, setMobile] = useState('');
   const [code, setCode] = useState('');
@@ -29,7 +30,7 @@ export function LoginForm() {
     event.preventDefault(); setBusy(true); setError('');
     try {
       await apiRequest('/auth/otp/verify', { method: 'POST', body: JSON.stringify({ mobile, code, purpose: 'LOGIN' }) });
-      router.push('/dashboard'); router.refresh();
+      router.push(returnTo as Route); router.refresh();
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'کد واردشده معتبر نیست.'); }
     finally { setBusy(false); }
   }
