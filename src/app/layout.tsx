@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import type { Route } from 'next';
 import Link from 'next/link';
+import { AccountNavigation } from '@/components/account-navigation';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -18,12 +19,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <Link href="/how-it-works">نحوه کار</Link>
             <Link href="/plans">پلن‌ها</Link>
             <Link href={'/faq' as Route}>پرسش‌ها</Link>
-            <Link href="/dashboard">داشبورد</Link>
-            <Link href="/supplier">فروشنده</Link>
-            <Link href={'/messages' as Route}>پیام‌ها</Link>
-            <Link href={'/support' as Route}>پشتیبانی</Link>
-            <Link href="/notifications">اعلان‌ها</Link>
-            <Link href="/login">ورود</Link>
+            <AccountNavigation />
           </nav>
         </header>
         <main>{children}</main>
