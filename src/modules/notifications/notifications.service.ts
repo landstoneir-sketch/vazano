@@ -10,6 +10,9 @@ const SUPPORTED_EVENT_TYPES = [
   'ir.vazano.quotation.submitted.v1',
   'ir.vazano.quotation.accepted.v1',
   'ir.vazano.message.sent.v1',
+  'ir.vazano.support.ticket.created.v1',
+  'ir.vazano.support.ticket.status_changed.v1',
+  'ir.vazano.support.ticket.replied.v1',
   'ir.vazano.subscription.activated.v1',
   'ir.vazano.subscription.renewal.14_days_before.v1',
   'ir.vazano.subscription.renewal.7_days_before.v1',
@@ -310,6 +313,61 @@ export class NotificationsService {
             },
           }));
       }
+      case 'ir.vazano.support.ticket.created.v1': {
+        const [ticket, supportUsers] = await Promise.all([
+          tx.supportTicket.findUnique({
+            where: { id: event.aggregateId },
+            select: { id: true, code: true, type: true, priority: true, subject: true },
+          }),
+          tx.user.findMany({
+            where: {
+              status: 'ACTIVE',
+              userRoles: { some: { organizationId: null, role: { key: { in: ['SUPER_ADMIN', 'ADMIN', 'SUPPORT'] } } } },
+            },
+            select: { id: true },
+          }),
+        ]);
+        if (!ticket) return [];
+        return supportUsers.map(({ id }) => ({
+          userId: id,
+          actionPath: '/admin/support',
+          variables: {
+            ticketCode: ticket.code,
+            ticketSubject: ticket.subject,
+            ticketPriority: ticket.priority,
+            ticketType: this.ticketTypeLabel(ticket.type),
+          },
+        }));
+      }
+      case 'ir.vazano.support.ticket.status_changed.v1': {
+        const ticket = await tx.supportTicket.findUnique({
+          where: { id: event.aggregateId },
+          select: { id: true, code: true, requesterUserId: true, organizationId: true, status: true },
+        });
+        if (!ticket) return [];
+        return [{
+          userId: ticket.requesterUserId,
+          organizationId: ticket.organizationId ?? undefined,
+          actionPath: `/support/${ticket.id}`,
+          variables: {
+            ticketCode: ticket.code,
+            ticketStatus: this.ticketStatusLabel(ticket.status),
+          },
+        }];
+      }
+      case 'ir.vazano.support.ticket.replied.v1': {
+        const ticket = await tx.supportTicket.findUnique({
+          where: { id: event.aggregateId },
+          select: { id: true, code: true, requesterUserId: true, organizationId: true },
+        });
+        if (!ticket) return [];
+        return [{
+          userId: ticket.requesterUserId,
+          organizationId: ticket.organizationId ?? undefined,
+          actionPath: `/support/${ticket.id}`,
+          variables: { ticketCode: ticket.code },
+        }];
+      }
       case 'ir.vazano.subscription.activated.v1': {
         const subscription = await tx.subscription.findUnique({
           where: { id: event.aggregateId },
@@ -380,5 +438,19 @@ export class NotificationsService {
 
   private approvalLabel(status: string): string {
     return ({ APPROVED: 'تأیید شد', NEEDS_CHANGES: 'نیازمند اصلاح است', REJECTED: 'رد شد' } as Record<string, string>)[status] ?? status;
+  }
+
+  private ticketTypeLabel(type: string): string {
+    return ({
+      QUESTION: 'پرسش', SERVICE_REQUEST: 'درخواست خدمت', ISSUE: 'مشکل', COMPLAINT: 'شکایت',
+      VIOLATION_REPORT: 'گزارش تخلف', APPEAL: 'اعتراض',
+    } as Record<string, string>)[type] ?? type;
+  }
+
+  private ticketStatusLabel(status: string): string {
+    return ({
+      SUBMITTED: 'ثبت‌شده', ACKNOWLEDGED: 'دریافت‌شده', IN_REVIEW: 'در حال بررسی',
+      WAITING_FOR_REQUESTER: 'در انتظار پاسخ شما', RESOLVED: 'حل‌شده', CLOSED: 'بسته‌شده', REJECTED: 'ردشده',
+    } as Record<string, string>)[status] ?? status;
   }
 }

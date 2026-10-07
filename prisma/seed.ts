@@ -103,6 +103,27 @@ const inAppNotificationTemplates = [
     actionPathTemplate: '/messages?thread={{threadId}}',
   },
   {
+    code: 'IN_APP_SUPPORT_TICKET_CREATED_FA_V1',
+    eventType: 'ir.vazano.support.ticket.created.v1',
+    titleTemplate: 'تیکت {{ticketPriority}} جدید: {{ticketCode}}',
+    bodyTemplate: '{{ticketType}} با موضوع «{{ticketSubject}}» برای رسیدگی ثبت شد.',
+    actionPathTemplate: '/admin/support',
+  },
+  {
+    code: 'IN_APP_SUPPORT_TICKET_STATUS_CHANGED_FA_V1',
+    eventType: 'ir.vazano.support.ticket.status_changed.v1',
+    titleTemplate: 'وضعیت تیکت {{ticketCode}} تغییر کرد',
+    bodyTemplate: 'وضعیت جدید تیکت شما: {{ticketStatus}}.',
+    actionPathTemplate: '/support/{{ticketId}}',
+  },
+  {
+    code: 'IN_APP_SUPPORT_TICKET_REPLIED_FA_V1',
+    eventType: 'ir.vazano.support.ticket.replied.v1',
+    titleTemplate: 'پاسخ جدید برای تیکت {{ticketCode}}',
+    bodyTemplate: 'تیم پشتیبانی وازانو پاسخ جدیدی برای درخواست شما ثبت کرد.',
+    actionPathTemplate: '/support/{{ticketId}}',
+  },
+  {
     code: 'IN_APP_SUBSCRIPTION_ACTIVATED_FA_V1',
     eventType: 'ir.vazano.subscription.activated.v1',
     titleTemplate: 'اشتراک فروشنده فعال شد',
