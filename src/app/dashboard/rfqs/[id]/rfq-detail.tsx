@@ -1,12 +1,14 @@
 'use client';
 
+import Link from 'next/link';
+import type { Route } from 'next';
 import { useCallback, useEffect, useState } from 'react';
 import { apiRequest } from '../../../../lib/api';
 
 type RfqItem = { id: string; title: string; quantity: string; category: { nameFa: string }; unit: { symbolFa: string } };
 type Rfq = { id: string; code: string; title: string; operationalStatus: string; deliveryProvince: string | null; deliveryCity: string | null; displayPricesTaxInclusive: boolean; items: RfqItem[] };
 type QuotationItem = { id: string; quantity: string; unitPriceRial: string; lineNetRial: string; isAlternative: boolean; offeredDescription: string | null; rfqItem: RfqItem };
-type Quotation = { id: string; code: string; status: string; finalAmountRial: string; taxRial: string; shippingRial: string; preparationDays: number | null; validUntil: string | null; supplierOrganization: { displayName: string; province: string | null; city: string | null }; items: QuotationItem[] };
+type Quotation = { id: string; code: string; status: string; finalAmountRial: string; taxRial: string; shippingRial: string; preparationDays: number | null; validUntil: string | null; supplierOrganization: { id: string; displayName: string; province: string | null; city: string | null }; items: QuotationItem[] };
 type Attachment = { id: string; originalName: string; status: string; sizeBytes: number };
 
 function toman(value: string) { return `${(Number(value) / 10).toLocaleString('fa-IR')} تومان`; }
@@ -72,7 +74,8 @@ export function RfqDetail({ rfqId }: { rfqId: string }) {
       <strong className="price">{toman(quote.finalAmountRial)}</strong><p>مالیات: {toman(quote.taxRial)} · حمل: {toman(quote.shippingRial)}</p>
       <p>آماده‌سازی: {quote.preparationDays ?? '—'} روز · اعتبار تا: {quote.validUntil ? new Date(quote.validUntil).toLocaleDateString('fa-IR') : '—'}</p>
       <ul>{quote.items.map((item) => <li key={item.id}>{item.rfqItem.title}: {toman(item.unitPriceRial)} / واحد{item.isAlternative ? ' · جایگزین' : ''}</li>)}</ul>
-      {quote.status === 'SUBMITTED' && <button className="button button-primary" disabled={busyId === quote.id} onClick={() => void accept(quote.id)}>انتخاب فروشنده</button>}
+      <div className="list-card-actions"><Link className="button button-secondary" href={`/messages?rfq=${rfq.id}&supplier=${quote.supplierOrganization.id}` as Route}>پیام به فروشنده</Link>
+      {quote.status === 'SUBMITTED' && <button className="button button-primary" disabled={busyId === quote.id} onClick={() => void accept(quote.id)}>انتخاب فروشنده</button>}</div>
       {quote.status === 'ACCEPTED' && <div className="message message-success">فروشنده منتخب</div>}
     </article>)}</div>
     <p className="muted">قیمت اصلی بدون مالیات نمایش داده می‌شود؛ مالیات و هزینه‌های جانبی به‌صورت شفاف و جداگانه آمده‌اند.</p>
