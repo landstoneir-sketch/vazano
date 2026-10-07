@@ -154,10 +154,14 @@ export class RfqsService {
     if (!canPublishRfq(rfq.approvalStatus, rfq.commitmentStatus)) throw new ConflictException('گیت تأیید یا تعهد مالی هنوز تکمیل نشده است.');
     if (rfq.lifecycleState === 'PUBLISHED') return rfq;
     const categoryIds = [...new Set(rfq.items.map((item) => item.categoryId))];
+    const now = new Date();
     const suppliers = await this.prisma.supplierProfile.findMany({
       where: {
         verificationStatus: 'VERIFIED',
-        organization: { status: 'ACTIVE' },
+        organization: {
+          status: 'ACTIVE',
+          subscriptions: { some: { status: 'ACTIVE', startsAt: { lte: now }, expiresAt: { gt: now } } },
+        },
         categories: { some: { categoryId: { in: categoryIds } } },
         ...(rfq.deliveryProvince
           ? { OR: [{ nationwideCoverage: true }, { serviceProvinces: { has: rfq.deliveryProvince } }] }
