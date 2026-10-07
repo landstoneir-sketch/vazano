@@ -4,6 +4,7 @@ import { PrismaService } from '../../shared/prisma/prisma.service';
 import { renderNotificationTemplate } from './template-renderer';
 
 const SUPPORTED_EVENT_TYPES = [
+  'ir.vazano.organization.member_invited.v1',
   'ir.vazano.rfq.submitted.v1',
   'ir.vazano.rfq.reviewed.v1',
   'ir.vazano.rfq.distributed.v1',
@@ -167,6 +168,28 @@ export class NotificationsService {
 
   private async resolveTargets(tx: Prisma.TransactionClient, event: SupportedOutboxEvent): Promise<NotificationTarget[]> {
     switch (event.eventType) {
+      case 'ir.vazano.organization.member_invited.v1': {
+        const membership = await tx.organizationMember.findUnique({
+          where: { id: event.aggregateId },
+          select: {
+            userId: true,
+            role: true,
+            status: true,
+            organizationId: true,
+            organization: { select: { displayName: true } },
+          },
+        });
+        if (!membership || membership.status !== 'INVITED') return [];
+        return [{
+          userId: membership.userId,
+          organizationId: membership.organizationId,
+          actionPath: '/dashboard/organization',
+          variables: {
+            organizationName: membership.organization.displayName,
+            memberRole: this.memberRoleLabel(membership.role),
+          },
+        }];
+      }
       case 'ir.vazano.rfq.submitted.v1': {
         const [rfq, admins] = await Promise.all([
           tx.rfq.findUnique({ where: { id: event.aggregateId }, select: { code: true, title: true } }),
@@ -430,6 +453,17 @@ export class NotificationsService {
       default:
         return [];
     }
+  }
+
+  private memberRoleLabel(role: string): string {
+    const labels: Record<string, string> = {
+      BUYER_OWNER: 'مالک حساب خریدار',
+      BUYER_MEMBER: 'عضو خریدار',
+      SUPPLIER_OWNER: 'مالک حساب فروشنده',
+      SUPPLIER_MANAGER: 'مدیر فروش',
+      SUPPLIER_SALES: 'کارشناس فروش',
+    };
+    return labels[role] ?? role;
   }
 
   private uniqueTargets(targets: NotificationTarget[]): NotificationTarget[] {
