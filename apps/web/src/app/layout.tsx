@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import type { Route } from 'next';
 import Link from 'next/link';
 import './globals.css';
 
@@ -18,6 +19,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <Link href="/plans">پلن‌ها</Link>
             <Link href="/dashboard">داشبورد</Link>
             <Link href="/supplier">فروشنده</Link>
+            <Link href={'/messages' as Route}>پیام‌ها</Link>
             <Link href="/notifications">اعلان‌ها</Link>
             <Link href="/login">ورود</Link>
           </nav>

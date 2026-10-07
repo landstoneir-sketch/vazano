@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import type { Route } from 'next';
 import { useEffect, useState } from 'react';
 import { apiRequest } from '../../lib/api';
 
@@ -28,7 +29,7 @@ export function MatchedRfqs() {
       <div className="eyebrow">{invitation.rfq.code} · برای {invitation.supplierOrganization.displayName}</div><h2>{invitation.rfq.title}</h2>
       <p>{invitation.rfq.deliveryProvince ?? '—'}، {invitation.rfq.deliveryCity ?? '—'} · مهلت: {invitation.rfq.responseDeadline ? new Date(invitation.rfq.responseDeadline).toLocaleDateString('fa-IR') : 'تعیین نشده'}</p>
       <ul>{invitation.rfq.items.map((item) => <li key={item.id}>{item.category.nameFa} — {item.quantity} {item.unit.symbolFa}</li>)}</ul>
-      <Link className="button button-primary" href={`/supplier/rfqs/${invitation.rfq.id}/quote?organizationId=${invitation.supplierOrganization.id}`}>{invitation.rfq.quotations.length ? 'ثبت نسخه جدید پیشنهاد' : 'ثبت پیشنهاد قیمت'}</Link>
+      <div className="list-card-actions"><Link className="button button-primary" href={`/supplier/rfqs/${invitation.rfq.id}/quote?organizationId=${invitation.supplierOrganization.id}`}>{invitation.rfq.quotations.length ? 'ثبت نسخه جدید پیشنهاد' : 'ثبت پیشنهاد قیمت'}</Link><Link className="button button-secondary" href={`/messages?rfq=${invitation.rfq.id}&supplier=${invitation.supplierOrganization.id}` as Route}>پیام درباره استعلام</Link></div>
     </article>)}
   </div>;
 }

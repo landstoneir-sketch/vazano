@@ -96,6 +96,13 @@ const inAppNotificationTemplates = [
     actionPathTemplate: '/supplier',
   },
   {
+    code: 'IN_APP_MESSAGE_SENT_FA_V1',
+    eventType: 'ir.vazano.message.sent.v1',
+    titleTemplate: 'پیام جدید درباره استعلام {{rfqCode}}',
+    bodyTemplate: '{{senderName}} پیام جدیدی برای این استعلام ارسال کرد.',
+    actionPathTemplate: '/messages?thread={{threadId}}',
+  },
+  {
     code: 'IN_APP_SUBSCRIPTION_ACTIVATED_FA_V1',
     eventType: 'ir.vazano.subscription.activated.v1',
     titleTemplate: 'اشتراک فروشنده فعال شد',

@@ -14,6 +14,7 @@ import { QuotationsModule } from './modules/quotations/quotations.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AttachmentsModule } from './modules/attachments/attachments.module';
 import { AdminConfigModule } from './modules/admin-config/admin-config.module';
+import { MessagesModule } from './modules/messages/messages.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { AdminConfigModule } from './modules/admin-config/admin-config.module';
     NotificationsModule,
     AttachmentsModule,
     AdminConfigModule,
+    MessagesModule,
   ],
   controllers: [HealthController],
 })
