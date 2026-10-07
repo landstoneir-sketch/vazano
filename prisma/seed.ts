@@ -255,6 +255,28 @@ async function main(): Promise<void> {
     const existing = await prisma.userRole.findFirst({ where: { userId: user.id, roleId: role.id, organizationId: null } });
     if (!existing) await prisma.userRole.create({ data: { userId: user.id, roleId: role.id } });
 
+    await prisma.cmsPage.upsert({
+      where: { slug: 'how-it-works' },
+      create: {
+        slug: 'how-it-works', titleFa: 'نحوه کار وازانو', excerptFa: 'از ثبت نیاز تا مقایسه و انتخاب پیشنهاد مناسب',
+        bodyFa: '۱. ثبت نیاز\nمشخصات فنی، مقدار، محل پروژه و زمان موردنیاز را وارد کنید.\n\n۲. دریافت پیشنهاد\nاستعلام پس از بررسی برای فروشندگان واجد شرایط ارسال می‌شود.\n\n۳. مقایسه و انتخاب\nقیمت، زمان تحویل و شرایط پیشنهادها را شفاف مقایسه و گزینه مناسب را انتخاب کنید.',
+        seoTitleFa: 'نحوه کار وازانو', seoDescriptionFa: 'راهنمای ثبت استعلام، دریافت پیشنهاد قیمت و انتخاب فروشنده در وازانو',
+        status: 'PUBLISHED', publishedAt: new Date(), updatedByUserId: user.id,
+      },
+      update: {},
+    });
+    const initialFaqs = [
+      { id: 'faq-buyer-cost', questionFa: 'ثبت استعلام برای خریدار هزینه دارد؟', answerFa: 'در نسخه MVP، ثبت استعلام برای خریدار رایگان است.', category: 'خریداران', sortOrder: 10 },
+      { id: 'faq-data-after-expiry', questionFa: 'پس از پایان اشتراک فروشنده، اطلاعات حذف می‌شود؟', answerFa: 'خیر. سوابق و اطلاعات حساب حفظ می‌شود؛ فقط دریافت استعلام و ارسال پیشنهاد جدید مطابق سیاست اشتراک محدود خواهد شد.', category: 'فروشندگان', sortOrder: 20 },
+    ];
+    for (const faq of initialFaqs) {
+      await prisma.faqItem.upsert({
+        where: { id: faq.id },
+        create: { ...faq, isPublished: true, updatedByUserId: user.id },
+        update: {},
+      });
+    }
+
     if (process.env.NODE_ENV !== 'production' && process.env.SEED_DEMO_DATA !== 'false') {
       const buyer = await prisma.organization.upsert({
         where: { id: 'demo-buyer-organization' },
