@@ -12,6 +12,14 @@ enum UserStatus {
   SUSPENDED
 }
 
+enum SecurityEventSeverity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
 enum OrganizationType {
   INDIVIDUAL
   COMPANY
@@ -326,6 +334,8 @@ model User {
   requestedSupportTickets SupportTicket[]          @relation("SupportTicketRequester")
   assignedSupportTickets  SupportTicket[]          @relation("SupportTicketAssignee")
   supportComments         SupportTicketComment[]   @relation("SupportCommentAuthor")
+  securityEvents          SecurityEvent[]          @relation("SecurityEventSubject")
+  resolvedSecurityEvents  SecurityEvent[]          @relation("SecurityEventResolver")
 
   @@map("users")
 }
@@ -467,6 +477,29 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([actorUserId, createdAt])
   @@map("audit_logs")
+}
+
+model SecurityEvent {
+  id               String                @id @default(cuid())
+  eventType        String                @map("event_type")
+  severity         SecurityEventSeverity @default(INFO)
+  outcome          String
+  userId           String?               @map("user_id")
+  subjectHash      String?               @map("subject_hash")
+  ipAddress        String?               @map("ip_address")
+  userAgent        String?               @map("user_agent")
+  metadata         Json?
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  resolvedAt       DateTime?             @map("resolved_at") @db.Timestamptz(3)
+  resolvedByUserId String?               @map("resolved_by_user_id")
+  user             User?                 @relation("SecurityEventSubject", fields: [userId], references: [id], onDelete: SetNull)
+  resolvedBy       User?                 @relation("SecurityEventResolver", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([severity, createdAt])
+  @@index([eventType, createdAt])
+  @@index([userId, createdAt])
+  @@index([resolvedAt, createdAt])
+  @@map("security_events")
 }
 
 model OutboxEvent {

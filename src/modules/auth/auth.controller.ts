@@ -11,7 +11,9 @@ import { SessionGuard, type AuthenticatedRequest } from './session.guard';
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
   @Post('otp/request') @HttpCode(200)
-  requestOtp(@Body() input: RequestOtpDto) { return this.auth.requestOtp(input.mobile, input.purpose); }
+  requestOtp(@Body() input: RequestOtpDto, @Req() request: Request) {
+    return this.auth.requestOtp(input.mobile, input.purpose, request.ip, request.headers['user-agent']);
+  }
 
   @Post('otp/verify') @HttpCode(200)
   async verifyOtp(@Body() input: VerifyOtpDto, @Req() request: Request, @Res({ passthrough: true }) response: Response) {

@@ -17,10 +17,16 @@ export class AuthService {
     @Inject(SMS_PORT) private readonly sms: SmsPort,
   ) {}
 
-  async requestOtp(rawMobile: string, purpose: OtpPurpose): Promise<RequestOtpResult> {
+  async requestOtp(rawMobile: string, purpose: OtpPurpose, ipAddress?: string, userAgent?: string): Promise<RequestOtpResult> {
     const mobile = normalizeIranianMobile(rawMobile);
     const recentCount = await this.prisma.otpCode.count({ where: { mobile, createdAt: { gte: new Date(Date.now() - 60_000) } } });
-    if (recentCount >= 3) throw new HttpException('تعداد درخواست‌ها زیاد است؛ یک دقیقه بعد دوباره تلاش کنید.', HttpStatus.TOO_MANY_REQUESTS);
+    if (recentCount >= 3) {
+      await this.prisma.securityEvent.create({ data: {
+        eventType: 'auth.otp.request_rate_limited', severity: 'MEDIUM', outcome: 'BLOCKED',
+        subjectHash: this.hashSubject(mobile), ipAddress, userAgent: this.safeUserAgent(userAgent), metadata: { purpose },
+      } });
+      throw new HttpException('تعداد درخواست‌ها زیاد است؛ یک دقیقه بعد دوباره تلاش کنید.', HttpStatus.TOO_MANY_REQUESTS);
+    }
     const debugEnabled = this.config.get<string>('OTP_DEBUG_ENABLED') === 'true';
     const code = debugEnabled ? this.config.get<string>('OTP_DEBUG_CODE', '11111') : randomInt(10_000, 100_000).toString();
     const ttl = this.config.get<number>('OTP_TTL_SECONDS', 120);
@@ -29,20 +35,47 @@ export class AuthService {
       return tx.otpCode.create({ data: { mobile, purpose, codeHash: this.hashOtp(mobile, purpose, code), expiresAt: new Date(Date.now() + ttl * 1000) } });
     });
     try { await this.sms.sendOtp(mobile, code); }
-    catch (error) { await this.prisma.otpCode.delete({ where: { id: otp.id } }); throw error; }
+    catch (error) {
+      await this.prisma.$transaction([
+        this.prisma.otpCode.delete({ where: { id: otp.id } }),
+        this.prisma.securityEvent.create({ data: {
+          eventType: 'auth.otp.delivery_failed', severity: 'LOW', outcome: 'FAILED',
+          subjectHash: this.hashSubject(mobile), ipAddress, userAgent: this.safeUserAgent(userAgent), metadata: { purpose },
+        } }),
+      ]);
+      throw error;
+    }
     return { expiresInSeconds: ttl, ...(debugEnabled ? { debugCode: code } : {}) };
   }
 
   async verifyOtp(rawMobile: string, purpose: OtpPurpose, code: string, ipAddress?: string, userAgent?: string): Promise<VerifyOtpResult> {
     const mobile = normalizeIranianMobile(rawMobile);
     const otp = await this.prisma.otpCode.findFirst({ where: { mobile, purpose, consumedAt: null }, orderBy: { createdAt: 'desc' } });
-    if (!otp || otp.expiresAt <= new Date()) throw new UnauthorizedException('کد تأیید منقضی یا نامعتبر است.');
+    if (!otp || otp.expiresAt <= new Date()) {
+      await this.prisma.securityEvent.create({ data: {
+        eventType: 'auth.otp.invalid_or_expired', severity: 'LOW', outcome: 'DENIED',
+        subjectHash: this.hashSubject(mobile), ipAddress, userAgent: this.safeUserAgent(userAgent), metadata: { purpose },
+      } });
+      throw new UnauthorizedException('کد تأیید منقضی یا نامعتبر است.');
+    }
     const maxAttempts = this.config.get<number>('OTP_MAX_ATTEMPTS', 5);
-    if (otp.attempts >= maxAttempts) throw new HttpException('تعداد تلاش‌های ناموفق بیش از حد مجاز است.', HttpStatus.TOO_MANY_REQUESTS);
+    if (otp.attempts >= maxAttempts) {
+      await this.prisma.securityEvent.create({ data: {
+        eventType: 'auth.otp.attempt_limit_reached', severity: 'HIGH', outcome: 'BLOCKED',
+        subjectHash: this.hashSubject(mobile), ipAddress, userAgent: this.safeUserAgent(userAgent), metadata: { purpose, attempts: otp.attempts },
+      } });
+      throw new HttpException('تعداد تلاش‌های ناموفق بیش از حد مجاز است.', HttpStatus.TOO_MANY_REQUESTS);
+    }
     const expected = Buffer.from(otp.codeHash, 'hex');
     const supplied = Buffer.from(this.hashOtp(mobile, purpose, code), 'hex');
     if (expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) {
-      await this.prisma.otpCode.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
+      await this.prisma.$transaction([
+        this.prisma.otpCode.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } }),
+        this.prisma.securityEvent.create({ data: {
+          eventType: 'auth.otp.code_mismatch', severity: 'MEDIUM', outcome: 'DENIED',
+          subjectHash: this.hashSubject(mobile), ipAddress, userAgent: this.safeUserAgent(userAgent), metadata: { purpose, attempt: otp.attempts + 1 },
+        } }),
+      ]);
       throw new UnauthorizedException('کد تأیید صحیح نیست.');
     }
     const rawToken = randomBytes(32).toString('base64url');
@@ -54,6 +87,10 @@ export class AuthService {
       await tx.otpCode.update({ where: { id: otp.id }, data: { consumedAt: new Date() } });
       await tx.session.create({ data: { userId: user.id, tokenHash: this.hashToken(rawToken), expiresAt, ipAddress, userAgent } });
       await tx.auditLog.create({ data: { actorUserId: user.id, action: 'auth.login', entityType: 'User', entityId: user.id, ipAddress } });
+      await tx.securityEvent.create({ data: {
+        eventType: 'auth.login.success', severity: 'INFO', outcome: 'SUCCESS', userId: user.id,
+        subjectHash: this.hashSubject(mobile), ipAddress, userAgent: this.safeUserAgent(userAgent), metadata: { purpose },
+      } });
       await tx.outboxEvent.create({ data: { aggregateType: 'User', aggregateId: user.id, eventType: 'ir.vazano.auth.login.v1', payload: { userId: user.id } } });
       return { user, isNewUser: !existing };
     });
@@ -66,6 +103,13 @@ export class AuthService {
   }
 
   hashToken(token: string): string { return createHash('sha256').update(token).digest('hex'); }
+  private hashSubject(value: string): string {
+    const pepper = this.config.getOrThrow<string>('OTP_PEPPER');
+    return createHmac('sha256', pepper).update(`security-subject:${value}`).digest('hex');
+  }
+  private safeUserAgent(userAgent: string | undefined): string | undefined {
+    return userAgent?.slice(0, 500);
+  }
   private hashOtp(mobile: string, purpose: OtpPurpose, code: string): string {
     const pepper = this.config.getOrThrow<string>('OTP_PEPPER');
     return createHmac('sha256', pepper).update(`${mobile}:${purpose}:${code}`).digest('hex');
