@@ -183,6 +183,17 @@ enum AttachmentPurpose {
   CERTIFICATE
 }
 
+enum MessageThreadStatus {
+  OPEN
+  CLOSED
+  ARCHIVED
+}
+
+enum MessageKind {
+  USER
+  SYSTEM
+}
+
 enum PaymentProvider {
   ZARINPAL
   MOCK
@@ -250,53 +261,58 @@ enum QuotationStatus {
 }
 
 model User {
-  id                  String               @id @default(cuid())
-  mobile              String               @unique
-  email               String?              @unique
-  firstName           String?              @map("first_name")
-  lastName            String?              @map("last_name")
-  locale              String               @default("fa-IR")
-  status              UserStatus           @default(ACTIVE)
-  mobileVerifiedAt    DateTime?            @map("mobile_verified_at") @db.Timestamptz(3)
-  emailVerifiedAt     DateTime?            @map("email_verified_at") @db.Timestamptz(3)
-  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id                  String                   @id @default(cuid())
+  mobile              String                   @unique
+  email               String?                  @unique
+  firstName           String?                  @map("first_name")
+  lastName            String?                  @map("last_name")
+  locale              String                   @default("fa-IR")
+  status              UserStatus               @default(ACTIVE)
+  mobileVerifiedAt    DateTime?                @map("mobile_verified_at") @db.Timestamptz(3)
+  emailVerifiedAt     DateTime?                @map("email_verified_at") @db.Timestamptz(3)
+  createdAt           DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
   memberships         OrganizationMember[]
   sessions            Session[]
   userRoles           UserRole[]
   auditLogs           AuditLog[]
-  createdRfqs         Rfq[]                @relation("RfqCreator")
-  buyerContactRfqs    Rfq[]                @relation("RfqBuyerContact")
-  operatedRfqs        Rfq[]                @relation("RfqOperator")
-  createdQuotations   Quotation[]          @relation("QuotationCreator")
+  createdRfqs         Rfq[]                    @relation("RfqCreator")
+  buyerContactRfqs    Rfq[]                    @relation("RfqBuyerContact")
+  operatedRfqs        Rfq[]                    @relation("RfqOperator")
+  createdQuotations   Quotation[]              @relation("QuotationCreator")
   notifications       Notification[]
-  uploadedAttachments Attachment[]         @relation("AttachmentUploader")
+  uploadedAttachments Attachment[]             @relation("AttachmentUploader")
+  sentMessages        Message[]                @relation("MessageSender")
+  messageReadStates   MessageThreadReadState[]
 
   @@map("users")
 }
 
 model Organization {
-  id              String               @id @default(cuid())
-  kind            OrganizationKind
-  type            OrganizationType
-  legalName       String               @map("legal_name")
-  displayName     String               @map("display_name")
-  nationalId      String?              @unique @map("national_id")
-  province        String?
-  city            String?
-  status          OrganizationStatus   @default(PENDING)
-  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
-  members         OrganizationMember[]
-  scopedRoles     UserRole[]
-  buyerRfqs       Rfq[]
-  subscriptions   Subscription[]
-  creditWallet    CreditWallet?
-  supplierProfile SupplierProfile?
-  rfqInvitations  RfqInvitation[]      @relation("InvitedSupplier")
-  quotations      Quotation[]          @relation("SupplierQuotations")
-  notifications   Notification[]
-  attachments     Attachment[]
+  id                     String               @id @default(cuid())
+  kind                   OrganizationKind
+  type                   OrganizationType
+  legalName              String               @map("legal_name")
+  displayName            String               @map("display_name")
+  nationalId             String?              @unique @map("national_id")
+  province               String?
+  city                   String?
+  status                 OrganizationStatus   @default(PENDING)
+  createdAt              DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  members                OrganizationMember[]
+  scopedRoles            UserRole[]
+  buyerRfqs              Rfq[]
+  subscriptions          Subscription[]
+  creditWallet           CreditWallet?
+  supplierProfile        SupplierProfile?
+  rfqInvitations         RfqInvitation[]      @relation("InvitedSupplier")
+  quotations             Quotation[]          @relation("SupplierQuotations")
+  notifications          Notification[]
+  attachments            Attachment[]
+  buyerMessageThreads    MessageThread[]      @relation("BuyerMessageThreads")
+  supplierMessageThreads MessageThread[]      @relation("SupplierMessageThreads")
+  sentMessages           Message[]            @relation("MessageSenderOrganization")
 
   @@index([kind, status])
   @@map("organizations")
@@ -584,6 +600,7 @@ model Rfq {
   invitations               RfqInvitation[]
   quotations                Quotation[]
   attachments               Attachment[]
+  messageThreads            MessageThread[]
 
   @@index([buyerOrganizationId, createdAt])
   @@index([lifecycleState, operationalStatus])
@@ -749,6 +766,56 @@ model Attachment {
   @@index([organizationId, createdAt])
   @@index([status, createdAt])
   @@map("attachments")
+}
+
+model MessageThread {
+  id                     String                   @id @default(cuid())
+  rfqId                  String                   @map("rfq_id")
+  buyerOrganizationId    String                   @map("buyer_organization_id")
+  supplierOrganizationId String                   @map("supplier_organization_id")
+  status                 MessageThreadStatus      @default(OPEN)
+  lastMessageAt          DateTime?                @map("last_message_at") @db.Timestamptz(3)
+  createdAt              DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+  rfq                    Rfq                      @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  buyerOrganization      Organization             @relation("BuyerMessageThreads", fields: [buyerOrganizationId], references: [id], onDelete: Restrict)
+  supplierOrganization   Organization             @relation("SupplierMessageThreads", fields: [supplierOrganizationId], references: [id], onDelete: Restrict)
+  messages               Message[]
+  readStates             MessageThreadReadState[]
+
+  @@unique([rfqId, supplierOrganizationId])
+  @@index([buyerOrganizationId, lastMessageAt])
+  @@index([supplierOrganizationId, lastMessageAt])
+  @@map("message_threads")
+}
+
+model Message {
+  id                   String        @id @default(cuid())
+  threadId             String        @map("thread_id")
+  senderUserId         String        @map("sender_user_id")
+  senderOrganizationId String        @map("sender_organization_id")
+  kind                 MessageKind   @default(USER)
+  body                 String
+  createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  thread               MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender               User          @relation("MessageSender", fields: [senderUserId], references: [id], onDelete: Restrict)
+  senderOrganization   Organization  @relation("MessageSenderOrganization", fields: [senderOrganizationId], references: [id], onDelete: Restrict)
+
+  @@index([threadId, createdAt])
+  @@index([senderUserId, createdAt])
+  @@map("messages")
+}
+
+model MessageThreadReadState {
+  threadId   String        @map("thread_id")
+  userId     String        @map("user_id")
+  lastReadAt DateTime      @map("last_read_at") @db.Timestamptz(3)
+  thread     MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([threadId, userId])
+  @@index([userId, lastReadAt])
+  @@map("message_thread_read_states")
 }
 
 model SubscriptionPlan {

@@ -9,6 +9,7 @@ const SUPPORTED_EVENT_TYPES = [
   'ir.vazano.rfq.distributed.v1',
   'ir.vazano.quotation.submitted.v1',
   'ir.vazano.quotation.accepted.v1',
+  'ir.vazano.message.sent.v1',
   'ir.vazano.subscription.activated.v1',
   'ir.vazano.subscription.renewal.14_days_before.v1',
   'ir.vazano.subscription.renewal.7_days_before.v1',
@@ -261,6 +262,53 @@ export class NotificationsService {
             variables,
           })),
         ]);
+      }
+      case 'ir.vazano.message.sent.v1': {
+        const message = await tx.message.findUnique({
+          where: { id: event.aggregateId },
+          select: {
+            id: true,
+            senderUserId: true,
+            senderOrganizationId: true,
+            sender: { select: { firstName: true, lastName: true } },
+            senderOrganization: { select: { displayName: true } },
+            thread: {
+              select: {
+                id: true,
+                buyerOrganizationId: true,
+                supplierOrganizationId: true,
+                rfq: { select: { code: true } },
+                buyerOrganization: {
+                  select: { members: { where: { status: 'ACTIVE' }, select: { userId: true } } },
+                },
+                supplierOrganization: {
+                  select: { members: { where: { status: 'ACTIVE' }, select: { userId: true } } },
+                },
+              },
+            },
+          },
+        });
+        if (!message) return [];
+        const senderName = [message.sender.firstName, message.sender.lastName].filter(Boolean).join(' ')
+          || message.senderOrganization.displayName;
+        const recipientOrganizationId = message.senderOrganizationId === message.thread.buyerOrganizationId
+          ? message.thread.supplierOrganizationId
+          : message.thread.buyerOrganizationId;
+        const members = recipientOrganizationId === message.thread.buyerOrganizationId
+          ? message.thread.buyerOrganization.members
+          : message.thread.supplierOrganization.members;
+        return members
+          .filter((member) => member.userId !== message.senderUserId)
+          .map((member) => ({
+            userId: member.userId,
+            organizationId: recipientOrganizationId,
+            actionPath: `/messages?thread=${message.thread.id}`,
+            variables: {
+              senderName,
+              rfqCode: message.thread.rfq.code,
+              threadId: message.thread.id,
+            },
+          }));
       }
       case 'ir.vazano.subscription.activated.v1': {
         const subscription = await tx.subscription.findUnique({
