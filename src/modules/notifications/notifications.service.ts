@@ -10,6 +10,11 @@ const SUPPORTED_EVENT_TYPES = [
   'ir.vazano.quotation.submitted.v1',
   'ir.vazano.quotation.accepted.v1',
   'ir.vazano.subscription.activated.v1',
+  'ir.vazano.subscription.renewal.14_days_before.v1',
+  'ir.vazano.subscription.renewal.7_days_before.v1',
+  'ir.vazano.subscription.renewal.3_days_before.v1',
+  'ir.vazano.subscription.renewal.expired.v1',
+  'ir.vazano.subscription.renewal.grace_ended.v1',
 ] as const;
 
 type NotificationTarget = {
@@ -276,6 +281,44 @@ export class NotificationsService {
           organizationId: subscription.organizationId,
           actionPath: '/supplier',
           variables: { planName: subscription.plan.nameFa, expiresAt },
+        }));
+      }
+      case 'ir.vazano.subscription.renewal.14_days_before.v1':
+      case 'ir.vazano.subscription.renewal.7_days_before.v1':
+      case 'ir.vazano.subscription.renewal.3_days_before.v1':
+      case 'ir.vazano.subscription.renewal.expired.v1':
+      case 'ir.vazano.subscription.renewal.grace_ended.v1': {
+        const reminder = await tx.subscriptionReminder.findUnique({
+          where: { id: event.aggregateId },
+          select: {
+            subscription: {
+              select: {
+                organizationId: true,
+                expiresAt: true,
+                graceEndsAt: true,
+                priceRialSnapshot: true,
+                plan: { select: { nameFa: true } },
+                organization: { select: { members: { where: { status: 'ACTIVE' }, select: { userId: true } } } },
+              },
+            },
+          },
+        });
+        if (!reminder) return [];
+        const subscription = reminder.subscription;
+        const formatDate = (date: Date | null) => date
+          ? new Intl.DateTimeFormat('fa-IR-u-ca-persian', { dateStyle: 'medium', timeZone: 'Asia/Tehran' }).format(date)
+          : '';
+        const variables = {
+          planName: subscription.plan.nameFa,
+          expiresAt: formatDate(subscription.expiresAt),
+          graceEndsAt: formatDate(subscription.graceEndsAt),
+          renewalAmountToman: (subscription.priceRialSnapshot / 10n).toLocaleString('fa-IR'),
+        };
+        return subscription.organization.members.map((member) => ({
+          userId: member.userId,
+          organizationId: subscription.organizationId,
+          actionPath: '/plans',
+          variables,
         }));
       }
       default:

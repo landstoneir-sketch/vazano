@@ -102,6 +102,41 @@ const inAppNotificationTemplates = [
     bodyTemplate: 'پلن «{{planName}}» فعال شد و تا {{expiresAt}} اعتبار دارد.',
     actionPathTemplate: '/supplier',
   },
+  {
+    code: 'IN_APP_SUBSCRIPTION_RENEWAL_14_DAYS_FA_V1',
+    eventType: 'ir.vazano.subscription.renewal.14_days_before.v1',
+    titleTemplate: '۱۴ روز تا پایان اشتراک',
+    bodyTemplate: 'اشتراک «{{planName}}» در {{expiresAt}} پایان می‌یابد. مبلغ تمدید {{renewalAmountToman}} تومان است.',
+    actionPathTemplate: '/plans',
+  },
+  {
+    code: 'IN_APP_SUBSCRIPTION_RENEWAL_7_DAYS_FA_V1',
+    eventType: 'ir.vazano.subscription.renewal.7_days_before.v1',
+    titleTemplate: '۷ روز تا پایان اشتراک',
+    bodyTemplate: 'برای جلوگیری از توقف دریافت استعلام جدید، اشتراک «{{planName}}» را پیش از {{expiresAt}} تمدید کنید.',
+    actionPathTemplate: '/plans',
+  },
+  {
+    code: 'IN_APP_SUBSCRIPTION_RENEWAL_3_DAYS_FA_V1',
+    eventType: 'ir.vazano.subscription.renewal.3_days_before.v1',
+    titleTemplate: 'هشدار نهایی تمدید اشتراک',
+    bodyTemplate: 'تنها ۳ روز تا پایان اشتراک «{{planName}}» باقی مانده است.',
+    actionPathTemplate: '/plans',
+  },
+  {
+    code: 'IN_APP_SUBSCRIPTION_EXPIRED_FA_V1',
+    eventType: 'ir.vazano.subscription.renewal.expired.v1',
+    titleTemplate: 'اشتراک شما پایان یافت',
+    bodyTemplate: 'دریافت استعلام جدید متوقف شد؛ سوابق حساب محفوظ است و تا {{graceEndsAt}} مهلت تمدید دارید.',
+    actionPathTemplate: '/plans',
+  },
+  {
+    code: 'IN_APP_SUBSCRIPTION_GRACE_ENDED_FA_V1',
+    eventType: 'ir.vazano.subscription.renewal.grace_ended.v1',
+    titleTemplate: 'مهلت تمدید پایان یافت',
+    bodyTemplate: 'مهلت ۷روزه تمدید اشتراک «{{planName}}» پایان یافت و خدمات حرفه‌ای حساب محدود شد.',
+    actionPathTemplate: '/plans',
+  },
 ] as const;
 
 async function main(): Promise<void> {
