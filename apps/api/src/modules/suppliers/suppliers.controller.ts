@@ -11,6 +11,11 @@ import { VerifySupplierDto } from './verify-supplier.dto';
 export class SuppliersController {
   constructor(private readonly suppliers: SuppliersService) {}
 
+  @Get('admin/verification-queue')
+  listVerificationQueue(@CurrentUser() user: AuthenticatedUser) {
+    return this.suppliers.listVerificationQueue(user);
+  }
+
   @Get('organizations/:organizationId/profile')
   getProfile(@CurrentUser() user: AuthenticatedUser, @Param('organizationId') organizationId: string) {
     return this.suppliers.getProfile(user, organizationId);
