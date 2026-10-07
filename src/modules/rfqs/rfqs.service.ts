@@ -72,7 +72,12 @@ export class RfqsService {
   listReviewQueue(user: AuthenticatedUser) {
     if (!user.permissions.includes('rfq.review')) throw new ForbiddenException('مجوز مشاهده صف بررسی را ندارید.');
     return this.prisma.rfq.findMany({
-      where: { approvalStatus: 'PENDING', operationalStatus: 'UNDER_REVIEW' },
+      where: {
+        OR: [
+          { approvalStatus: 'PENDING', operationalStatus: 'UNDER_REVIEW' },
+          { approvalStatus: 'APPROVED', operationalStatus: { in: ['WAITING_COMMITMENT', 'READY_TO_PUBLISH'] } },
+        ],
+      },
       include: {
         buyerOrganization: { select: { id: true, displayName: true, province: true, city: true } },
         buyerContact: { select: { id: true, firstName: true, lastName: true, mobile: true } },

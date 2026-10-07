@@ -9,6 +9,18 @@ import { VerifySupplierDto } from './verify-supplier.dto';
 export class SuppliersService {
   constructor(private readonly prisma: PrismaService) {}
 
+  listVerificationQueue(user: AuthenticatedUser) {
+    if (!user.permissions.includes('supplier.verify')) throw new ForbiddenException('مجوز مشاهده صف بررسی فروشندگان را ندارید.');
+    return this.prisma.organization.findMany({
+      where: { kind: 'SUPPLIER', supplierProfile: { verificationStatus: { in: ['PENDING', 'NEEDS_CORRECTION'] } } },
+      include: {
+        supplierProfile: { include: { categories: { include: { category: true } } } },
+        members: { where: { status: 'ACTIVE', role: 'SUPPLIER_OWNER' }, include: { user: { select: { id: true, mobile: true, firstName: true, lastName: true } } } },
+      },
+      orderBy: { updatedAt: 'asc' },
+    });
+  }
+
   async getProfile(user: AuthenticatedUser, organizationId: string) {
     this.assertCanManageProfile(user, organizationId);
     const organization = await this.prisma.organization.findFirst({
