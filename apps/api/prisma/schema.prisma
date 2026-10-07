@@ -184,46 +184,77 @@ enum QualityControlStatus {
   CANCELLED
 }
 
+enum SupplierVerificationStatus {
+  INCOMPLETE
+  PENDING
+  VERIFIED
+  NEEDS_CORRECTION
+  REJECTED
+  SUSPENDED
+}
+
+enum RfqInvitationStatus {
+  INVITED
+  VIEWED
+  RESPONDED
+  DECLINED
+  EXPIRED
+}
+
+enum QuotationStatus {
+  DRAFT
+  SUBMITTED
+  REVISED
+  WITHDRAWN
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
 model User {
-  id               String               @id @default(cuid())
-  mobile           String               @unique
-  email            String?              @unique
-  firstName        String?              @map("first_name")
-  lastName         String?              @map("last_name")
-  locale           String               @default("fa-IR")
-  status           UserStatus           @default(ACTIVE)
-  mobileVerifiedAt DateTime?            @map("mobile_verified_at") @db.Timestamptz(3)
-  emailVerifiedAt  DateTime?            @map("email_verified_at") @db.Timestamptz(3)
-  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
-  memberships      OrganizationMember[]
-  sessions         Session[]
-  userRoles        UserRole[]
-  auditLogs        AuditLog[]
-  createdRfqs      Rfq[]                @relation("RfqCreator")
-  buyerContactRfqs Rfq[]                @relation("RfqBuyerContact")
-  operatedRfqs     Rfq[]                @relation("RfqOperator")
+  id                String               @id @default(cuid())
+  mobile            String               @unique
+  email             String?              @unique
+  firstName         String?              @map("first_name")
+  lastName          String?              @map("last_name")
+  locale            String               @default("fa-IR")
+  status            UserStatus           @default(ACTIVE)
+  mobileVerifiedAt  DateTime?            @map("mobile_verified_at") @db.Timestamptz(3)
+  emailVerifiedAt   DateTime?            @map("email_verified_at") @db.Timestamptz(3)
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  memberships       OrganizationMember[]
+  sessions          Session[]
+  userRoles         UserRole[]
+  auditLogs         AuditLog[]
+  createdRfqs       Rfq[]                @relation("RfqCreator")
+  buyerContactRfqs  Rfq[]                @relation("RfqBuyerContact")
+  operatedRfqs      Rfq[]                @relation("RfqOperator")
+  createdQuotations Quotation[]          @relation("QuotationCreator")
 
   @@map("users")
 }
 
 model Organization {
-  id            String               @id @default(cuid())
-  kind          OrganizationKind
-  type          OrganizationType
-  legalName     String               @map("legal_name")
-  displayName   String               @map("display_name")
-  nationalId    String?              @unique @map("national_id")
-  province      String?
-  city          String?
-  status        OrganizationStatus   @default(PENDING)
-  createdAt     DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt     DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
-  members       OrganizationMember[]
-  scopedRoles   UserRole[]
-  buyerRfqs     Rfq[]
-  subscriptions Subscription[]
-  creditWallet  CreditWallet?
+  id              String               @id @default(cuid())
+  kind            OrganizationKind
+  type            OrganizationType
+  legalName       String               @map("legal_name")
+  displayName     String               @map("display_name")
+  nationalId      String?              @unique @map("national_id")
+  province        String?
+  city            String?
+  status          OrganizationStatus   @default(PENDING)
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  members         OrganizationMember[]
+  scopedRoles     UserRole[]
+  buyerRfqs       Rfq[]
+  subscriptions   Subscription[]
+  creditWallet    CreditWallet?
+  supplierProfile SupplierProfile?
+  rfqInvitations  RfqInvitation[]      @relation("InvitedSupplier")
+  quotations      Quotation[]          @relation("SupplierQuotations")
 
   @@index([kind, status])
   @@map("organizations")
@@ -368,22 +399,23 @@ model Industry {
 }
 
 model Category {
-  id         String     @id @default(cuid())
-  industryId String     @map("industry_id")
-  parentId   String?    @map("parent_id")
-  code       String     @unique
-  slug       String     @unique
-  nameFa     String     @map("name_fa")
-  nameEn     String?    @map("name_en")
-  isActive   Boolean    @default(true) @map("is_active")
-  sortOrder  Int        @default(0) @map("sort_order")
-  metadata   Json?
-  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt  DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
-  industry   Industry   @relation(fields: [industryId], references: [id], onDelete: Restrict)
-  parent     Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
-  children   Category[] @relation("CategoryTree")
-  rfqItems   RfqItem[]
+  id                 String             @id @default(cuid())
+  industryId         String             @map("industry_id")
+  parentId           String?            @map("parent_id")
+  code               String             @unique
+  slug               String             @unique
+  nameFa             String             @map("name_fa")
+  nameEn             String?            @map("name_en")
+  isActive           Boolean            @default(true) @map("is_active")
+  sortOrder          Int                @default(0) @map("sort_order")
+  metadata           Json?
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  industry           Industry           @relation(fields: [industryId], references: [id], onDelete: Restrict)
+  parent             Category?          @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children           Category[]         @relation("CategoryTree")
+  rfqItems           RfqItem[]
+  supplierCategories SupplierCategory[]
 
   @@index([industryId, parentId, isActive])
   @@map("categories")
@@ -442,6 +474,8 @@ model Rfq {
   primaryDomain             Industry               @relation(fields: [primaryDomainId], references: [id], onDelete: Restrict)
   items                     RfqItem[]
   qualityControlRequest     QualityControlRequest?
+  invitations               RfqInvitation[]
+  quotations                Quotation[]
 
   @@index([buyerOrganizationId, createdAt])
   @@index([lifecycleState, operationalStatus])
@@ -450,24 +484,130 @@ model Rfq {
 }
 
 model RfqItem {
-  id                     String        @id @default(cuid())
-  rfqId                  String        @map("rfq_id")
-  categoryId             String        @map("category_id")
-  unitId                 String        @map("unit_id")
+  id                     String          @id @default(cuid())
+  rfqId                  String          @map("rfq_id")
+  categoryId             String          @map("category_id")
+  unitId                 String          @map("unit_id")
   title                  String
-  quantity               Decimal       @db.Decimal(20, 4)
-  specifications         Json          @default("{}")
-  estimatedLineValueRial BigInt?       @map("estimated_line_value_rial")
-  sortOrder              Int           @default(0) @map("sort_order")
-  createdAt              DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt              DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
-  rfq                    Rfq           @relation(fields: [rfqId], references: [id], onDelete: Cascade)
-  category               Category      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  unit                   UnitOfMeasure @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  quantity               Decimal         @db.Decimal(20, 4)
+  specifications         Json            @default("{}")
+  estimatedLineValueRial BigInt?         @map("estimated_line_value_rial")
+  sortOrder              Int             @default(0) @map("sort_order")
+  createdAt              DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  rfq                    Rfq             @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  category               Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  unit                   UnitOfMeasure   @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  quotationItems         QuotationItem[]
 
   @@index([rfqId, sortOrder])
   @@index([categoryId])
   @@map("rfq_items")
+}
+
+model SupplierProfile {
+  id                 String                     @id @default(cuid())
+  organizationId     String                     @unique @map("organization_id")
+  verificationStatus SupplierVerificationStatus @default(INCOMPLETE) @map("verification_status")
+  description        String?
+  nationwideCoverage Boolean                    @default(false) @map("nationwide_coverage")
+  serviceProvinces   String[]                   @default([]) @map("service_provinces")
+  verificationReason String?                    @map("verification_reason")
+  verifiedAt         DateTime?                  @map("verified_at") @db.Timestamptz(3)
+  createdAt          DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization       Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  categories         SupplierCategory[]
+
+  @@index([verificationStatus, nationwideCoverage])
+  @@map("supplier_profiles")
+}
+
+model SupplierCategory {
+  supplierProfileId String          @map("supplier_profile_id")
+  categoryId        String          @map("category_id")
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  supplierProfile   SupplierProfile @relation(fields: [supplierProfileId], references: [id], onDelete: Cascade)
+  category          Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@id([supplierProfileId, categoryId])
+  @@index([categoryId])
+  @@map("supplier_categories")
+}
+
+model RfqInvitation {
+  id                     String              @id @default(cuid())
+  rfqId                  String              @map("rfq_id")
+  supplierOrganizationId String              @map("supplier_organization_id")
+  status                 RfqInvitationStatus @default(INVITED)
+  matchReasons           Json                @default("{}") @map("match_reasons")
+  invitedAt              DateTime            @default(now()) @map("invited_at") @db.Timestamptz(3)
+  viewedAt               DateTime?           @map("viewed_at") @db.Timestamptz(3)
+  respondedAt            DateTime?           @map("responded_at") @db.Timestamptz(3)
+  declinedAt             DateTime?           @map("declined_at") @db.Timestamptz(3)
+  rfq                    Rfq                 @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  supplierOrganization   Organization        @relation("InvitedSupplier", fields: [supplierOrganizationId], references: [id], onDelete: Restrict)
+
+  @@unique([rfqId, supplierOrganizationId])
+  @@index([supplierOrganizationId, status, invitedAt])
+  @@map("rfq_invitations")
+}
+
+model Quotation {
+  id                     String          @id @default(cuid())
+  code                   String          @unique
+  rfqId                  String          @map("rfq_id")
+  supplierOrganizationId String          @map("supplier_organization_id")
+  createdByUserId        String          @map("created_by_user_id")
+  version                Int             @default(1)
+  status                 QuotationStatus @default(DRAFT)
+  currency               String          @default("IRR")
+  paymentTerms           String?         @map("payment_terms")
+  preparationDays        Int?            @map("preparation_days")
+  deliveryDate           DateTime?       @map("delivery_date") @db.Timestamptz(3)
+  validUntil             DateTime?       @map("valid_until") @db.Timestamptz(3)
+  subtotalRial           BigInt          @default(0) @map("subtotal_rial")
+  discountRial           BigInt          @default(0) @map("discount_rial")
+  taxRial                BigInt          @default(0) @map("tax_rial")
+  packagingRial          BigInt          @default(0) @map("packaging_rial")
+  loadingRial            BigInt          @default(0) @map("loading_rial")
+  shippingRial           BigInt          @default(0) @map("shipping_rial")
+  otherCostsRial         BigInt          @default(0) @map("other_costs_rial")
+  finalAmountRial        BigInt          @default(0) @map("final_amount_rial")
+  submittedAt            DateTime?       @map("submitted_at") @db.Timestamptz(3)
+  withdrawnAt            DateTime?       @map("withdrawn_at") @db.Timestamptz(3)
+  createdAt              DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  rfq                    Rfq             @relation(fields: [rfqId], references: [id], onDelete: Restrict)
+  supplierOrganization   Organization    @relation("SupplierQuotations", fields: [supplierOrganizationId], references: [id], onDelete: Restrict)
+  createdBy              User            @relation("QuotationCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  items                  QuotationItem[]
+
+  @@unique([rfqId, supplierOrganizationId, version])
+  @@index([rfqId, status, submittedAt])
+  @@index([supplierOrganizationId, status, createdAt])
+  @@map("quotations")
+}
+
+model QuotationItem {
+  id                 String    @id @default(cuid())
+  quotationId        String    @map("quotation_id")
+  rfqItemId          String    @map("rfq_item_id")
+  quantity           Decimal   @db.Decimal(20, 4)
+  unitPriceRial      BigInt    @map("unit_price_rial")
+  discountRial       BigInt    @default(0) @map("discount_rial")
+  lineSubtotalRial   BigInt    @map("line_subtotal_rial")
+  lineNetRial        BigInt    @map("line_net_rial")
+  isAlternative      Boolean   @default(false) @map("is_alternative")
+  offeredDescription String?   @map("offered_description")
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  quotation          Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  rfqItem            RfqItem   @relation(fields: [rfqItemId], references: [id], onDelete: Restrict)
+
+  @@unique([quotationId, rfqItemId])
+  @@index([rfqItemId])
+  @@map("quotation_items")
 }
 
 model SubscriptionPlan {

@@ -22,6 +22,16 @@ export class RfqsController {
     return this.rfqs.listReviewQueue(user);
   }
 
+  @Get('matched')
+  listMatched(@CurrentUser() user: AuthenticatedUser) {
+    return this.rfqs.listMatchedForSupplier(user);
+  }
+
+  @Get(':id')
+  getOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.rfqs.getOne(user, id);
+  }
+
   @Post()
   create(@CurrentUser() user: AuthenticatedUser, @Body() input: CreateRfqDto) {
     return this.rfqs.createSelfService(user, input);
@@ -51,5 +61,4 @@ export class RfqsController {
   createCommitmentPayment(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() input: CreateCommitmentPaymentDto) {
     return this.rfqs.createCommitmentPayment(user, id, input.idempotencyKey);
   }
-
 }

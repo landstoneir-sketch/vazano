@@ -131,6 +131,68 @@ async function main(): Promise<void> {
     const role = await prisma.role.findUniqueOrThrow({ where: { key: 'SUPER_ADMIN' } });
     const existing = await prisma.userRole.findFirst({ where: { userId: user.id, roleId: role.id, organizationId: null } });
     if (!existing) await prisma.userRole.create({ data: { userId: user.id, roleId: role.id } });
+
+    if (process.env.NODE_ENV !== 'production' && process.env.SEED_DEMO_DATA !== 'false') {
+      const buyer = await prisma.organization.upsert({
+        where: { id: 'demo-buyer-organization' },
+        create: { id: 'demo-buyer-organization', kind: 'BUYER', type: 'COMPANY', legalName: 'خریدار آزمایشی وازانو', displayName: 'خریدار آزمایشی', province: 'تهران', city: 'تهران', status: 'ACTIVE' },
+        update: { status: 'ACTIVE' },
+      });
+      await prisma.organizationMember.upsert({
+        where: { organizationId_userId: { organizationId: buyer.id, userId: user.id } },
+        create: { organizationId: buyer.id, userId: user.id, role: 'BUYER_OWNER' },
+        update: { role: 'BUYER_OWNER', status: 'ACTIVE' },
+      });
+      const demoCategory = await prisma.category.findFirstOrThrow({ where: { parentId: naturalStone.id }, orderBy: { sortOrder: 'asc' } });
+      const demoUnit = await prisma.unitOfMeasure.findUniqueOrThrow({ where: { code: 'square-meter' } });
+      await prisma.rfq.upsert({
+        where: { id: 'demo-historical-rfq' },
+        create: {
+          id: 'demo-historical-rfq', code: 'VZ-DEMO-HISTORY', buyerOrganizationId: buyer.id, buyerContactUserId: user.id, createdByUserId: user.id,
+          primaryDomainId: industry.id, title: 'سابقه آزمایشی تکمیل‌شده', lifecycleState: 'CLOSED', operationalStatus: 'COMPLETED', approvalStatus: 'APPROVED',
+          source: 'PLATFORM_OPERATOR', manualReviewRequired: false, commitmentStatus: 'NOT_REQUIRED', displayPricesTaxInclusive: false, closedAt: new Date(),
+          items: { create: { id: 'demo-historical-rfq-item', categoryId: demoCategory.id, unitId: demoUnit.id, title: 'ردیف آزمایشی سابقه', quantity: '1' } },
+        },
+        update: {},
+      });
+
+      const supplier = await prisma.organization.upsert({
+        where: { id: 'demo-supplier-organization' },
+        create: { id: 'demo-supplier-organization', kind: 'SUPPLIER', type: 'COMPANY', legalName: 'سنگ نمونه وازانو', displayName: 'سنگ نمونه وازانو', province: 'تهران', city: 'تهران', status: 'ACTIVE' },
+        update: { status: 'ACTIVE' },
+      });
+      await prisma.organizationMember.upsert({
+        where: { organizationId_userId: { organizationId: supplier.id, userId: user.id } },
+        create: { organizationId: supplier.id, userId: user.id, role: 'SUPPLIER_OWNER' },
+        update: { role: 'SUPPLIER_OWNER', status: 'ACTIVE' },
+      });
+      const supplierProfile = await prisma.supplierProfile.upsert({
+        where: { organizationId: supplier.id },
+        create: { organizationId: supplier.id, description: 'داده آزمایشی محیط توسعه برای کنترل جریان کامل استعلام و پیشنهاد', nationwideCoverage: true, verificationStatus: 'VERIFIED', verifiedAt: new Date() },
+        update: { nationwideCoverage: true, verificationStatus: 'VERIFIED', verifiedAt: new Date() },
+      });
+      const stoneCategories = await prisma.category.findMany({ where: { parentId: naturalStone.id }, select: { id: true } });
+      await prisma.supplierCategory.createMany({ data: stoneCategories.map(({ id }) => ({ supplierProfileId: supplierProfile.id, categoryId: id })), skipDuplicates: true });
+
+      const demoPlan = await prisma.subscriptionPlan.findUniqueOrThrow({ where: { code: 'SELLER_P1M_V1' } });
+      const startsAt = new Date();
+      const expiresAt = new Date(startsAt.getTime() + 30 * 24 * 60 * 60 * 1000);
+      await prisma.subscription.upsert({
+        where: { id: 'demo-supplier-subscription' },
+        create: { id: 'demo-supplier-subscription', organizationId: supplier.id, planId: demoPlan.id, status: 'ACTIVE', startsAt, expiresAt, graceEndsAt: new Date(expiresAt.getTime() + 7 * 24 * 60 * 60 * 1000), priceRialSnapshot: demoPlan.priceRial, grantCreditSnapshot: demoPlan.grantCredits, planVersionSnapshot: demoPlan.version },
+        update: { status: 'ACTIVE', startsAt, expiresAt, graceEndsAt: new Date(expiresAt.getTime() + 7 * 24 * 60 * 60 * 1000) },
+      });
+      const wallet = await prisma.creditWallet.upsert({
+        where: { organizationId: supplier.id },
+        create: { organizationId: supplier.id, cachedBalanceCredits: 10_000_000n },
+        update: {},
+      });
+      await prisma.creditLedgerEntry.upsert({
+        where: { idempotencyKey: 'demo-supplier:initial-credit:v1' },
+        create: { walletId: wallet.id, type: 'GRANT', amountCredits: 10_000_000n, referenceType: 'DevelopmentSeed', referenceId: supplier.id, idempotencyKey: 'demo-supplier:initial-credit:v1', reasonCode: 'DEVELOPMENT_DEMO_DATA' },
+        update: {},
+      });
+    }
   }
 }
 

@@ -24,9 +24,49 @@ export class RfqsService {
       .map((membership) => membership.organizationId);
     return this.prisma.rfq.findMany({
       where: { buyerOrganizationId: { in: buyerOrganizationIds } },
-      include: { items: { include: { category: true, unit: true }, orderBy: { sortOrder: 'asc' } } },
+      include: { items: { include: { category: true, unit: true }, orderBy: { sortOrder: 'asc' } }, _count: { select: { quotations: true } } },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  listMatchedForSupplier(user: AuthenticatedUser) {
+    const supplierOrganizationIds = user.memberships
+      .filter((membership) => ['SUPPLIER_OWNER', 'SUPPLIER_MANAGER', 'SUPPLIER_SALES'].includes(membership.role))
+      .map((membership) => membership.organizationId);
+    return this.prisma.rfqInvitation.findMany({
+      where: { supplierOrganizationId: { in: supplierOrganizationIds }, status: { in: ['INVITED', 'VIEWED', 'RESPONDED'] } },
+      include: {
+        supplierOrganization: { select: { id: true, displayName: true } },
+        rfq: {
+          include: {
+            buyerOrganization: { select: { id: true, displayName: true, province: true, city: true } },
+            items: { include: { category: true, unit: true }, orderBy: { sortOrder: 'asc' } },
+            quotations: { where: { supplierOrganizationId: { in: supplierOrganizationIds } }, select: { id: true, status: true, version: true, finalAmountRial: true } },
+          },
+        },
+      },
+      orderBy: { invitedAt: 'desc' },
+    });
+  }
+
+  async getOne(user: AuthenticatedUser, rfqId: string) {
+    const rfq = await this.prisma.rfq.findUnique({
+      where: { id: rfqId },
+      include: {
+        buyerOrganization: { select: { id: true, displayName: true, province: true, city: true } },
+        items: { include: { category: true, unit: true }, orderBy: { sortOrder: 'asc' } },
+        invitations: { select: { supplierOrganizationId: true, status: true } },
+        _count: { select: { quotations: true } },
+      },
+    });
+    if (!rfq) throw new NotFoundException('استعلام پیدا نشد.');
+    const buyerAccess = user.memberships.some((membership) => membership.organizationId === rfq.buyerOrganizationId);
+    const supplierOrganizationIds = user.memberships
+      .filter((membership) => ['SUPPLIER_OWNER', 'SUPPLIER_MANAGER', 'SUPPLIER_SALES'].includes(membership.role))
+      .map((membership) => membership.organizationId);
+    const supplierAccess = rfq.invitations.some((invitation) => supplierOrganizationIds.includes(invitation.supplierOrganizationId));
+    if (!buyerAccess && !supplierAccess && !user.permissions.includes('rfq.manage')) throw new ForbiddenException('دسترسی به این استعلام مجاز نیست.');
+    return rfq;
   }
 
   listReviewQueue(user: AuthenticatedUser) {
@@ -104,15 +144,43 @@ export class RfqsService {
 
   async publish(user: AuthenticatedUser, rfqId: string) {
     if (!user.permissions.includes('rfq.review')) throw new ForbiddenException('مجوز انتشار استعلام را ندارید.');
-    const rfq = await this.prisma.rfq.findUnique({ where: { id: rfqId } });
+    const rfq = await this.prisma.rfq.findUnique({ where: { id: rfqId }, include: { items: true } });
     if (!rfq) throw new NotFoundException('استعلام پیدا نشد.');
     if (!canPublishRfq(rfq.approvalStatus, rfq.commitmentStatus)) throw new ConflictException('گیت تأیید یا تعهد مالی هنوز تکمیل نشده است.');
     if (rfq.lifecycleState === 'PUBLISHED') return rfq;
+    const categoryIds = [...new Set(rfq.items.map((item) => item.categoryId))];
+    const suppliers = await this.prisma.supplierProfile.findMany({
+      where: {
+        verificationStatus: 'VERIFIED',
+        organization: { status: 'ACTIVE' },
+        categories: { some: { categoryId: { in: categoryIds } } },
+        ...(rfq.deliveryProvince
+          ? { OR: [{ nationwideCoverage: true }, { serviceProvinces: { has: rfq.deliveryProvince } }] }
+          : {}),
+      },
+      include: { categories: { where: { categoryId: { in: categoryIds } }, select: { categoryId: true } } },
+    });
     return this.prisma.$transaction(async (tx) => {
       const result = await tx.rfq.update({ where: { id: rfqId }, data: { lifecycleState: 'PUBLISHED', operationalStatus: 'OPEN_FOR_QUOTES', publishedAt: new Date() } });
+      for (const supplier of suppliers) {
+        await tx.rfqInvitation.upsert({
+          where: { rfqId_supplierOrganizationId: { rfqId, supplierOrganizationId: supplier.organizationId } },
+          create: {
+            rfqId,
+            supplierOrganizationId: supplier.organizationId,
+            matchReasons: {
+              strategy: 'RULE_BASED_V1',
+              categoryIds: supplier.categories.map((item) => item.categoryId),
+              geography: supplier.nationwideCoverage ? 'NATIONWIDE' : rfq.deliveryProvince ?? 'UNSPECIFIED',
+            },
+          },
+          update: {},
+        });
+      }
       await tx.auditLog.create({ data: { actorUserId: user.id, organizationId: rfq.buyerOrganizationId, action: 'rfq.publish', entityType: 'Rfq', entityId: rfqId } });
       await tx.outboxEvent.create({ data: { aggregateType: 'Rfq', aggregateId: rfqId, eventType: 'ir.vazano.rfq.published.v1', payload: { rfqId } } });
-      return result;
+      await tx.outboxEvent.create({ data: { aggregateType: 'Rfq', aggregateId: rfqId, eventType: 'ir.vazano.rfq.distributed.v1', payload: { rfqId, invitedSupplierCount: suppliers.length, strategy: 'RULE_BASED_V1' } } });
+      return { ...result, invitedSupplierCount: suppliers.length };
     });
   }
 
