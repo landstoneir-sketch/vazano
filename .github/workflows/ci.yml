@@ -1,0 +1,64 @@
+name: Quality gate
+
+on:
+  pull_request:
+  push:
+    branches: [main, "rebuild/**"]
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Validate database schema
+        run: npm run prisma:validate --workspace @vazano/api
+
+      - name: Generate database client
+        run: npm run prisma:generate
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm run test
+
+      - name: Build applications
+        run: npm run build
+
+  containers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Build web runtime image
+        run: docker build --target web-runner --tag vazano-web:${{ github.sha }} .
+
+      - name: Build API runtime image
+        run: docker build --target api-runner --tag vazano-api:${{ github.sha }} .

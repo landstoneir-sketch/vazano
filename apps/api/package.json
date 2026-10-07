@@ -4,19 +4,20 @@
   "private": true,
   "scripts": {
     "build": "nest build",
-    "start": "node dist/main.js",
+    "start": "node dist/src/main.js",
     "start:dev": "nest start --watch",
     "lint": "eslint \"{src,prisma,test}/**/*.ts\"",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "jest --runInBand --passWithNoTests",
     "prisma:generate": "prisma generate",
+    "prisma:validate": "prisma validate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.922.0",
-    "@aws-sdk/s3-request-presigner": "^3.922.0",
+    "@aws-sdk/client-s3": "^3.1147.0",
+    "@aws-sdk/s3-request-presigner": "^3.1147.0",
     "@nestjs/common": "^11.1.6",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.1.6",
