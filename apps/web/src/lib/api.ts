@@ -8,6 +8,7 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
     credentials: 'include',
     headers: { 'content-type': 'application/json', ...init?.headers },
   });
+  if (response.status === 204) return undefined as T;
   const body = (await response.json()) as ApiEnvelope<T> | { error?: { message?: string } };
   if (!response.ok) {
     const message = 'error' in body ? body.error?.message : undefined;
