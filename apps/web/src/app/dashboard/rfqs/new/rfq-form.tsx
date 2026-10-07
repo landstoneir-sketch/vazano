@@ -9,6 +9,8 @@ type Industry = { id: string; nameFa: string };
 type Category = { id: string; industryId: string; parentId: string | null; nameFa: string };
 type Unit = { id: string; nameFa: string; symbolFa: string };
 type CreatedRfq = { id: string; code: string; commitmentStatus: string; commitmentAmountRial: string | null; operationalStatus: string };
+type Attachment = { id: string; originalName: string; status: string; sizeBytes: number };
+type UploadIntent = { attachment: Attachment; upload: { url: string; method: 'PUT'; headers: Record<string, string> } };
 
 export function NewRfqForm() {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
@@ -29,6 +31,8 @@ export function NewRfqForm() {
   const [created, setCreated] = useState<CreatedRfq | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   useEffect(() => {
     void Promise.all([
@@ -73,11 +77,44 @@ export function NewRfqForm() {
     finally { setBusy(false); }
   }
 
+  async function uploadAttachment() {
+    if (!created || !selectedFile) return;
+    setBusy(true); setError('');
+    try {
+      const intent = await apiRequest<UploadIntent>(`/attachments/rfqs/${created.id}/upload-intent`, {
+        method: 'POST',
+        body: JSON.stringify({
+          fileName: selectedFile.name,
+          mimeType: selectedFile.type,
+          sizeBytes: selectedFile.size,
+          purpose: selectedFile.type.startsWith('image/') ? 'PRODUCT_IMAGE' : 'GENERAL',
+        }),
+      });
+      const upload = await fetch(intent.upload.url, { method: intent.upload.method, headers: intent.upload.headers, body: selectedFile });
+      if (!upload.ok) throw new Error('ارسال فایل به فضای ذخیره‌سازی انجام نشد.');
+      const completed = await apiRequest<Attachment>(`/attachments/${intent.attachment.id}/complete`, { method: 'POST' });
+      setAttachments((items) => [...items, completed]);
+      setSelectedFile(null);
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : 'بارگذاری فایل انجام نشد.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!error && organizations.length === 0) return <div className="card"><p>برای ثبت استعلام ابتدا حساب خریدار ایجاد کنید.</p><Link className="button button-primary" href="/dashboard/organization">ایجاد حساب خریدار</Link></div>;
 
   return <form className="card form-grid" onSubmit={submit}>
     {error && <div className="message message-error">{error}</div>}
     {created && <div className="message message-success"><strong>{created.operationalStatus === 'UNDER_REVIEW' ? 'استعلام در صف بررسی است.' : 'پیش‌نویس ثبت شد.'}</strong><br />کد استعلام: {created.code}<br />وضعیت تعهد: {created.commitmentStatus}{created.operationalStatus !== 'UNDER_REVIEW' && <><br /><button type="button" className="button button-secondary" onClick={() => void submitForReview()} disabled={busy}>ارسال برای بررسی وازانو</button></>}</div>}
+    {created && created.operationalStatus !== 'UNDER_REVIEW' && <fieldset className="fieldset full"><legend>عکس، نقشه، متره یا مشخصات فنی</legend>
+      <p className="muted">PDF، تصویر، Word یا Excel تا حداکثر ۲۰ مگابایت؛ فایل اجرایی و SVG پذیرفته نمی‌شود.</p>
+      <div className="attachment-upload-row">
+        <input aria-label="انتخاب فایل پیوست" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.xls,.xlsx,.docx" onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)} />
+        <button className="button button-secondary" type="button" disabled={busy || !selectedFile} onClick={() => void uploadAttachment()}>بارگذاری فایل</button>
+      </div>
+      {attachments.length > 0 && <ul>{attachments.map((attachment) => <li key={attachment.id}>{attachment.originalName} — {attachment.status === 'READY' ? 'آماده' : 'در انتظار بررسی امنیتی'}</li>)}</ul>}
+    </fieldset>}
     <label className="form-field"><span>حساب خریدار</span><select value={organizationId} onChange={(event) => setOrganizationId(event.target.value)} required>{organizations.map((item) => <option value={item.id} key={item.id}>{item.displayName}</option>)}</select></label>
     <label className="form-field"><span>حوزه اصلی</span><select value={industryId} onChange={(event) => { setIndustryId(event.target.value); setCategoryId(''); }} required>{industries.map((item) => <option value={item.id} key={item.id}>{item.nameFa}</option>)}</select></label>
     <label className="form-field full"><span>عنوان استعلام</span><input value={title} onChange={(event) => setTitle(event.target.value)} required minLength={3} placeholder="مثلاً تأمین سنگ نمای پروژه مسکونی" /></label>
