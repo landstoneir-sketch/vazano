@@ -1,0 +1,57 @@
+import { Prisma } from '@prisma/client';
+
+export const PROPOSAL_FEE_POLICY_VERSION = '1.2';
+export const PROPOSAL_FEE_MIN_CREDITS = 100_000n;
+export const PROPOSAL_FEE_MAX_CREDITS = 5_000_000n;
+
+export type QuotationLineInput = {
+  quantity: string;
+  unitPriceRial: string;
+  discountRial?: string;
+};
+
+export type QuotationCostInput = {
+  items: QuotationLineInput[];
+  discountRial?: string;
+  taxRial?: string;
+  packagingRial?: string;
+  loadingRial?: string;
+  shippingRial?: string;
+  otherCostsRial?: string;
+};
+
+export function calculateQuotationTotals(input: QuotationCostInput) {
+  const items = input.items.map((item) => {
+    const quantity = new Prisma.Decimal(item.quantity);
+    const unitPriceRial = BigInt(item.unitPriceRial);
+    const discountRial = BigInt(item.discountRial ?? '0');
+    const lineSubtotalRial = BigInt(
+      quantity.mul(unitPriceRial.toString()).toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP).toFixed(0),
+    );
+    if (discountRial > lineSubtotalRial) throw new RangeError('Line discount exceeds line subtotal');
+    return { quantity, unitPriceRial, discountRial, lineSubtotalRial, lineNetRial: lineSubtotalRial - discountRial };
+  });
+  const subtotalRial = items.reduce((sum, item) => sum + item.lineNetRial, 0n);
+  const discountRial = BigInt(input.discountRial ?? '0');
+  if (discountRial > subtotalRial) throw new RangeError('Quotation discount exceeds subtotal');
+  const taxRial = BigInt(input.taxRial ?? '0');
+  const packagingRial = BigInt(input.packagingRial ?? '0');
+  const loadingRial = BigInt(input.loadingRial ?? '0');
+  const shippingRial = BigInt(input.shippingRial ?? '0');
+  const otherCostsRial = BigInt(input.otherCostsRial ?? '0');
+  const finalAmountRial = subtotalRial - discountRial + taxRial + packagingRial + loadingRial + shippingRial + otherCostsRial;
+  return { items, subtotalRial, discountRial, taxRial, packagingRial, loadingRial, shippingRial, otherCostsRial, finalAmountRial };
+}
+
+export function calculateProposalFeeCredits(finalAmountRial: bigint): bigint {
+  const variableFee = (finalAmountRial + 9_999n) / 10_000n;
+  if (variableFee < PROPOSAL_FEE_MIN_CREDITS) return PROPOSAL_FEE_MIN_CREDITS;
+  if (variableFee > PROPOSAL_FEE_MAX_CREDITS) return PROPOSAL_FEE_MAX_CREDITS;
+  return variableFee;
+}
+
+export function startOfTehranDay(now: Date): Date {
+  const tehranOffsetMs = 210 * 60 * 1000;
+  const local = new Date(now.getTime() + tehranOffsetMs);
+  return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) - tehranOffsetMs);
+}

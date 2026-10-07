@@ -9,6 +9,8 @@ import { CatalogModule } from './modules/catalog/catalog.module';
 import { RfqsModule } from './modules/rfqs/rfqs.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { SuppliersModule } from './modules/suppliers/suppliers.module';
+import { QuotationsModule } from './modules/quotations/quotations.module';
 
 @Module({
   imports: [
@@ -21,6 +23,8 @@ import { PaymentsModule } from './modules/payments/payments.module';
     RfqsModule,
     SubscriptionsModule,
     PaymentsModule,
+    SuppliersModule,
+    QuotationsModule,
   ],
   controllers: [HealthController],
 })
