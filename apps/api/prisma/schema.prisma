@@ -1,0 +1,617 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum OrganizationType {
+  INDIVIDUAL
+  COMPANY
+}
+
+enum OrganizationKind {
+  BUYER
+  SUPPLIER
+  PLATFORM
+}
+
+enum OrganizationStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+enum MemberRole {
+  BUYER_OWNER
+  BUYER_MEMBER
+  SUPPLIER_OWNER
+  SUPPLIER_MANAGER
+  SUPPLIER_SALES
+}
+
+enum MemberStatus {
+  INVITED
+  ACTIVE
+  REMOVED
+}
+
+enum OtpPurpose {
+  LOGIN
+  SIGNUP
+  RESET
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+enum RfqEntryMethod {
+  STANDARD
+  CONVERSATIONAL
+  BOQ
+  IMAGE
+  DRAWING
+  NAMEPLATE
+  FILE
+}
+
+enum RfqLifecycleState {
+  DRAFT
+  SUBMITTED
+  PUBLISHED
+  CLOSED
+  CANCELLED
+  EXPIRED
+  ARCHIVED
+}
+
+enum RfqOperationalStatus {
+  DRAFT_INCOMPLETE
+  READY_FOR_REVIEW
+  UNDER_REVIEW
+  NEEDS_CHANGES
+  WAITING_COMMITMENT
+  READY_TO_PUBLISH
+  OPEN_FOR_QUOTES
+  HAS_QUOTES
+  NEGOTIATING
+  SELLER_SELECTED
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum RfqApprovalStatus {
+  NOT_SUBMITTED
+  PENDING
+  NEEDS_CHANGES
+  APPROVED
+  REJECTED
+}
+
+enum RfqSource {
+  BUYER_SELF_SERVICE
+  PLATFORM_OPERATOR
+}
+
+enum CommitmentStatus {
+  NOT_REQUIRED
+  REQUIRED
+  PAYMENT_PENDING
+  HELD
+  RELEASED_TO_WALLET
+  REFUND_PENDING
+  REFUNDED
+  FORFEITED
+}
+
+enum SubscriptionStatus {
+  DRAFT
+  ACTIVE
+  GRACE
+  EXPIRED
+  SUSPENDED
+  CANCELLED
+}
+
+enum BillingCycle {
+  P1M
+  P3M
+  P6M
+  P1Y
+  CUSTOM
+}
+
+enum ReminderChannel {
+  SMS
+  IN_APP
+  EMAIL
+}
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  CANCELLED
+  FAILED
+}
+
+enum PaymentProvider {
+  ZARINPAL
+  MOCK
+}
+
+enum PaymentPurpose {
+  SUBSCRIPTION
+  BUYER_COMMITMENT
+  QUALITY_CONTROL
+}
+
+enum PaymentStatus {
+  CREATED
+  REDIRECT_PENDING
+  VERIFY_PENDING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum CreditEntryType {
+  GRANT
+  RESERVE
+  CONSUME
+  RELEASE
+  REFUND
+  EXPIRE
+  ADJUSTMENT
+}
+
+enum QualityControlStatus {
+  REQUESTED
+  QUOTED
+  ACCEPTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id               String               @id @default(cuid())
+  mobile           String               @unique
+  email            String?              @unique
+  firstName        String?              @map("first_name")
+  lastName         String?              @map("last_name")
+  locale           String               @default("fa-IR")
+  status           UserStatus           @default(ACTIVE)
+  mobileVerifiedAt DateTime?            @map("mobile_verified_at") @db.Timestamptz(3)
+  emailVerifiedAt  DateTime?            @map("email_verified_at") @db.Timestamptz(3)
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  memberships      OrganizationMember[]
+  sessions         Session[]
+  userRoles        UserRole[]
+  auditLogs        AuditLog[]
+  createdRfqs      Rfq[]                @relation("RfqCreator")
+  buyerContactRfqs Rfq[]                @relation("RfqBuyerContact")
+  operatedRfqs     Rfq[]                @relation("RfqOperator")
+
+  @@map("users")
+}
+
+model Organization {
+  id            String               @id @default(cuid())
+  kind          OrganizationKind
+  type          OrganizationType
+  legalName     String               @map("legal_name")
+  displayName   String               @map("display_name")
+  nationalId    String?              @unique @map("national_id")
+  province      String?
+  city          String?
+  status        OrganizationStatus   @default(PENDING)
+  createdAt     DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  members       OrganizationMember[]
+  scopedRoles   UserRole[]
+  buyerRfqs     Rfq[]
+  subscriptions Subscription[]
+  creditWallet  CreditWallet?
+
+  @@index([kind, status])
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
+  userId         String       @map("user_id")
+  role           MemberRole
+  status         MemberStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId, status])
+  @@map("organization_members")
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  key         String           @unique
+  nameFa      String           @map("name_fa")
+  description String?
+  isSystem    Boolean          @default(true) @map("is_system")
+  permissions RolePermission[]
+  userRoles   UserRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  key         String           @unique
+  description String?
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id")
+  permissionId String     @map("permission_id")
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id             String        @id @default(cuid())
+  userId         String        @map("user_id")
+  roleId         String        @map("role_id")
+  organizationId String?       @map("organization_id")
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           Role          @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([userId, organizationId])
+  @@map("user_roles")
+}
+
+model Session {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(3)
+  lastSeenAt DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+  ipAddress  String?   @map("ip_address")
+  userAgent  String?   @map("user_agent")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("sessions")
+}
+
+model OtpCode {
+  id         String     @id @default(cuid())
+  mobile     String
+  purpose    OtpPurpose
+  codeHash   String     @map("code_hash")
+  attempts   Int        @default(0)
+  expiresAt  DateTime   @map("expires_at") @db.Timestamptz(3)
+  consumedAt DateTime?  @map("consumed_at") @db.Timestamptz(3)
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([mobile, purpose, createdAt])
+  @@map("otp_codes")
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  actorUserId    String?  @map("actor_user_id")
+  organizationId String?  @map("organization_id")
+  action         String
+  entityType     String   @map("entity_type")
+  entityId       String?  @map("entity_id")
+  metadata       Json?
+  ipAddress      String?  @map("ip_address")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  actor          User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([actorUserId, createdAt])
+  @@map("audit_logs")
+}
+
+model OutboxEvent {
+  id            String       @id @default(cuid())
+  aggregateType String       @map("aggregate_type")
+  aggregateId   String       @map("aggregate_id")
+  eventType     String       @map("event_type")
+  payload       Json
+  status        OutboxStatus @default(PENDING)
+  attempts      Int          @default(0)
+  availableAt   DateTime     @default(now()) @map("available_at") @db.Timestamptz(3)
+  processedAt   DateTime?    @map("processed_at") @db.Timestamptz(3)
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([status, availableAt])
+  @@map("outbox_events")
+}
+
+model Industry {
+  id         String     @id @default(cuid())
+  code       String     @unique
+  nameFa     String     @map("name_fa")
+  nameEn     String?    @map("name_en")
+  isActive   Boolean    @default(true) @map("is_active")
+  sortOrder  Int        @default(0) @map("sort_order")
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  categories Category[]
+  rfqs       Rfq[]
+
+  @@map("industries")
+}
+
+model Category {
+  id         String     @id @default(cuid())
+  industryId String     @map("industry_id")
+  parentId   String?    @map("parent_id")
+  code       String     @unique
+  slug       String     @unique
+  nameFa     String     @map("name_fa")
+  nameEn     String?    @map("name_en")
+  isActive   Boolean    @default(true) @map("is_active")
+  sortOrder  Int        @default(0) @map("sort_order")
+  metadata   Json?
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  industry   Industry   @relation(fields: [industryId], references: [id], onDelete: Restrict)
+  parent     Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children   Category[] @relation("CategoryTree")
+  rfqItems   RfqItem[]
+
+  @@index([industryId, parentId, isActive])
+  @@map("categories")
+}
+
+model UnitOfMeasure {
+  id           String    @id @default(cuid())
+  code         String    @unique
+  nameFa       String    @map("name_fa")
+  symbolFa     String    @map("symbol_fa")
+  decimalScale Int       @default(2) @map("decimal_scale")
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  rfqItems     RfqItem[]
+
+  @@map("units_of_measure")
+}
+
+model Rfq {
+  id                        String                 @id @default(cuid())
+  code                      String                 @unique
+  buyerOrganizationId       String                 @map("buyer_organization_id")
+  buyerContactUserId        String                 @map("buyer_contact_user_id")
+  createdByUserId           String                 @map("created_by_user_id")
+  operatorUserId            String?                @map("operator_user_id")
+  primaryDomainId           String                 @map("primary_domain_id")
+  title                     String
+  description               String?
+  entryMethod               RfqEntryMethod         @default(STANDARD) @map("entry_method")
+  lifecycleState            RfqLifecycleState      @default(DRAFT) @map("lifecycle_state")
+  operationalStatus         RfqOperationalStatus   @default(DRAFT_INCOMPLETE) @map("operational_status")
+  approvalStatus            RfqApprovalStatus      @default(NOT_SUBMITTED) @map("approval_status")
+  source                    RfqSource              @default(BUYER_SELF_SERVICE)
+  manualReviewRequired      Boolean                @default(true) @map("manual_review_required")
+  commitmentStatus          CommitmentStatus       @default(NOT_REQUIRED) @map("commitment_status")
+  commitmentAmountRial      BigInt?                @map("commitment_amount_rial")
+  commitmentPolicyVersion   String?                @map("commitment_policy_version")
+  deliveryProvince          String?                @map("delivery_province")
+  deliveryCity              String?                @map("delivery_city")
+  requiredAt                DateTime?              @map("required_at") @db.Timestamptz(3)
+  responseDeadline          DateTime?              @map("response_deadline") @db.Timestamptz(3)
+  installationRequired      Boolean                @default(false) @map("installation_required")
+  qualityControlRequested   Boolean                @default(false) @map("quality_control_requested")
+  qualityControlFeeBps      Int?                   @map("quality_control_fee_bps")
+  displayPricesTaxInclusive Boolean                @default(false) @map("display_prices_tax_inclusive")
+  submittedAt               DateTime?              @map("submitted_at") @db.Timestamptz(3)
+  publishedAt               DateTime?              @map("published_at") @db.Timestamptz(3)
+  closedAt                  DateTime?              @map("closed_at") @db.Timestamptz(3)
+  createdAt                 DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                 DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  buyerOrganization         Organization           @relation(fields: [buyerOrganizationId], references: [id], onDelete: Restrict)
+  buyerContact              User                   @relation("RfqBuyerContact", fields: [buyerContactUserId], references: [id], onDelete: Restrict)
+  createdBy                 User                   @relation("RfqCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  operator                  User?                  @relation("RfqOperator", fields: [operatorUserId], references: [id], onDelete: Restrict)
+  primaryDomain             Industry               @relation(fields: [primaryDomainId], references: [id], onDelete: Restrict)
+  items                     RfqItem[]
+  qualityControlRequest     QualityControlRequest?
+
+  @@index([buyerOrganizationId, createdAt])
+  @@index([lifecycleState, operationalStatus])
+  @@index([approvalStatus, manualReviewRequired])
+  @@map("rfqs")
+}
+
+model RfqItem {
+  id                     String        @id @default(cuid())
+  rfqId                  String        @map("rfq_id")
+  categoryId             String        @map("category_id")
+  unitId                 String        @map("unit_id")
+  title                  String
+  quantity               Decimal       @db.Decimal(20, 4)
+  specifications         Json          @default("{}")
+  estimatedLineValueRial BigInt?       @map("estimated_line_value_rial")
+  sortOrder              Int           @default(0) @map("sort_order")
+  createdAt              DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  rfq                    Rfq           @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  category               Category      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  unit                   UnitOfMeasure @relation(fields: [unitId], references: [id], onDelete: Restrict)
+
+  @@index([rfqId, sortOrder])
+  @@index([categoryId])
+  @@map("rfq_items")
+}
+
+model SubscriptionPlan {
+  id                 String         @id @default(cuid())
+  code               String         @unique
+  nameFa             String         @map("name_fa")
+  descriptionFa      String?        @map("description_fa")
+  billingCycle       BillingCycle   @map("billing_cycle")
+  durationIso        String         @map("duration_iso")
+  priceRial          BigInt         @map("price_rial")
+  grantCredits       BigInt         @map("grant_credits")
+  dailyProposalLimit Int            @default(2) @map("daily_proposal_limit")
+  maxProposalLimit   Int            @default(6) @map("max_proposal_limit")
+  taxIncluded        Boolean        @default(false) @map("tax_included")
+  isPublic           Boolean        @default(true) @map("is_public")
+  isActive           Boolean        @default(true) @map("is_active")
+  version            Int            @default(1)
+  entitlements       Json           @default("{}")
+  createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  subscriptions      Subscription[]
+
+  @@index([isActive, isPublic])
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id                  String                 @id @default(cuid())
+  organizationId      String                 @map("organization_id")
+  planId              String                 @map("plan_id")
+  status              SubscriptionStatus     @default(DRAFT)
+  startsAt            DateTime?              @map("starts_at") @db.Timestamptz(3)
+  expiresAt           DateTime?              @map("expires_at") @db.Timestamptz(3)
+  graceEndsAt         DateTime?              @map("grace_ends_at") @db.Timestamptz(3)
+  autoRenewEnabled    Boolean                @default(false) @map("auto_renew_enabled")
+  autoRenewConsentAt  DateTime?              @map("auto_renew_consent_at") @db.Timestamptz(3)
+  priceRialSnapshot   BigInt                 @map("price_rial_snapshot")
+  grantCreditSnapshot BigInt                 @map("grant_credit_snapshot")
+  planVersionSnapshot Int                    @map("plan_version_snapshot")
+  createdAt           DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization        Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  plan                SubscriptionPlan       @relation(fields: [planId], references: [id], onDelete: Restrict)
+  reminders           SubscriptionReminder[]
+
+  @@index([organizationId, status])
+  @@index([status, expiresAt])
+  @@map("subscriptions")
+}
+
+model SubscriptionReminder {
+  id             String          @id @default(cuid())
+  subscriptionId String          @map("subscription_id")
+  offsetDays     Int             @map("offset_days")
+  channel        ReminderChannel
+  status         ReminderStatus  @default(PENDING)
+  scheduledAt    DateTime        @map("scheduled_at") @db.Timestamptz(3)
+  sentAt         DateTime?       @map("sent_at") @db.Timestamptz(3)
+  cancelledAt    DateTime?       @map("cancelled_at") @db.Timestamptz(3)
+  failureReason  String?         @map("failure_reason")
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  subscription   Subscription    @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriptionId, offsetDays, channel])
+  @@index([status, scheduledAt])
+  @@map("subscription_reminders")
+}
+
+model CreditWallet {
+  id                   String              @id @default(cuid())
+  organizationId       String              @unique @map("organization_id")
+  cachedBalanceCredits BigInt              @default(0) @map("cached_balance_credits")
+  updatedAt            DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization         Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  entries              CreditLedgerEntry[]
+
+  @@map("credit_wallets")
+}
+
+model CreditLedgerEntry {
+  id             String          @id @default(cuid())
+  walletId       String          @map("wallet_id")
+  type           CreditEntryType
+  amountCredits  BigInt          @map("amount_credits")
+  referenceType  String          @map("reference_type")
+  referenceId    String          @map("reference_id")
+  idempotencyKey String          @unique @map("idempotency_key")
+  reasonCode     String?         @map("reason_code")
+  metadata       Json?
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  wallet         CreditWallet    @relation(fields: [walletId], references: [id], onDelete: Restrict)
+
+  @@index([walletId, createdAt])
+  @@index([referenceType, referenceId])
+  @@map("credit_ledger_entries")
+}
+
+model PaymentIntent {
+  id                  String          @id @default(cuid())
+  provider            PaymentProvider
+  purpose             PaymentPurpose
+  status              PaymentStatus   @default(CREATED)
+  amountRial          BigInt          @map("amount_rial")
+  payerOrganizationId String?         @map("payer_organization_id")
+  referenceType       String          @map("reference_type")
+  referenceId         String          @map("reference_id")
+  authority           String?         @unique
+  providerReference   String?         @map("provider_reference")
+  idempotencyKey      String          @unique @map("idempotency_key")
+  callbackPayload     Json?           @map("callback_payload")
+  verifiedAt          DateTime?       @map("verified_at") @db.Timestamptz(3)
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([referenceType, referenceId])
+  @@index([status, createdAt])
+  @@map("payment_intents")
+}
+
+model QualityControlRequest {
+  id                 String               @id @default(cuid())
+  rfqId              String               @unique @map("rfq_id")
+  status             QualityControlStatus @default(REQUESTED)
+  purchaseAmountRial BigInt?              @map("purchase_amount_rial")
+  feeBps             Int                  @default(300) @map("fee_bps")
+  feeAmountRial      BigInt?              @map("fee_amount_rial")
+  policyVersion      String               @default("QC_V1") @map("policy_version")
+  requestedAt        DateTime             @default(now()) @map("requested_at") @db.Timestamptz(3)
+  acceptedAt         DateTime?            @map("accepted_at") @db.Timestamptz(3)
+  completedAt        DateTime?            @map("completed_at") @db.Timestamptz(3)
+  rfq                Rfq                  @relation(fields: [rfqId], references: [id], onDelete: Restrict)
+
+  @@index([status, requestedAt])
+  @@map("quality_control_requests")
+}
+
+model SystemSetting {
+  id            String   @id @default(cuid())
+  key           String   @unique
+  value         Json
+  descriptionFa String?  @map("description_fa")
+  isEditable    Boolean  @default(true) @map("is_editable")
+  version       Int      @default(1)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("system_settings")
+}
