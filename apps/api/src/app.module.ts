@@ -17,6 +17,7 @@ import { AdminConfigModule } from './modules/admin-config/admin-config.module';
 import { MessagesModule } from './modules/messages/messages.module';
 import { SupportModule } from './modules/support/support.module';
 import { AdminOperationsModule } from './modules/admin-operations/admin-operations.module';
+import { CmsModule } from './modules/cms/cms.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { AdminOperationsModule } from './modules/admin-operations/admin-operatio
     MessagesModule,
     SupportModule,
     AdminOperationsModule,
+    CmsModule,
   ],
   controllers: [HealthController],
 })

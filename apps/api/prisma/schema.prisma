@@ -20,6 +20,12 @@ enum SecurityEventSeverity {
   CRITICAL
 }
 
+enum CmsPublicationStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
 enum OrganizationType {
   INDIVIDUAL
   COMPANY
@@ -336,8 +342,47 @@ model User {
   supportComments         SupportTicketComment[]   @relation("SupportCommentAuthor")
   securityEvents          SecurityEvent[]          @relation("SecurityEventSubject")
   resolvedSecurityEvents  SecurityEvent[]          @relation("SecurityEventResolver")
+  updatedCmsPages         CmsPage[]                 @relation("CmsPageUpdater")
+  updatedFaqItems         FaqItem[]                 @relation("FaqItemUpdater")
 
   @@map("users")
+}
+
+model CmsPage {
+  id               String               @id @default(cuid())
+  slug             String               @unique
+  titleFa          String               @map("title_fa")
+  excerptFa        String?              @map("excerpt_fa")
+  bodyFa           String               @map("body_fa") @db.Text
+  seoTitleFa       String?              @map("seo_title_fa")
+  seoDescriptionFa String?              @map("seo_description_fa")
+  status           CmsPublicationStatus @default(DRAFT)
+  version          Int                  @default(1)
+  publishedAt      DateTime?            @map("published_at") @db.Timestamptz(3)
+  updatedByUserId  String               @map("updated_by_user_id")
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  updatedBy        User                 @relation("CmsPageUpdater", fields: [updatedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([status, updatedAt])
+  @@map("cms_pages")
+}
+
+model FaqItem {
+  id              String   @id @default(cuid())
+  questionFa      String   @map("question_fa")
+  answerFa        String   @map("answer_fa") @db.Text
+  category        String?
+  sortOrder       Int      @default(0) @map("sort_order")
+  isPublished     Boolean  @default(false) @map("is_published")
+  version         Int      @default(1)
+  updatedByUserId String   @map("updated_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  updatedBy       User     @relation("FaqItemUpdater", fields: [updatedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([isPublished, sortOrder])
+  @@map("faq_items")
 }
 
 model Organization {
