@@ -260,30 +260,72 @@ enum QuotationStatus {
   EXPIRED
 }
 
+enum SupportTicketType {
+  QUESTION
+  SERVICE_REQUEST
+  ISSUE
+  COMPLAINT
+  VIOLATION_REPORT
+  APPEAL
+}
+
+enum SupportTicketCategory {
+  PRODUCT_TECHNICAL
+  ACCOUNT_ACCESS
+  RFQ
+  QUOTATION
+  SUPPLIER_BUYER_CONDUCT
+  BILLING
+  PRIVACY_SECURITY
+  COMMUNICATION
+  POLICY
+  OTHER
+}
+
+enum SupportTicketPriority {
+  P1
+  P2
+  P3
+  P4
+}
+
+enum SupportTicketStatus {
+  SUBMITTED
+  ACKNOWLEDGED
+  IN_REVIEW
+  WAITING_FOR_REQUESTER
+  RESOLVED
+  CLOSED
+  REJECTED
+}
+
 model User {
-  id                  String                   @id @default(cuid())
-  mobile              String                   @unique
-  email               String?                  @unique
-  firstName           String?                  @map("first_name")
-  lastName            String?                  @map("last_name")
-  locale              String                   @default("fa-IR")
-  status              UserStatus               @default(ACTIVE)
-  mobileVerifiedAt    DateTime?                @map("mobile_verified_at") @db.Timestamptz(3)
-  emailVerifiedAt     DateTime?                @map("email_verified_at") @db.Timestamptz(3)
-  createdAt           DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt           DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
-  memberships         OrganizationMember[]
-  sessions            Session[]
-  userRoles           UserRole[]
-  auditLogs           AuditLog[]
-  createdRfqs         Rfq[]                    @relation("RfqCreator")
-  buyerContactRfqs    Rfq[]                    @relation("RfqBuyerContact")
-  operatedRfqs        Rfq[]                    @relation("RfqOperator")
-  createdQuotations   Quotation[]              @relation("QuotationCreator")
-  notifications       Notification[]
-  uploadedAttachments Attachment[]             @relation("AttachmentUploader")
-  sentMessages        Message[]                @relation("MessageSender")
-  messageReadStates   MessageThreadReadState[]
+  id                      String                   @id @default(cuid())
+  mobile                  String                   @unique
+  email                   String?                  @unique
+  firstName               String?                  @map("first_name")
+  lastName                String?                  @map("last_name")
+  locale                  String                   @default("fa-IR")
+  status                  UserStatus               @default(ACTIVE)
+  mobileVerifiedAt        DateTime?                @map("mobile_verified_at") @db.Timestamptz(3)
+  emailVerifiedAt         DateTime?                @map("email_verified_at") @db.Timestamptz(3)
+  createdAt               DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+  memberships             OrganizationMember[]
+  sessions                Session[]
+  userRoles               UserRole[]
+  auditLogs               AuditLog[]
+  createdRfqs             Rfq[]                    @relation("RfqCreator")
+  buyerContactRfqs        Rfq[]                    @relation("RfqBuyerContact")
+  operatedRfqs            Rfq[]                    @relation("RfqOperator")
+  createdQuotations       Quotation[]              @relation("QuotationCreator")
+  notifications           Notification[]
+  uploadedAttachments     Attachment[]             @relation("AttachmentUploader")
+  sentMessages            Message[]                @relation("MessageSender")
+  messageReadStates       MessageThreadReadState[]
+  requestedSupportTickets SupportTicket[]          @relation("SupportTicketRequester")
+  assignedSupportTickets  SupportTicket[]          @relation("SupportTicketAssignee")
+  supportComments         SupportTicketComment[]   @relation("SupportCommentAuthor")
 
   @@map("users")
 }
@@ -313,6 +355,8 @@ model Organization {
   buyerMessageThreads    MessageThread[]      @relation("BuyerMessageThreads")
   supplierMessageThreads MessageThread[]      @relation("SupplierMessageThreads")
   sentMessages           Message[]            @relation("MessageSenderOrganization")
+  supportTickets         SupportTicket[]      @relation("SupportTicketOrganization")
+  subjectSupportTickets  SupportTicket[]      @relation("SupportTicketSubjectOrganization")
 
   @@index([kind, status])
   @@map("organizations")
@@ -601,6 +645,7 @@ model Rfq {
   quotations                Quotation[]
   attachments               Attachment[]
   messageThreads            MessageThread[]
+  supportTickets            SupportTicket[]
 
   @@index([buyerOrganizationId, createdAt])
   @@index([lifecycleState, operationalStatus])
@@ -816,6 +861,54 @@ model MessageThreadReadState {
   @@id([threadId, userId])
   @@index([userId, lastReadAt])
   @@map("message_thread_read_states")
+}
+
+model SupportTicket {
+  id                    String                 @id @default(cuid())
+  code                  String                 @unique
+  requesterUserId       String                 @map("requester_user_id")
+  organizationId        String?                @map("organization_id")
+  subjectOrganizationId String?                @map("subject_organization_id")
+  relatedRfqId          String?                @map("related_rfq_id")
+  assignedToUserId      String?                @map("assigned_to_user_id")
+  type                  SupportTicketType
+  category              SupportTicketCategory
+  priority              SupportTicketPriority  @default(P4)
+  status                SupportTicketStatus    @default(SUBMITTED)
+  subject               String
+  description           String
+  resolution            String?
+  acknowledgedAt        DateTime?              @map("acknowledged_at") @db.Timestamptz(3)
+  resolvedAt            DateTime?              @map("resolved_at") @db.Timestamptz(3)
+  closedAt              DateTime?              @map("closed_at") @db.Timestamptz(3)
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  requester             User                   @relation("SupportTicketRequester", fields: [requesterUserId], references: [id], onDelete: Restrict)
+  organization          Organization?          @relation("SupportTicketOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  subjectOrganization   Organization?          @relation("SupportTicketSubjectOrganization", fields: [subjectOrganizationId], references: [id], onDelete: Restrict)
+  relatedRfq            Rfq?                   @relation(fields: [relatedRfqId], references: [id], onDelete: SetNull)
+  assignedTo            User?                  @relation("SupportTicketAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  comments              SupportTicketComment[]
+
+  @@index([requesterUserId, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([status, priority, createdAt])
+  @@index([assignedToUserId, status])
+  @@map("support_tickets")
+}
+
+model SupportTicketComment {
+  id           String        @id @default(cuid())
+  ticketId     String        @map("ticket_id")
+  authorUserId String        @map("author_user_id")
+  body         String
+  isInternal   Boolean       @default(false) @map("is_internal")
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  ticket       SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author       User          @relation("SupportCommentAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+
+  @@index([ticketId, createdAt])
+  @@map("support_ticket_comments")
 }
 
 model SubscriptionPlan {
