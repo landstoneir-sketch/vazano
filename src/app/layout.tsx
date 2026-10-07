@@ -20,6 +20,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <Link href="/dashboard">داشبورد</Link>
             <Link href="/supplier">فروشنده</Link>
             <Link href={'/messages' as Route}>پیام‌ها</Link>
+            <Link href={'/support' as Route}>پشتیبانی</Link>
             <Link href="/notifications">اعلان‌ها</Link>
             <Link href="/login">ورود</Link>
           </nav>
