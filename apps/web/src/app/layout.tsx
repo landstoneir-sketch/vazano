@@ -18,6 +18,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <Link href="/plans">پلن‌ها</Link>
             <Link href="/dashboard">داشبورد</Link>
             <Link href="/supplier">فروشنده</Link>
+            <Link href="/notifications">اعلان‌ها</Link>
             <Link href="/login">ورود</Link>
           </nav>
         </header>

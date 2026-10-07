@@ -59,6 +59,51 @@ const systemSettings = [
   ['seller.daily_proposal_limit', { base: 2, shortageOverrideMax: 6 }, 'محدودیت روزانه پیشنهاد موفق'],
 ] as const;
 
+const inAppNotificationTemplates = [
+  {
+    code: 'IN_APP_RFQ_SUBMITTED_FA_V1',
+    eventType: 'ir.vazano.rfq.submitted.v1',
+    titleTemplate: 'استعلام آماده بررسی است',
+    bodyTemplate: 'استعلام {{rfqCode}} با عنوان «{{rfqTitle}}» برای بررسی ارسال شد.',
+    actionPathTemplate: '/admin/rfqs',
+  },
+  {
+    code: 'IN_APP_RFQ_REVIEWED_FA_V1',
+    eventType: 'ir.vazano.rfq.reviewed.v1',
+    titleTemplate: 'نتیجه بررسی استعلام',
+    bodyTemplate: 'استعلام {{rfqCode}} {{approvalStatus}}.',
+    actionPathTemplate: '/dashboard/rfqs/{{rfqId}}',
+  },
+  {
+    code: 'IN_APP_RFQ_DISTRIBUTED_FA_V1',
+    eventType: 'ir.vazano.rfq.distributed.v1',
+    titleTemplate: 'استعلام جدید برای فروشنده',
+    bodyTemplate: 'استعلام {{rfqCode}} با عنوان «{{rfqTitle}}» با توانمندی‌های شما تطبیق دارد.',
+    actionPathTemplate: '/supplier',
+  },
+  {
+    code: 'IN_APP_QUOTATION_SUBMITTED_FA_V1',
+    eventType: 'ir.vazano.quotation.submitted.v1',
+    titleTemplate: 'پیشنهاد قیمت جدید دریافت شد',
+    bodyTemplate: '{{supplierName}} پیشنهاد {{quotationCode}} را برای استعلام {{rfqCode}} ارسال کرد.',
+    actionPathTemplate: '/dashboard/rfqs/{{rfqId}}',
+  },
+  {
+    code: 'IN_APP_QUOTATION_ACCEPTED_FA_V1',
+    eventType: 'ir.vazano.quotation.accepted.v1',
+    titleTemplate: 'پیشنهاد قیمت انتخاب شد',
+    bodyTemplate: 'پیشنهاد {{quotationCode}} از {{supplierName}} برای استعلام {{rfqCode}} انتخاب شد.',
+    actionPathTemplate: '/supplier',
+  },
+  {
+    code: 'IN_APP_SUBSCRIPTION_ACTIVATED_FA_V1',
+    eventType: 'ir.vazano.subscription.activated.v1',
+    titleTemplate: 'اشتراک فروشنده فعال شد',
+    bodyTemplate: 'پلن «{{planName}}» فعال شد و تا {{expiresAt}} اعتبار دارد.',
+    actionPathTemplate: '/supplier',
+  },
+] as const;
+
 async function main(): Promise<void> {
   for (const key of permissions) {
     await prisma.permission.upsert({ where: { key }, create: { key, description: key }, update: {} });
@@ -122,6 +167,14 @@ async function main(): Promise<void> {
       where: { key },
       create: { key, value, descriptionFa },
       update: { value, descriptionFa },
+    });
+  }
+
+  for (const template of inAppNotificationTemplates) {
+    await prisma.notificationTemplate.upsert({
+      where: { code: template.code },
+      create: { ...template, channel: 'IN_APP', locale: 'fa-IR' },
+      update: { ...template, channel: 'IN_APP', locale: 'fa-IR', isActive: true },
     });
   }
 
