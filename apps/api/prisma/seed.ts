@@ -61,6 +61,13 @@ const systemSettings = [
 
 const inAppNotificationTemplates = [
   {
+    code: 'IN_APP_ORGANIZATION_MEMBER_INVITED_FA_V1',
+    eventType: 'ir.vazano.organization.member_invited.v1',
+    titleTemplate: 'دعوت به سازمان {{organizationName}}',
+    bodyTemplate: 'برای عضویت با نقش «{{memberRole}}» دعوت شده‌اید. دعوت‌نامه را بررسی کنید.',
+    actionPathTemplate: '/dashboard/organization',
+  },
+  {
     code: 'IN_APP_RFQ_SUBMITTED_FA_V1',
     eventType: 'ir.vazano.rfq.submitted.v1',
     titleTemplate: 'استعلام آماده بررسی است',
