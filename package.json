@@ -11,9 +11,11 @@
     "dev": "concurrently -n api,web -c blue,green \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "npm run start:dev --workspace @vazano/api",
     "dev:web": "npm run dev --workspace @vazano/web",
+    "start:e2e:api": "npm run build --workspace @vazano/api && npm run start --workspace @vazano/api",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
+    "test:e2e": "playwright test",
     "build": "npm run build --workspaces --if-present",
     "prisma:generate": "npm run prisma:generate --workspace @vazano/api",
     "prisma:migrate": "npm run prisma:migrate --workspace @vazano/api",
@@ -21,6 +23,7 @@
     "prisma:seed": "npm run prisma:seed --workspace @vazano/api"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "concurrently": "9.2.4",
     "prettier": "^3.6.2",
     "typescript": "^5.9.3"

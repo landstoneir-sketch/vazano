@@ -57,8 +57,11 @@ npm run dev
 npm run lint
 npm run typecheck
 npm run test
+npm run test:e2e
 npm run build
 ```
+
+تست `test:e2e` مسیر حیاتی ورود، ثبت و انتشار استعلام، ثبت پیشنهاد و انتخاب فروشنده را با Chrome و داده موقت کنترل می‌کند؛ برای اجرای آن باید Docker Desktop و پایگاه‌داده توسعه فعال باشند. این تست پیامک واقعی ارسال نمی‌کند و داده موقت خود را پس از پایان پاک می‌کند.
 
 Migrationها نسخه‌بندی شده‌اند و اطلاعات اولیه محیط توسعه با `npm run prisma:seed` ثبت می‌شود.
 
