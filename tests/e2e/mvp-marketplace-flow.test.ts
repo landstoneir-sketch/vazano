@@ -122,6 +122,10 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   await page.getByRole('button', { name: 'ذخیره تغییرات پلن' }).click();
   await expect(page.getByText(/پلن اشتراک به‌روزرسانی شد/)).toBeVisible();
 
+  await page.goto('/supplier/subscription');
+  await expect(page.getByRole('heading', { name: 'اشتراک و پرداخت' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /خرید این پلن|تمدید با این پلن/ }).first()).toBeVisible();
+
   await page.goto('/dashboard/rfqs/new');
   await expect(page.getByLabel('حساب خریدار')).toContainText('خریدار آزمایشی');
   await page.getByLabel('عنوان استعلام').fill(TEST_RFQ_TITLE);
