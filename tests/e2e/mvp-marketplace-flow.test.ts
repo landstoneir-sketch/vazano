@@ -108,6 +108,14 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   await page.getByRole('button', { name: 'ورود' }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 
+  await page.goto('/admin/catalog');
+  await expect(page.getByRole('heading', { name: 'دسته‌بندی‌ها و ویژگی‌های محصول' })).toBeVisible();
+  await page.getByRole('button', { name: /تراورتن/ }).click();
+  await page.getByRole('button', { name: 'ذخیره تغییرات' }).click();
+  await expect(page.getByText('دسته‌بندی به‌روزرسانی شد.')).toBeVisible();
+  await page.getByRole('button', { name: 'تعریف ویژگی‌های محصول' }).click();
+  await expect(page.getByText('نوع فرآوری', { exact: true }).first()).toBeVisible();
+
   await page.goto('/dashboard/rfqs/new');
   await expect(page.getByLabel('حساب خریدار')).toContainText('خریدار آزمایشی');
   await page.getByLabel('عنوان استعلام').fill(TEST_RFQ_TITLE);
