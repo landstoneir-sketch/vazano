@@ -116,6 +116,12 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   await page.getByRole('button', { name: 'تعریف ویژگی‌های محصول' }).click();
   await expect(page.getByText('نوع فرآوری', { exact: true }).first()).toBeVisible();
 
+  await page.goto('/admin/billing');
+  await expect(page.getByRole('heading', { name: 'اشتراک‌ها، پلن‌ها و پرداخت‌ها' })).toBeVisible();
+  await page.getByRole('button', { name: /اشتراک فروشنده یک‌ماهه/ }).click();
+  await page.getByRole('button', { name: 'ذخیره تغییرات پلن' }).click();
+  await expect(page.getByText(/پلن اشتراک به‌روزرسانی شد/)).toBeVisible();
+
   await page.goto('/dashboard/rfqs/new');
   await expect(page.getByLabel('حساب خریدار')).toContainText('خریدار آزمایشی');
   await page.getByLabel('عنوان استعلام').fill(TEST_RFQ_TITLE);

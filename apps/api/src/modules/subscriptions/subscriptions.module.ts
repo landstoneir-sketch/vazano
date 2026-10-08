@@ -7,10 +7,12 @@ import { SubscriptionBillingService } from './subscription-billing.service';
 import { SubscriptionPaymentCallbackController } from './subscription-payment-callback.controller';
 import { SubscriptionLifecycleService } from './subscription-lifecycle.service';
 import { SubscriptionLifecycleWorker } from './subscription-lifecycle.worker';
+import { AdminBillingController } from './admin-billing.controller';
+import { AdminBillingService } from './admin-billing.service';
 
 @Module({
   imports: [AuthModule, PaymentsModule],
-  controllers: [SubscriptionsController, SubscriptionPaymentCallbackController],
-  providers: [SubscriptionsService, SubscriptionBillingService, SubscriptionLifecycleService, SubscriptionLifecycleWorker],
+  controllers: [SubscriptionsController, SubscriptionPaymentCallbackController, AdminBillingController],
+  providers: [SubscriptionsService, SubscriptionBillingService, SubscriptionLifecycleService, SubscriptionLifecycleWorker, AdminBillingService],
 })
 export class SubscriptionsModule {}

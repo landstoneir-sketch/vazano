@@ -33,6 +33,10 @@ describe('route access policy', () => {
     const catalogManager = { ...contentManager, permissions: ['category.manage'] };
     expect(canAccessRoute('/admin/catalog', catalogManager)).toBe(true);
     expect(canAccessRoute('/admin/content', catalogManager)).toBe(false);
+
+    const financeManager = { ...contentManager, permissions: ['billing.read'], globalRoles: ['FINANCE'] };
+    expect(canAccessRoute('/admin/billing', financeManager)).toBe(true);
+    expect(canAccessRoute('/admin/settings', financeManager)).toBe(false);
   });
 
   it('allows the super admin to access all admin pages', () => {
