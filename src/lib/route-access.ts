@@ -8,6 +8,7 @@ const SUPPLIER_ROLES = new Set(['SUPPLIER_OWNER', 'SUPPLIER_MANAGER', 'SUPPLIER_
 
 const ADMIN_PERMISSION_RULES: Array<{ prefix: string; permissions: string[] }> = [
   { prefix: '/admin/audit-logs', permissions: ['audit.read'] },
+  { prefix: '/admin/catalog', permissions: ['category.manage'] },
   { prefix: '/admin/content', permissions: ['content.manage'] },
   { prefix: '/admin/rfqs', permissions: ['rfq.review', 'rfq.manage'] },
   { prefix: '/admin/settings', permissions: ['settings.read', 'settings.manage'] },

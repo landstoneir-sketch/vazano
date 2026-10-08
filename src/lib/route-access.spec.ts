@@ -27,7 +27,12 @@ describe('route access policy', () => {
   it('uses fine-grained permissions for admin pages', () => {
     const contentManager = { ...buyer, permissions: ['content.manage'], globalRoles: ['CONTENT_MANAGER'] };
     expect(canAccessRoute('/admin/content', contentManager)).toBe(true);
+    expect(canAccessRoute('/admin/catalog', contentManager)).toBe(false);
     expect(canAccessRoute('/admin/users', contentManager)).toBe(false);
+
+    const catalogManager = { ...contentManager, permissions: ['category.manage'] };
+    expect(canAccessRoute('/admin/catalog', catalogManager)).toBe(true);
+    expect(canAccessRoute('/admin/content', catalogManager)).toBe(false);
   });
 
   it('allows the super admin to access all admin pages', () => {
