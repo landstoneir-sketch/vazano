@@ -11,6 +11,7 @@ const ADMIN_PERMISSION_RULES: Array<{ prefix: string; permissions: string[] }> =
   { prefix: '/admin/billing', permissions: ['billing.read', 'billing.manage'] },
   { prefix: '/admin/catalog', permissions: ['category.manage'] },
   { prefix: '/admin/content', permissions: ['content.manage'] },
+  { prefix: '/admin/locations', permissions: ['location.manage'] },
   { prefix: '/admin/rfqs', permissions: ['rfq.review', 'rfq.manage'] },
   { prefix: '/admin/settings', permissions: ['settings.read', 'settings.manage'] },
   { prefix: '/admin/suppliers', permissions: ['supplier.verify'] },

@@ -8,6 +8,8 @@ type Organization = { id: string; displayName: string; kind: string };
 type Industry = { id: string; nameFa: string };
 type Category = { id: string; industryId: string; parentId: string | null; nameFa: string };
 type Unit = { id: string; nameFa: string; symbolFa: string };
+type Province = { id: string; code: string; nameFa: string };
+type City = { id: string; provinceId: string; code: string; nameFa: string; isProvinceCapital: boolean };
 type ProductAttribute = {
   id: string;
   code: string;
@@ -28,6 +30,8 @@ export function NewRfqForm() {
   const [industries, setIndustries] = useState<Industry[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
+  const [provinces, setProvinces] = useState<Province[]>([]);
+  const [cities, setCities] = useState<City[]>([]);
   const [organizationId, setOrganizationId] = useState('');
   const [industryId, setIndustryId] = useState('');
   const [categoryId, setCategoryId] = useState('');
@@ -35,8 +39,8 @@ export function NewRfqForm() {
   const [title, setTitle] = useState('');
   const [itemTitle, setItemTitle] = useState('');
   const [quantity, setQuantity] = useState('');
-  const [province, setProvince] = useState('');
-  const [city, setCity] = useState('');
+  const [provinceId, setProvinceId] = useState('');
+  const [cityId, setCityId] = useState('');
   const [installationRequired, setInstallationRequired] = useState(false);
   const [qualityControlRequested, setQualityControlRequested] = useState(false);
   const [productAttributes, setProductAttributes] = useState<ProductAttribute[]>([]);
@@ -53,9 +57,10 @@ export function NewRfqForm() {
       apiRequest<Industry[]>('/catalog/industries'),
       apiRequest<Category[]>('/catalog/categories'),
       apiRequest<Unit[]>('/catalog/units'),
-    ]).then(([orgData, industryData, categoryData, unitData]) => {
+      apiRequest<Province[]>('/locations/provinces'),
+    ]).then(([orgData, industryData, categoryData, unitData, provinceData]) => {
       const buyers = orgData.filter((item) => item.kind === 'BUYER');
-      setOrganizations(buyers); setIndustries(industryData); setCategories(categoryData); setUnits(unitData);
+      setOrganizations(buyers); setIndustries(industryData); setCategories(categoryData); setUnits(unitData); setProvinces(provinceData);
       setOrganizationId(buyers[0]?.id ?? ''); setIndustryId(industryData[0]?.id ?? ''); setUnitId(unitData[0]?.id ?? '');
     }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'دریافت اطلاعات اولیه انجام نشد.'));
   }, []);
@@ -70,6 +75,15 @@ export function NewRfqForm() {
       .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : 'دریافت ویژگی‌های فنی انجام نشد.'); });
     return () => { active = false; };
   }, [categoryId]);
+
+  useEffect(() => {
+    if (!provinceId) return;
+    let active = true;
+    void apiRequest<City[]>(`/locations/provinces/${provinceId}/cities`)
+      .then((data) => { if (active) setCities(data); })
+      .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : 'دریافت شهرها انجام نشد.'); });
+    return () => { active = false; };
+  }, [provinceId]);
 
   function attributeLabel(attribute: ProductAttribute) {
     return attribute.unitLabelFa ? `${attribute.nameFa} (${attribute.unitLabelFa})` : attribute.nameFa;
@@ -89,8 +103,8 @@ export function NewRfqForm() {
         buyerOrganizationId: organizationId,
         primaryDomainId: industryId,
         title,
-        deliveryProvince: province || undefined,
-        deliveryCity: city || undefined,
+        deliveryProvinceId: provinceId,
+        deliveryCityId: cityId,
         installationRequired,
         qualityControlRequested,
         items: [{ categoryId, unitId, title: itemTitle, quantity, specifications }],
@@ -170,11 +184,11 @@ export function NewRfqForm() {
         return <label className="form-field" key={attribute.id}><span>{label}{attribute.isRequired ? ' *' : ''}</span><input aria-label={label} type={attribute.dataType === 'NUMBER' ? 'number' : 'text'} min={minimum} max={maximum} maxLength={maxLength} value={typeof value === 'string' ? value : ''} required={attribute.isRequired} onChange={(event) => setSpecifications((current) => ({ ...current, [attribute.code]: event.target.value }))} /></label>;
       })}
     </div></fieldset>}
-    <label className="form-field"><span>استان تحویل</span><input value={province} onChange={(event) => setProvince(event.target.value)} /></label>
-    <label className="form-field"><span>شهر تحویل</span><input value={city} onChange={(event) => setCity(event.target.value)} /></label>
+    <label className="form-field"><span>استان تحویل</span><select value={provinceId} onChange={(event) => { setProvinceId(event.target.value); setCities([]); setCityId(''); }} required><option value="">انتخاب استان</option>{provinces.map((item) => <option value={item.id} key={item.id}>{item.nameFa}</option>)}</select></label>
+    <label className="form-field"><span>شهر تحویل (اختیاری)</span><select value={cityId} onChange={(event) => setCityId(event.target.value)} disabled={!provinceId}><option value="">{provinceId ? 'انتخاب شهر' : 'ابتدا استان را انتخاب کنید'}</option>{cities.map((item) => <option value={item.id} key={item.id}>{item.nameFa}{item.isProvinceCapital ? ' (مرکز استان)' : ''}</option>)}</select></label>
     <label className="check-field"><input type="checkbox" checked={installationRequired} onChange={(event) => setInstallationRequired(event.target.checked)} /><span>نیاز به نصب دارم</span></label>
     <label className="check-field"><input type="checkbox" checked={qualityControlRequested} onChange={(event) => setQualityControlRequested(event.target.checked)} /><span>کنترل کیفیت توسط وازانو (کارمزد ۳٪ مبلغ خرید)</span></label>
     <div className="message">وازانو واسط اطلاعات است. مبلغ کالا، حمل، نصب و مالیات مستقیماً میان خریدار و فروشنده تعیین می‌شود.</div>
-    <button className="button button-primary" disabled={busy || !organizationId}>{busy ? 'در حال ثبت…' : 'ذخیره پیش‌نویس استعلام'}</button>
+    <button className="button button-primary" disabled={busy || !organizationId || !provinceId}>{busy ? 'در حال ثبت…' : 'ذخیره پیش‌نویس استعلام'}</button>
   </form>;
 }
