@@ -66,6 +66,10 @@ button, input, select, textarea { font: inherit; }
 .fieldset legend { padding: 0 8px; font-weight: 700; }
 .check-field { display: flex; align-items: center; gap: 10px; min-height: 48px; }
 .check-field input { width: 20px; height: 20px; }
+.attribute-options { border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; }
+.attribute-options legend { padding: 0 6px; font-weight: 700; }
+.attribute-options .check-field { display: inline-flex; margin-left: 18px; }
+.specification-summary { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; color: var(--muted); font-size: .9rem; }
 .check-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 18px; }
 .list-card { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .list-card-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }

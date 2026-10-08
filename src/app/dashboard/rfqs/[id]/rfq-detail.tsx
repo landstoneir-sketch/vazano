@@ -4,8 +4,9 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import { useCallback, useEffect, useState } from 'react';
 import { apiRequest } from '../../../../lib/api';
+import { formatProductSpecifications, type ProductAttributeBinding, type ProductSpecifications } from '../../../../lib/product-specifications';
 
-type RfqItem = { id: string; title: string; quantity: string; category: { nameFa: string }; unit: { symbolFa: string } };
+type RfqItem = { id: string; title: string; quantity: string; specifications: ProductSpecifications; category: { nameFa: string; attributeBindings: ProductAttributeBinding[] }; unit: { symbolFa: string } };
 type Rfq = { id: string; code: string; title: string; operationalStatus: string; deliveryProvince: string | null; deliveryCity: string | null; displayPricesTaxInclusive: boolean; items: RfqItem[] };
 type QuotationItem = { id: string; quantity: string; unitPriceRial: string; lineNetRial: string; isAlternative: boolean; offeredDescription: string | null; rfqItem: RfqItem };
 type Quotation = { id: string; code: string; status: string; finalAmountRial: string; taxRial: string; shippingRial: string; preparationDays: number | null; validUntil: string | null; supplierOrganization: { id: string; displayName: string; province: string | null; city: string | null }; items: QuotationItem[] };
@@ -59,7 +60,10 @@ export function RfqDetail({ rfqId }: { rfqId: string }) {
   return <div className="stack">
     <div><div className="eyebrow">{rfq.code}</div><h1>{rfq.title}</h1><p className="muted">{rfq.deliveryProvince ?? 'استان نامشخص'}، {rfq.deliveryCity ?? 'شهر نامشخص'} · {rfq.operationalStatus}</p></div>
     {message && <div className="message message-success">{message}</div>}
-    <article className="card"><h2>اقلام درخواستی</h2><ul>{rfq.items.map((item) => <li key={item.id}>{item.category.nameFa} — {item.title} — {item.quantity} {item.unit.symbolFa}</li>)}</ul></article>
+    <article className="card"><h2>اقلام درخواستی</h2><ul>{rfq.items.map((item) => {
+      const details = formatProductSpecifications(item.specifications, item.category.attributeBindings);
+      return <li key={item.id}>{item.category.nameFa} — {item.title} — {item.quantity} {item.unit.symbolFa}{details.length > 0 && <div className="specification-summary">{details.map((detail) => <span key={detail.code}>{detail.label}: {detail.value}</span>)}</div>}</li>;
+    })}</ul></article>
     <article className="card"><h2>پیوست‌ها</h2>
       {attachments.length === 0 && <p>فایلی به این استعلام پیوست نشده است.</p>}
       <div className="stack">{attachments.map((attachment) => <div className="list-card" key={attachment.id}>
