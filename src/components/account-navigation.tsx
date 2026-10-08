@@ -16,7 +16,7 @@ function adminLanding(account: AuthenticatedAccount): Route | null {
   if (account.permissions.includes('support.manage')) return '/admin/support' as Route;
   if (account.permissions.includes('category.manage')) return '/admin/catalog' as Route;
   if (account.permissions.includes('content.manage')) return '/admin/content' as Route;
-  if (account.permissions.includes('billing.read')) return '/admin/settings';
+  if (account.permissions.includes('billing.read')) return '/admin/billing' as Route;
   return null;
 }
 
