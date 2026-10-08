@@ -115,6 +115,10 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   await expect(page.getByText('دسته‌بندی به‌روزرسانی شد.')).toBeVisible();
   await page.getByRole('button', { name: 'تعریف ویژگی‌های محصول' }).click();
   await expect(page.getByText('نوع فرآوری', { exact: true }).first()).toBeVisible();
+  await page.getByRole('button', { name: 'واحدهای اندازه‌گیری' }).click();
+  await page.getByRole('button', { name: /متر مربع/ }).click();
+  await page.getByRole('button', { name: 'ذخیره تغییرات واحد' }).click();
+  await expect(page.getByText('واحد اندازه‌گیری به‌روزرسانی شد.')).toBeVisible();
 
   await page.goto('/admin/billing');
   await expect(page.getByRole('heading', { name: 'اشتراک‌ها، پلن‌ها و پرداخت‌ها' })).toBeVisible();

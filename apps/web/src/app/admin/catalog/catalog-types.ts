@@ -1,5 +1,16 @@
 export type Industry = { id: string; code: string; nameFa: string };
 
+export type UnitOfMeasure = {
+  id: string;
+  code: string;
+  nameFa: string;
+  symbolFa: string;
+  decimalScale: number;
+  isActive: boolean;
+  updatedAt: string;
+  _count: { rfqItems: number };
+};
+
 export type AttributeDataType = 'TEXT' | 'NUMBER' | 'SINGLE_SELECT' | 'MULTI_SELECT' | 'BOOLEAN';
 
 export type ProductAttribute = {
