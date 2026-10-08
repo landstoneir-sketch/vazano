@@ -7,20 +7,54 @@ const permissions = [
   'category.read', 'category.manage', 'rfq.create', 'rfq.create_on_behalf', 'rfq.read', 'rfq.review',
   'rfq.manage', 'quotation.create', 'quotation.read', 'quotation.manage', 'subscription.read',
   'subscription.manage', 'billing.read', 'billing.manage', 'payment.manage', 'content.manage',
-  'support.manage', 'audit.read', 'settings.read', 'settings.manage',
+  'support.manage', 'audit.read', 'settings.read', 'settings.manage', 'location.read', 'location.manage',
 ];
 const roles: Record<string, string[]> = {
   SUPER_ADMIN: permissions,
   ADMIN: permissions.filter((key) => !['settings.manage'].includes(key)),
   SUPPORT: ['user.read', 'organization.read', 'rfq.read', 'rfq.create_on_behalf', 'quotation.read', 'support.manage'],
   FINANCE: ['organization.read', 'subscription.read', 'subscription.manage', 'billing.read', 'billing.manage', 'payment.manage'],
-  CONTENT_MANAGER: ['category.read', 'category.manage', 'content.manage'],
+  CONTENT_MANAGER: ['category.read', 'category.manage', 'content.manage', 'location.read', 'location.manage'],
   BUYER_OWNER: ['organization.read', 'organization.manage', 'category.read', 'rfq.create', 'rfq.read', 'quotation.read'],
   BUYER_MEMBER: ['organization.read', 'category.read', 'rfq.create', 'rfq.read', 'quotation.read'],
   SUPPLIER_OWNER: ['organization.read', 'organization.manage', 'category.read', 'rfq.read', 'quotation.create', 'quotation.read', 'subscription.read', 'billing.read'],
   SUPPLIER_MANAGER: ['organization.read', 'category.read', 'rfq.read', 'quotation.create', 'quotation.read', 'subscription.read'],
   SUPPLIER_SALES: ['organization.read', 'category.read', 'rfq.read', 'quotation.create', 'quotation.read'],
 };
+
+const iranProvinces = [
+  ['east-azerbaijan', 'آذربایجان شرقی', 'East Azerbaijan', 'tabriz', 'تبریز', 'Tabriz'],
+  ['west-azerbaijan', 'آذربایجان غربی', 'West Azerbaijan', 'urmia', 'ارومیه', 'Urmia'],
+  ['ardabil', 'اردبیل', 'Ardabil', 'ardabil', 'اردبیل', 'Ardabil'],
+  ['isfahan', 'اصفهان', 'Isfahan', 'isfahan', 'اصفهان', 'Isfahan'],
+  ['alborz', 'البرز', 'Alborz', 'karaj', 'کرج', 'Karaj'],
+  ['ilam', 'ایلام', 'Ilam', 'ilam', 'ایلام', 'Ilam'],
+  ['bushehr', 'بوشهر', 'Bushehr', 'bushehr', 'بوشهر', 'Bushehr'],
+  ['tehran', 'تهران', 'Tehran', 'tehran', 'تهران', 'Tehran'],
+  ['chaharmahal-bakhtiari', 'چهارمحال و بختیاری', 'Chaharmahal and Bakhtiari', 'shahrekord', 'شهرکرد', 'Shahrekord'],
+  ['south-khorasan', 'خراسان جنوبی', 'South Khorasan', 'birjand', 'بیرجند', 'Birjand'],
+  ['razavi-khorasan', 'خراسان رضوی', 'Razavi Khorasan', 'mashhad', 'مشهد', 'Mashhad'],
+  ['north-khorasan', 'خراسان شمالی', 'North Khorasan', 'bojnord', 'بجنورد', 'Bojnord'],
+  ['khuzestan', 'خوزستان', 'Khuzestan', 'ahvaz', 'اهواز', 'Ahvaz'],
+  ['zanjan', 'زنجان', 'Zanjan', 'zanjan', 'زنجان', 'Zanjan'],
+  ['semnan', 'سمنان', 'Semnan', 'semnan', 'سمنان', 'Semnan'],
+  ['sistan-baluchestan', 'سیستان و بلوچستان', 'Sistan and Baluchestan', 'zahedan', 'زاهدان', 'Zahedan'],
+  ['fars', 'فارس', 'Fars', 'shiraz', 'شیراز', 'Shiraz'],
+  ['qazvin', 'قزوین', 'Qazvin', 'qazvin', 'قزوین', 'Qazvin'],
+  ['qom', 'قم', 'Qom', 'qom', 'قم', 'Qom'],
+  ['kurdistan', 'کردستان', 'Kurdistan', 'sanandaj', 'سنندج', 'Sanandaj'],
+  ['kerman', 'کرمان', 'Kerman', 'kerman', 'کرمان', 'Kerman'],
+  ['kermanshah', 'کرمانشاه', 'Kermanshah', 'kermanshah', 'کرمانشاه', 'Kermanshah'],
+  ['kohgiluyeh-boyer-ahmad', 'کهگیلویه و بویراحمد', 'Kohgiluyeh and Boyer-Ahmad', 'yasuj', 'یاسوج', 'Yasuj'],
+  ['golestan', 'گلستان', 'Golestan', 'gorgan', 'گرگان', 'Gorgan'],
+  ['gilan', 'گیلان', 'Gilan', 'rasht', 'رشت', 'Rasht'],
+  ['lorestan', 'لرستان', 'Lorestan', 'khorramabad', 'خرم‌آباد', 'Khorramabad'],
+  ['mazandaran', 'مازندران', 'Mazandaran', 'sari', 'ساری', 'Sari'],
+  ['markazi', 'مرکزی', 'Markazi', 'arak', 'اراک', 'Arak'],
+  ['hormozgan', 'هرمزگان', 'Hormozgan', 'bandar-abbas', 'بندرعباس', 'Bandar Abbas'],
+  ['hamedan', 'همدان', 'Hamedan', 'hamedan', 'همدان', 'Hamedan'],
+  ['yazd', 'یزد', 'Yazd', 'yazd', 'یزد', 'Yazd'],
+] as const;
 
 const naturalStoneCategories = [
   ['travertine', 'travertine', 'تراورتن', 'Travertine'],
@@ -192,6 +226,28 @@ async function main(): Promise<void> {
     const role = await prisma.role.upsert({ where: { key }, create: { key, nameFa: key }, update: {} });
     const records = await prisma.permission.findMany({ where: { key: { in: rolePermissions } }, select: { id: true } });
     await prisma.rolePermission.createMany({ data: records.map(({ id }) => ({ roleId: role.id, permissionId: id })), skipDuplicates: true });
+  }
+
+  for (const [sortOrder, [code, nameFa, nameEn, capitalCode, capitalNameFa, capitalNameEn]] of iranProvinces.entries()) {
+    const province = await prisma.province.upsert({
+      where: { code },
+      create: { code, nameFa, nameEn, sortOrder: sortOrder + 1 },
+      update: { nameFa, nameEn, sortOrder: sortOrder + 1, isActive: true },
+    });
+    await prisma.city.upsert({
+      where: { provinceId_code: { provinceId: province.id, code: capitalCode } },
+      create: { provinceId: province.id, code: capitalCode, nameFa: capitalNameFa, nameEn: capitalNameEn, isProvinceCapital: true, sortOrder: 1 },
+      update: { nameFa: capitalNameFa, nameEn: capitalNameEn, isProvinceCapital: true, sortOrder: 1, isActive: true },
+    });
+    await prisma.rfq.updateMany({
+      where: { deliveryProvince: nameFa, deliveryProvinceId: null },
+      data: { deliveryProvinceId: province.id },
+    });
+    const capital = await prisma.city.findUniqueOrThrow({ where: { provinceId_code: { provinceId: province.id, code: capitalCode } } });
+    await prisma.rfq.updateMany({
+      where: { deliveryProvince: nameFa, deliveryCity: capitalNameFa, deliveryCityId: null },
+      data: { deliveryProvinceId: province.id, deliveryCityId: capital.id },
+    });
   }
 
   const industry = await prisma.industry.upsert({

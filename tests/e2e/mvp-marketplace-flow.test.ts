@@ -120,6 +120,10 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   await page.getByRole('button', { name: 'ذخیره تغییرات واحد' }).click();
   await expect(page.getByText('واحد اندازه‌گیری به‌روزرسانی شد.')).toBeVisible();
 
+  await page.goto('/admin/locations');
+  await expect(page.getByRole('heading', { name: 'استان‌ها و شهرها' })).toBeVisible();
+  await expect(page.getByText('۳۱ استان ثبت شده است.')).toBeVisible();
+
   await page.goto('/admin/billing');
   await expect(page.getByRole('heading', { name: 'اشتراک‌ها، پلن‌ها و پرداخت‌ها' })).toBeVisible();
   await page.getByRole('button', { name: /اشتراک فروشنده یک‌ماهه/ }).click();
@@ -139,8 +143,9 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   await page.getByLabel('ضخامت (میلی‌متر)').fill('20');
   await page.getByLabel('شرح محصول').fill('سنگ تراورتن کرم، ضخامت ۲ سانتی‌متر');
   await page.getByLabel('مقدار').fill('120');
-  await page.getByLabel('استان تحویل').fill('تهران');
-  await page.getByLabel('شهر تحویل').fill('تهران');
+  await page.getByLabel('استان تحویل').selectOption({ label: 'تهران' });
+  await expect(page.getByLabel('شهر تحویل')).toBeEnabled();
+  await page.getByLabel('شهر تحویل').selectOption({ index: 1 });
   await page.getByRole('button', { name: 'ذخیره پیش‌نویس استعلام' }).click();
   await expect(page.getByText('پیش‌نویس ثبت شد.')).toBeVisible();
   await page.getByRole('button', { name: 'ارسال برای بررسی وازانو' }).click();

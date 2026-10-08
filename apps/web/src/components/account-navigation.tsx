@@ -15,6 +15,7 @@ function adminLanding(account: AuthenticatedAccount): Route | null {
   if (account.globalRoles.includes('SUPER_ADMIN') || account.permissions.includes('rfq.review')) return '/admin/rfqs';
   if (account.permissions.includes('support.manage')) return '/admin/support' as Route;
   if (account.permissions.includes('category.manage')) return '/admin/catalog' as Route;
+  if (account.permissions.includes('location.manage')) return '/admin/locations' as Route;
   if (account.permissions.includes('content.manage')) return '/admin/content' as Route;
   if (account.permissions.includes('billing.read')) return '/admin/billing' as Route;
   return null;

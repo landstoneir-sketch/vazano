@@ -71,9 +71,19 @@ export class CreateRfqDto {
 
   @IsString()
   @IsOptional()
+  deliveryProvinceId?: string;
+
+  @IsString()
+  @IsOptional()
+  deliveryCityId?: string;
+
+  @IsString()
+  @MaxLength(80)
+  @IsOptional()
   deliveryProvince?: string;
 
   @IsString()
+  @MaxLength(80)
   @IsOptional()
   deliveryCity?: string;
 
