@@ -4,8 +4,10 @@ import { PrismaService } from '../../shared/prisma/prisma.service';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { CreateCategoryDto } from './create-category.dto';
 import { CreateProductAttributeDto } from './create-product-attribute.dto';
+import { CreateUnitDto } from './create-unit.dto';
 import { UpdateCategoryDto } from './update-category.dto';
 import { UpdateProductAttributeDto } from './update-product-attribute.dto';
+import { UpdateUnitDto } from './update-unit.dto';
 import { UpsertCategoryAttributeDto } from './upsert-category-attribute.dto';
 
 const categoryInclude = {
@@ -108,6 +110,69 @@ export class AdminCatalogService {
         },
       },
       orderBy: [{ isActive: 'desc' }, { nameFa: 'asc' }],
+    });
+  }
+
+  listUnits(user: AuthenticatedUser) {
+    this.requireManagePermission(user);
+    return this.prisma.unitOfMeasure.findMany({
+      include: { _count: { select: { rfqItems: true } } },
+      orderBy: [{ isActive: 'desc' }, { nameFa: 'asc' }],
+    });
+  }
+
+  async createUnit(user: AuthenticatedUser, input: CreateUnitDto) {
+    this.requireManagePermission(user);
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const unit = await tx.unitOfMeasure.create({
+          data: {
+            code: input.code.trim(),
+            nameFa: input.nameFa.trim(),
+            symbolFa: input.symbolFa.trim(),
+            decimalScale: input.decimalScale,
+            isActive: input.isActive ?? true,
+          },
+          include: { _count: { select: { rfqItems: true } } },
+        });
+        await tx.auditLog.create({ data: {
+          actorUserId: user.id,
+          action: 'unit_of_measure.create',
+          entityType: 'UnitOfMeasure',
+          entityId: unit.id,
+          metadata: { code: unit.code, symbolFa: unit.symbolFa },
+        } });
+        return unit;
+      });
+    } catch (error: unknown) {
+      this.rethrowUniqueConflict(error, 'کد این واحد اندازه‌گیری قبلاً ثبت شده است.');
+    }
+  }
+
+  async updateUnit(user: AuthenticatedUser, unitId: string, input: UpdateUnitDto) {
+    this.requireManagePermission(user);
+    const unit = await this.prisma.unitOfMeasure.findUnique({ where: { id: unitId } });
+    if (!unit) throw new NotFoundException('واحد اندازه‌گیری پیدا نشد.');
+
+    return this.prisma.$transaction(async (tx) => {
+      const result = await tx.unitOfMeasure.updateMany({
+        where: { id: unit.id, updatedAt: new Date(input.expectedUpdatedAt) },
+        data: {
+          nameFa: input.nameFa.trim(),
+          symbolFa: input.symbolFa.trim(),
+          decimalScale: input.decimalScale,
+          isActive: input.isActive,
+        },
+      });
+      if (result.count !== 1) throw new ConflictException('این واحد هم‌زمان تغییر کرده است؛ اطلاعات را دوباره بارگذاری کنید.');
+      await tx.auditLog.create({ data: {
+        actorUserId: user.id,
+        action: 'unit_of_measure.update',
+        entityType: 'UnitOfMeasure',
+        entityId: unit.id,
+        metadata: { code: unit.code, previousUpdatedAt: unit.updatedAt.toISOString() },
+      } });
+      return tx.unitOfMeasure.findUniqueOrThrow({ where: { id: unit.id }, include: { _count: { select: { rfqItems: true } } } });
     });
   }
 
