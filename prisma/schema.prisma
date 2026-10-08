@@ -129,6 +129,14 @@ enum CommitmentStatus {
   FORFEITED
 }
 
+enum ProductAttributeDataType {
+  TEXT
+  NUMBER
+  SINGLE_SELECT
+  MULTI_SELECT
+  BOOLEAN
+}
+
 enum SubscriptionStatus {
   DRAFT
   ACTIVE
@@ -661,9 +669,42 @@ model Category {
   children           Category[]         @relation("CategoryTree")
   rfqItems           RfqItem[]
   supplierCategories SupplierCategory[]
+  attributeBindings  CategoryAttribute[]
 
   @@index([industryId, parentId, isActive])
   @@map("categories")
+}
+
+model ProductAttributeDefinition {
+  id            String                   @id @default(cuid())
+  code          String                   @unique
+  nameFa        String                   @map("name_fa")
+  nameEn        String?                  @map("name_en")
+  dataType      ProductAttributeDataType @map("data_type")
+  unitLabelFa   String?                  @map("unit_label_fa")
+  options       Json                     @default("[]")
+  validation    Json                     @default("{}")
+  isActive      Boolean                  @default(true) @map("is_active")
+  version       Int                      @default(1)
+  createdAt     DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+  categoryLinks CategoryAttribute[]
+
+  @@index([isActive, code])
+  @@map("product_attribute_definitions")
+}
+
+model CategoryAttribute {
+  categoryId  String                     @map("category_id")
+  attributeId String                     @map("attribute_id")
+  isRequired  Boolean                    @default(false) @map("is_required")
+  sortOrder   Int                        @default(0) @map("sort_order")
+  category    Category                   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  attribute   ProductAttributeDefinition @relation(fields: [attributeId], references: [id], onDelete: Restrict)
+
+  @@id([categoryId, attributeId])
+  @@index([attributeId])
+  @@map("category_attributes")
 }
 
 model UnitOfMeasure {

@@ -6,6 +6,14 @@ import { PrismaService } from '../../shared/prisma/prisma.service';
 import { CreateQuotationDto } from './create-quotation.dto';
 import { calculateProposalFeeCredits, calculateQuotationTotals, PROPOSAL_FEE_POLICY_VERSION, startOfTehranDay } from './quotation-policies';
 
+const categoryDetailsInclude = {
+  attributeBindings: {
+    where: { attribute: { isActive: true } },
+    include: { attribute: true },
+    orderBy: { sortOrder: 'asc' as const },
+  },
+} as const;
+
 @Injectable()
 export class QuotationsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -165,7 +173,7 @@ export class QuotationsService {
       where: { rfqId, status: { in: ['SUBMITTED', 'ACCEPTED', 'REJECTED'] } },
       include: {
         supplierOrganization: { select: { id: true, displayName: true, province: true, city: true } },
-        items: { include: { rfqItem: { include: { category: true, unit: true } } }, orderBy: { createdAt: 'asc' } },
+        items: { include: { rfqItem: { include: { category: { include: categoryDetailsInclude }, unit: true } } }, orderBy: { createdAt: 'asc' } },
       },
       orderBy: [{ finalAmountRial: 'asc' }, { submittedAt: 'asc' }],
     });
@@ -200,7 +208,7 @@ export class QuotationsService {
   private async findBuyerRfq(user: AuthenticatedUser, rfqId: string) {
     const rfq = await this.prisma.rfq.findUnique({
       where: { id: rfqId },
-      include: { items: { include: { category: true, unit: true }, orderBy: { sortOrder: 'asc' } } },
+      include: { items: { include: { category: { include: categoryDetailsInclude }, unit: true }, orderBy: { sortOrder: 'asc' } } },
     });
     if (!rfq) throw new NotFoundException('استعلام پیدا نشد.');
     const isMember = user.memberships.some((membership) => membership.organizationId === rfq.buyerOrganizationId);

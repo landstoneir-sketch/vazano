@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { CatalogService } from './catalog.service';
 
 @Controller('catalog')
@@ -18,5 +18,10 @@ export class CatalogController {
   @Get('units')
   listUnits() {
     return this.catalog.listUnits();
+  }
+
+  @Get('categories/:categoryId/attributes')
+  listCategoryAttributes(@Param('categoryId') categoryId: string) {
+    return this.catalog.listCategoryAttributes(categoryId);
   }
 }
