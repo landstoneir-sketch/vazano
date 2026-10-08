@@ -276,6 +276,7 @@ export class RfqsService {
     const domain = await this.prisma.industry.findFirst({ where: { id: input.primaryDomainId, isActive: true } });
     if (!domain) throw new BadRequestException('حوزه اصلی معتبر نیست.');
     await this.validateItems(input.primaryDomainId, input);
+    const deliveryLocation = await this.resolveDeliveryLocation(input);
 
     const responseDeadline = input.responseDeadline ? new Date(input.responseDeadline) : undefined;
     if (responseDeadline && responseDeadline <= new Date()) throw new BadRequestException('مهلت پاسخ باید در آینده باشد.');
@@ -303,8 +304,10 @@ export class RfqsService {
           commitmentStatus: commitmentRequired ? 'REQUIRED' : 'NOT_REQUIRED',
           commitmentAmountRial: commitmentRequired ? BUYER_COMMITMENT_AMOUNT_RIAL : null,
           commitmentPolicyVersion: commitmentRequired ? BUYER_COMMITMENT_POLICY_VERSION : null,
-          deliveryProvince: input.deliveryProvince,
-          deliveryCity: input.deliveryCity,
+          deliveryProvinceId: deliveryLocation.provinceId,
+          deliveryCityId: deliveryLocation.cityId,
+          deliveryProvince: deliveryLocation.provinceName,
+          deliveryCity: deliveryLocation.cityName,
           requiredAt: input.requiredAt ? new Date(input.requiredAt) : undefined,
           responseDeadline,
           installationRequired: input.installationRequired ?? false,
@@ -346,6 +349,29 @@ export class RfqsService {
       });
       return rfq;
     });
+  }
+
+  private async resolveDeliveryLocation(input: CreateRfqDto) {
+    const provinceName = input.deliveryProvince?.trim();
+    const provinceRequested = input.deliveryProvinceId || provinceName;
+    const cityRequested = input.deliveryCityId || input.deliveryCity?.trim();
+    if (!provinceRequested && !cityRequested) return { provinceId: undefined, cityId: undefined, provinceName: undefined, cityName: undefined };
+    if (!provinceRequested) throw new BadRequestException('برای انتخاب شهر، استان تحویل را نیز مشخص کنید.');
+
+    const province = await this.prisma.province.findFirst({
+      where: input.deliveryProvinceId ? { id: input.deliveryProvinceId, isActive: true } : { nameFa: provinceName, isActive: true },
+    });
+    if (!province) throw new BadRequestException('استان تحویل معتبر یا فعال نیست.');
+    if (!cityRequested) return { provinceId: province.id, cityId: undefined, provinceName: province.nameFa, cityName: undefined };
+
+    const cityName = input.deliveryCity?.trim();
+    const city = await this.prisma.city.findFirst({
+      where: input.deliveryCityId
+        ? { id: input.deliveryCityId, provinceId: province.id, isActive: true }
+        : { nameFa: cityName, provinceId: province.id, isActive: true },
+    });
+    if (!city) throw new BadRequestException('شهر تحویل با استان انتخاب‌شده مطابقت ندارد یا غیرفعال است.');
+    return { provinceId: province.id, cityId: city.id, provinceName: province.nameFa, cityName: city.nameFa };
   }
 
   private async validateItems(primaryDomainId: string, input: CreateRfqDto): Promise<void> {

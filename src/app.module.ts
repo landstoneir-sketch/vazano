@@ -18,6 +18,7 @@ import { MessagesModule } from './modules/messages/messages.module';
 import { SupportModule } from './modules/support/support.module';
 import { AdminOperationsModule } from './modules/admin-operations/admin-operations.module';
 import { CmsModule } from './modules/cms/cms.module';
+import { LocationsModule } from './modules/locations/locations.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { CmsModule } from './modules/cms/cms.module';
     SupportModule,
     AdminOperationsModule,
     CmsModule,
+    LocationsModule,
   ],
   controllers: [HealthController],
 })
