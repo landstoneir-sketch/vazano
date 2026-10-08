@@ -9,3 +9,5 @@ This module owns seller plan purchase, payment activation, credits, renewal sche
 - `/v1/admin/billing/overview` gives finance users a unified view of plans, recent subscriptions, payments, and lifecycle counts.
 - Plan creation and editing require `billing.manage`; historical subscriptions keep price, credit, and plan-version snapshots.
 - Stable plan code, billing cycle, and duration are immutable after creation. A materially different commercial offer must be created as a new plan.
+- Supplier owners start an idempotent checkout from `/supplier/subscription`; provider SDK details remain behind the payment adapter.
+- Zarinpal callbacks are verified server-side and redirect to a non-sensitive success/cancel/failure result in the seller workspace.
