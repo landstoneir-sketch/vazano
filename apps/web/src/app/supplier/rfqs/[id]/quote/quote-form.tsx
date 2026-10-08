@@ -3,9 +3,10 @@
 import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../../../../../lib/api';
+import { formatProductSpecifications, type ProductAttributeBinding, type ProductSpecifications } from '../../../../../lib/product-specifications';
 
 type Organization = { id: string; displayName: string; kind: string; status: string };
-type RfqItem = { id: string; title: string; quantity: string; category: { nameFa: string }; unit: { symbolFa: string } };
+type RfqItem = { id: string; title: string; quantity: string; specifications: ProductSpecifications; category: { nameFa: string; attributeBindings: ProductAttributeBinding[] }; unit: { symbolFa: string } };
 type Rfq = { id: string; code: string; title: string; responseDeadline: string | null; items: RfqItem[] };
 type CreatedQuotation = { id: string; code: string; status: string; finalAmountRial: string };
 
@@ -85,7 +86,10 @@ export function QuoteForm({ rfqId, initialOrganizationId }: { rfqId: string; ini
     <label className="form-field"><span>حساب فروشنده</span><select value={organizationId} onChange={(event) => setOrganizationId(event.target.value)} required>{organizations.map((item) => <option key={item.id} value={item.id}>{item.displayName} · {item.status}</option>)}</select></label>
     <label className="form-field"><span>مدت آماده‌سازی (روز)</span><input type="number" min="0" value={preparationDays} onChange={(event) => setPreparationDays(event.target.value)} required /></label>
     <label className="form-field"><span>اعتبار پیشنهاد تا</span><input type="date" value={validUntil} onChange={(event) => setValidUntil(event.target.value)} required /></label>
-    <fieldset className="fieldset full"><legend>قیمت اقلام — تومان، بدون مالیات</legend>{rfq.items.map((item) => <div className="quote-line" key={item.id}><div><strong>{item.category.nameFa}</strong><br /><span>{item.title} · {item.quantity} {item.unit.symbolFa}</span></div><label className="form-field"><span>قیمت هر واحد (تومان)</span><input inputMode="numeric" pattern="\d+" value={prices[item.id] ?? ''} onChange={(event) => setPrices((current) => ({ ...current, [item.id]: event.target.value }))} required /></label></div>)}</fieldset>
+    <fieldset className="fieldset full"><legend>قیمت اقلام — تومان، بدون مالیات</legend>{rfq.items.map((item) => {
+      const details = formatProductSpecifications(item.specifications, item.category.attributeBindings);
+      return <div className="quote-line" key={item.id}><div><strong>{item.category.nameFa}</strong><br /><span>{item.title} · {item.quantity} {item.unit.symbolFa}</span>{details.length > 0 && <div className="specification-summary">{details.map((detail) => <span key={detail.code}>{detail.label}: {detail.value}</span>)}</div>}</div><label className="form-field"><span>قیمت هر واحد (تومان)</span><input inputMode="numeric" pattern="\d+" value={prices[item.id] ?? ''} onChange={(event) => setPrices((current) => ({ ...current, [item.id]: event.target.value }))} required /></label></div>;
+    })}</fieldset>
     <label className="form-field"><span>بسته‌بندی (تومان)</span><input inputMode="numeric" pattern="\d+" value={packagingToman} onChange={(event) => setPackagingToman(event.target.value)} /></label>
     <label className="form-field"><span>حمل (تومان)</span><input inputMode="numeric" pattern="\d+" value={shippingToman} onChange={(event) => setShippingToman(event.target.value)} /></label>
     <label className="form-field"><span>مالیات، جداگانه (تومان)</span><input inputMode="numeric" pattern="\d+" value={taxToman} onChange={(event) => setTaxToman(event.target.value)} /></label>

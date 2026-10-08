@@ -40,6 +40,16 @@ const naturalStoneCategories = [
   ['conglomerate', 'conglomerate', 'کنگلومرا', 'Conglomerate'],
 ] as const;
 
+const naturalStoneAttributes = [
+  { code: 'stone-color', nameFa: 'رنگ غالب', nameEn: 'Primary color', dataType: 'TEXT' as const, unitLabelFa: null, options: [], validation: { maxLength: 80 }, isRequired: false },
+  { code: 'quarry-name', nameFa: 'معدن یا خاستگاه', nameEn: 'Quarry / origin', dataType: 'TEXT' as const, unitLabelFa: null, options: [], validation: { maxLength: 120 }, isRequired: false },
+  { code: 'finish', nameFa: 'نوع فرآوری', nameEn: 'Finish', dataType: 'SINGLE_SELECT' as const, unitLabelFa: null, options: ['سابیده', 'هوند', 'چرمی', 'بوش‌همر', 'تیشه‌ای', 'خام'], validation: {}, isRequired: true },
+  { code: 'thickness-mm', nameFa: 'ضخامت', nameEn: 'Thickness', dataType: 'NUMBER' as const, unitLabelFa: 'میلی‌متر', options: [], validation: { min: 5, max: 200 }, isRequired: true },
+  { code: 'dimensions', nameFa: 'ابعاد یا نوع برش', nameEn: 'Dimensions / cut', dataType: 'TEXT' as const, unitLabelFa: null, options: [], validation: { maxLength: 120 }, isRequired: false },
+  { code: 'grade', nameFa: 'درجه یا سورت', nameEn: 'Grade / sort', dataType: 'SINGLE_SELECT' as const, unitLabelFa: null, options: ['سوپر', 'ممتاز', 'درجه یک', 'درجه دو'], validation: {}, isRequired: false },
+  { code: 'application', nameFa: 'محل مصرف', nameEn: 'Application', dataType: 'MULTI_SELECT' as const, unitLabelFa: null, options: ['نما', 'کف', 'پله', 'دیوار داخلی', 'محوطه', 'کانتر و دکوراتیو'], validation: {}, isRequired: false },
+] as const;
+
 const systemSettings = [
   ['market.coverage.country', 'IR', 'کشور بازار اولیه وازانو'],
   ['market.coverage.mode', 'NATIONWIDE', 'پوشش جغرافیایی بازار'],
@@ -216,6 +226,41 @@ async function main(): Promise<void> {
       create: { code, nameFa, symbolFa, decimalScale },
       update: { nameFa, symbolFa, decimalScale, isActive: true },
     });
+  }
+
+  const stoneCategories = await prisma.category.findMany({
+    where: { parentId: naturalStone.id, isActive: true },
+    select: { id: true },
+  });
+  for (const [sortOrder, definition] of naturalStoneAttributes.entries()) {
+    const attribute = await prisma.productAttributeDefinition.upsert({
+      where: { code: definition.code },
+      create: {
+        code: definition.code,
+        nameFa: definition.nameFa,
+        nameEn: definition.nameEn,
+        dataType: definition.dataType,
+        unitLabelFa: definition.unitLabelFa,
+        options: [...definition.options],
+        validation: definition.validation,
+      },
+      update: {
+        nameFa: definition.nameFa,
+        nameEn: definition.nameEn,
+        dataType: definition.dataType,
+        unitLabelFa: definition.unitLabelFa,
+        options: [...definition.options],
+        validation: definition.validation,
+        isActive: true,
+      },
+    });
+    for (const category of stoneCategories) {
+      await prisma.categoryAttribute.upsert({
+        where: { categoryId_attributeId: { categoryId: category.id, attributeId: attribute.id } },
+        create: { categoryId: category.id, attributeId: attribute.id, isRequired: definition.isRequired, sortOrder: sortOrder + 1 },
+        update: { isRequired: definition.isRequired, sortOrder: sortOrder + 1 },
+      });
+    }
   }
 
   const plans = [

@@ -8,6 +8,17 @@ type Organization = { id: string; displayName: string; kind: string };
 type Industry = { id: string; nameFa: string };
 type Category = { id: string; industryId: string; parentId: string | null; nameFa: string };
 type Unit = { id: string; nameFa: string; symbolFa: string };
+type ProductAttribute = {
+  id: string;
+  code: string;
+  nameFa: string;
+  dataType: 'TEXT' | 'NUMBER' | 'SINGLE_SELECT' | 'MULTI_SELECT' | 'BOOLEAN';
+  unitLabelFa: string | null;
+  options: string[];
+  validation: Record<string, unknown>;
+  isRequired: boolean;
+};
+type SpecificationValue = string | boolean | string[];
 type CreatedRfq = { id: string; code: string; commitmentStatus: string; commitmentAmountRial: string | null; operationalStatus: string };
 type Attachment = { id: string; originalName: string; status: string; sizeBytes: number };
 type UploadIntent = { attachment: Attachment; upload: { url: string; method: 'PUT'; headers: Record<string, string> } };
@@ -28,6 +39,8 @@ export function NewRfqForm() {
   const [city, setCity] = useState('');
   const [installationRequired, setInstallationRequired] = useState(false);
   const [qualityControlRequested, setQualityControlRequested] = useState(false);
+  const [productAttributes, setProductAttributes] = useState<ProductAttribute[]>([]);
+  const [specifications, setSpecifications] = useState<Record<string, SpecificationValue>>({});
   const [created, setCreated] = useState<CreatedRfq | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -49,6 +62,26 @@ export function NewRfqForm() {
 
   const selectableCategories = useMemo(() => categories.filter((item) => item.industryId === industryId && item.parentId), [categories, industryId]);
 
+  useEffect(() => {
+    if (!categoryId) return;
+    let active = true;
+    void apiRequest<ProductAttribute[]>(`/catalog/categories/${categoryId}/attributes`)
+      .then((data) => { if (active) { setProductAttributes(data); setSpecifications({}); } })
+      .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : 'دریافت ویژگی‌های فنی انجام نشد.'); });
+    return () => { active = false; };
+  }, [categoryId]);
+
+  function attributeLabel(attribute: ProductAttribute) {
+    return attribute.unitLabelFa ? `${attribute.nameFa} (${attribute.unitLabelFa})` : attribute.nameFa;
+  }
+
+  function toggleMultiValue(code: string, option: string, checked: boolean) {
+    setSpecifications((current) => {
+      const selected = Array.isArray(current[code]) ? current[code] as string[] : [];
+      return { ...current, [code]: checked ? [...selected, option] : selected.filter((item) => item !== option) };
+    });
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError(''); setCreated(null);
     try {
@@ -60,7 +93,7 @@ export function NewRfqForm() {
         deliveryCity: city || undefined,
         installationRequired,
         qualityControlRequested,
-        items: [{ categoryId, unitId, title: itemTitle, quantity }],
+        items: [{ categoryId, unitId, title: itemTitle, quantity, specifications }],
       }) });
       setCreated(rfq);
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'ثبت استعلام انجام نشد.'); }
@@ -116,14 +149,27 @@ export function NewRfqForm() {
       {attachments.length > 0 && <ul>{attachments.map((attachment) => <li key={attachment.id}>{attachment.originalName} — {attachment.status === 'READY' ? 'آماده' : 'در انتظار بررسی امنیتی'}</li>)}</ul>}
     </fieldset>}
     <label className="form-field"><span>حساب خریدار</span><select value={organizationId} onChange={(event) => setOrganizationId(event.target.value)} required>{organizations.map((item) => <option value={item.id} key={item.id}>{item.displayName}</option>)}</select></label>
-    <label className="form-field"><span>حوزه اصلی</span><select value={industryId} onChange={(event) => { setIndustryId(event.target.value); setCategoryId(''); }} required>{industries.map((item) => <option value={item.id} key={item.id}>{item.nameFa}</option>)}</select></label>
+    <label className="form-field"><span>حوزه اصلی</span><select value={industryId} onChange={(event) => { setIndustryId(event.target.value); setCategoryId(''); setProductAttributes([]); setSpecifications({}); }} required>{industries.map((item) => <option value={item.id} key={item.id}>{item.nameFa}</option>)}</select></label>
     <label className="form-field full"><span>عنوان استعلام</span><input value={title} onChange={(event) => setTitle(event.target.value)} required minLength={3} placeholder="مثلاً تأمین سنگ نمای پروژه مسکونی" /></label>
     <fieldset className="fieldset full"><legend>ردیف محصول</legend><div className="form-columns">
-      <label className="form-field"><span>نوع سنگ</span><select value={categoryId} onChange={(event) => setCategoryId(event.target.value)} required><option value="">انتخاب کنید</option>{selectableCategories.map((item) => <option value={item.id} key={item.id}>{item.nameFa}</option>)}</select></label>
+      <label className="form-field"><span>نوع سنگ</span><select value={categoryId} onChange={(event) => { setCategoryId(event.target.value); setProductAttributes([]); setSpecifications({}); }} required><option value="">انتخاب کنید</option>{selectableCategories.map((item) => <option value={item.id} key={item.id}>{item.nameFa}</option>)}</select></label>
       <label className="form-field"><span>شرح محصول</span><input value={itemTitle} onChange={(event) => setItemTitle(event.target.value)} required minLength={2} placeholder="سنگ تراورتن کرم، ضخامت ۲ سانتی‌متر" /></label>
       <label className="form-field"><span>مقدار</span><input value={quantity} onChange={(event) => setQuantity(event.target.value)} required inputMode="decimal" dir="ltr" /></label>
       <label className="form-field"><span>واحد</span><select value={unitId} onChange={(event) => setUnitId(event.target.value)} required>{units.map((item) => <option value={item.id} key={item.id}>{item.nameFa} ({item.symbolFa})</option>)}</select></label>
     </div></fieldset>
+    {productAttributes.length > 0 && <fieldset className="fieldset full"><legend>مشخصات فنی محصول</legend><div className="form-columns">
+      {productAttributes.map((attribute) => {
+        const label = attributeLabel(attribute);
+        const value = specifications[attribute.code];
+        if (attribute.dataType === 'SINGLE_SELECT') return <label className="form-field" key={attribute.id}><span>{label}{attribute.isRequired ? ' *' : ''}</span><select aria-label={label} value={typeof value === 'string' ? value : ''} required={attribute.isRequired} onChange={(event) => setSpecifications((current) => ({ ...current, [attribute.code]: event.target.value }))}><option value="">انتخاب کنید</option>{attribute.options.map((option) => <option value={option} key={option}>{option}</option>)}</select></label>;
+        if (attribute.dataType === 'MULTI_SELECT') return <fieldset className="attribute-options" key={attribute.id}><legend>{label}{attribute.isRequired ? ' *' : ''}</legend>{attribute.options.map((option) => <label className="check-field" key={option}><input type="checkbox" checked={Array.isArray(value) && value.includes(option)} onChange={(event) => toggleMultiValue(attribute.code, option, event.target.checked)} /><span>{option}</span></label>)}</fieldset>;
+        if (attribute.dataType === 'BOOLEAN') return <label className="check-field" key={attribute.id}><input type="checkbox" checked={value === true} onChange={(event) => setSpecifications((current) => ({ ...current, [attribute.code]: event.target.checked }))} /><span>{label}</span></label>;
+        const minimum = typeof attribute.validation.min === 'number' ? attribute.validation.min : undefined;
+        const maximum = typeof attribute.validation.max === 'number' ? attribute.validation.max : undefined;
+        const maxLength = typeof attribute.validation.maxLength === 'number' ? attribute.validation.maxLength : undefined;
+        return <label className="form-field" key={attribute.id}><span>{label}{attribute.isRequired ? ' *' : ''}</span><input aria-label={label} type={attribute.dataType === 'NUMBER' ? 'number' : 'text'} min={minimum} max={maximum} maxLength={maxLength} value={typeof value === 'string' ? value : ''} required={attribute.isRequired} onChange={(event) => setSpecifications((current) => ({ ...current, [attribute.code]: event.target.value }))} /></label>;
+      })}
+    </div></fieldset>}
     <label className="form-field"><span>استان تحویل</span><input value={province} onChange={(event) => setProvince(event.target.value)} /></label>
     <label className="form-field"><span>شهر تحویل</span><input value={city} onChange={(event) => setCity(event.target.value)} /></label>
     <label className="check-field"><input type="checkbox" checked={installationRequired} onChange={(event) => setInstallationRequired(event.target.checked)} /><span>نیاز به نصب دارم</span></label>

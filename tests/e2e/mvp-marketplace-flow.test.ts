@@ -112,6 +112,9 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   await expect(page.getByLabel('حساب خریدار')).toContainText('خریدار آزمایشی');
   await page.getByLabel('عنوان استعلام').fill(TEST_RFQ_TITLE);
   await page.getByLabel('نوع سنگ').selectOption({ index: 1 });
+  await expect(page.getByLabel('نوع فرآوری')).toBeVisible();
+  await page.getByLabel('نوع فرآوری').selectOption({ index: 1 });
+  await page.getByLabel('ضخامت (میلی‌متر)').fill('20');
   await page.getByLabel('شرح محصول').fill('سنگ تراورتن کرم، ضخامت ۲ سانتی‌متر');
   await page.getByLabel('مقدار').fill('120');
   await page.getByLabel('استان تحویل').fill('تهران');

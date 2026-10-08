@@ -10,6 +10,14 @@ import { canPublishRfq } from './rfq-policies';
 import { RfqReviewDecision, ReviewRfqDto } from './review-rfq.dto';
 import { PaymentsService } from '../payments/payments.service';
 
+const categoryDetailsInclude = {
+  attributeBindings: {
+    where: { attribute: { isActive: true } },
+    include: { attribute: true },
+    orderBy: { sortOrder: 'asc' as const },
+  },
+} as const;
+
 @Injectable()
 export class RfqsService {
   constructor(
@@ -24,7 +32,7 @@ export class RfqsService {
       .map((membership) => membership.organizationId);
     return this.prisma.rfq.findMany({
       where: { buyerOrganizationId: { in: buyerOrganizationIds } },
-      include: { items: { include: { category: true, unit: true }, orderBy: { sortOrder: 'asc' } }, _count: { select: { quotations: true } } },
+      include: { items: { include: { category: { include: categoryDetailsInclude }, unit: true }, orderBy: { sortOrder: 'asc' } }, _count: { select: { quotations: true } } },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -40,7 +48,7 @@ export class RfqsService {
         rfq: {
           include: {
             buyerOrganization: { select: { id: true, displayName: true, province: true, city: true } },
-            items: { include: { category: true, unit: true }, orderBy: { sortOrder: 'asc' } },
+            items: { include: { category: { include: categoryDetailsInclude }, unit: true }, orderBy: { sortOrder: 'asc' } },
             quotations: { where: { supplierOrganizationId: { in: supplierOrganizationIds } }, select: { id: true, status: true, version: true, finalAmountRial: true } },
           },
         },
@@ -54,7 +62,7 @@ export class RfqsService {
       where: { id: rfqId },
       include: {
         buyerOrganization: { select: { id: true, displayName: true, province: true, city: true } },
-        items: { include: { category: true, unit: true }, orderBy: { sortOrder: 'asc' } },
+        items: { include: { category: { include: categoryDetailsInclude }, unit: true }, orderBy: { sortOrder: 'asc' } },
         invitations: { select: { supplierOrganizationId: true, status: true } },
         _count: { select: { quotations: true } },
       },
@@ -81,7 +89,7 @@ export class RfqsService {
       include: {
         buyerOrganization: { select: { id: true, displayName: true, province: true, city: true } },
         buyerContact: { select: { id: true, firstName: true, lastName: true, mobile: true } },
-        items: { include: { category: true, unit: true }, orderBy: { sortOrder: 'asc' } },
+        items: { include: { category: { include: categoryDetailsInclude }, unit: true }, orderBy: { sortOrder: 'asc' } },
       },
       orderBy: { submittedAt: 'asc' },
     });
@@ -343,12 +351,66 @@ export class RfqsService {
   private async validateItems(primaryDomainId: string, input: CreateRfqDto): Promise<void> {
     const categoryIds = [...new Set(input.items.map((item) => item.categoryId))];
     const unitIds = [...new Set(input.items.map((item) => item.unitId))];
-    const [categories, units] = await Promise.all([
+    const [categories, units, attributeBindings] = await Promise.all([
       this.prisma.category.count({ where: { id: { in: categoryIds }, industryId: primaryDomainId, isActive: true } }),
       this.prisma.unitOfMeasure.count({ where: { id: { in: unitIds }, isActive: true } }),
+      this.prisma.categoryAttribute.findMany({
+        where: { categoryId: { in: categoryIds }, attribute: { isActive: true } },
+        include: { attribute: true },
+      }),
     ]);
     if (categories !== categoryIds.length) throw new BadRequestException('یک یا چند دسته‌بندی نامعتبر است.');
     if (units !== unitIds.length) throw new BadRequestException('یک یا چند واحد اندازه‌گیری نامعتبر است.');
+
+    for (const item of input.items) {
+      const bindings = attributeBindings.filter((binding) => binding.categoryId === item.categoryId);
+      const bindingByCode = new Map(bindings.map((binding) => [binding.attribute.code, binding]));
+      const specifications = item.specifications ?? {};
+      const isPresent = (value: string | number | boolean | string[] | null | undefined) =>
+        value !== null && value !== undefined && (typeof value !== 'string' || value.trim().length > 0) && (!Array.isArray(value) || value.length > 0);
+
+      for (const binding of bindings) {
+        if (binding.isRequired && !isPresent(specifications[binding.attribute.code])) {
+          throw new BadRequestException(`ویژگی «${binding.attribute.nameFa}» برای این محصول الزامی است.`);
+        }
+      }
+
+      for (const [code, value] of Object.entries(specifications)) {
+        const binding = bindingByCode.get(code);
+        if (!binding) throw new BadRequestException(`ویژگی فنی «${code}» برای دسته انتخاب‌شده معتبر نیست.`);
+        if (!isPresent(value)) continue;
+
+        const options = Array.isArray(binding.attribute.options)
+          ? binding.attribute.options.filter((option): option is string => typeof option === 'string')
+          : [];
+        const validation = typeof binding.attribute.validation === 'object' && binding.attribute.validation !== null && !Array.isArray(binding.attribute.validation)
+          ? binding.attribute.validation
+          : {};
+
+        if (binding.attribute.dataType === 'TEXT') {
+          if (typeof value !== 'string') throw new BadRequestException(`مقدار «${binding.attribute.nameFa}» باید متن باشد.`);
+          const maxLength = typeof validation.maxLength === 'number' ? validation.maxLength : undefined;
+          if (maxLength && value.length > maxLength) throw new BadRequestException(`مقدار «${binding.attribute.nameFa}» بیش از حد طولانی است.`);
+        }
+        if (binding.attribute.dataType === 'NUMBER') {
+          const numericValue = typeof value === 'number' ? value : (typeof value === 'string' ? Number(value) : Number.NaN);
+          if (!Number.isFinite(numericValue)) throw new BadRequestException(`مقدار «${binding.attribute.nameFa}» باید عدد باشد.`);
+          const minimum = typeof validation.min === 'number' ? validation.min : undefined;
+          const maximum = typeof validation.max === 'number' ? validation.max : undefined;
+          if (minimum !== undefined && numericValue < minimum) throw new BadRequestException(`مقدار «${binding.attribute.nameFa}» کمتر از حد مجاز است.`);
+          if (maximum !== undefined && numericValue > maximum) throw new BadRequestException(`مقدار «${binding.attribute.nameFa}» بیشتر از حد مجاز است.`);
+        }
+        if (binding.attribute.dataType === 'SINGLE_SELECT' && (typeof value !== 'string' || !options.includes(value))) {
+          throw new BadRequestException(`گزینه انتخاب‌شده برای «${binding.attribute.nameFa}» معتبر نیست.`);
+        }
+        if (binding.attribute.dataType === 'MULTI_SELECT' && (!Array.isArray(value) || value.some((selected) => !options.includes(selected)))) {
+          throw new BadRequestException(`گزینه‌های انتخاب‌شده برای «${binding.attribute.nameFa}» معتبر نیست.`);
+        }
+        if (binding.attribute.dataType === 'BOOLEAN' && typeof value !== 'boolean') {
+          throw new BadRequestException(`مقدار «${binding.attribute.nameFa}» باید بله یا خیر باشد.`);
+        }
+      }
+    }
   }
 
   private async findAuthorizedRfq(user: AuthenticatedUser, rfqId: string) {

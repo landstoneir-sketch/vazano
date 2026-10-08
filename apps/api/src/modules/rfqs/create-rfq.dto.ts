@@ -35,7 +35,7 @@ export class CreateRfqItemDto {
 
   @IsObject()
   @IsOptional()
-  specifications?: Record<string, string | number | boolean | null>;
+  specifications?: Record<string, string | number | boolean | string[] | null>;
 
   @IsNumberString({ no_symbols: true })
   @IsOptional()
