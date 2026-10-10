@@ -220,4 +220,15 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   const qualityControl = await prisma.qualityControlRequest.findUnique({ where: { rfqId: rfqId! } });
   expect(qualityControl?.status).toBe('ACCEPTED');
   expect(qualityControl?.feeAmountRial).toBe(37_500_000n);
+
+  await page.goto('/admin/quality-control');
+  const qualityControlCard = page.locator('article').filter({ hasText: TEST_RFQ_TITLE });
+  await expect(qualityControlCard).toContainText('آماده شروع');
+  await qualityControlCard.getByRole('button', { name: 'شروع کنترل کیفیت' }).click();
+  await expect(page.getByText('عملیات کنترل کیفیت آغاز شد.')).toBeVisible();
+  await qualityControlCard.getByRole('button', { name: 'ثبت تکمیل خدمت' }).click();
+  await expect(page.getByText('عملیات کنترل کیفیت تکمیل شد.')).toBeVisible();
+  const completedQualityControl = await prisma.qualityControlRequest.findUnique({ where: { rfqId: rfqId! } });
+  expect(completedQualityControl?.status).toBe('COMPLETED');
+  expect(completedQualityControl?.completedAt).not.toBeNull();
 });
