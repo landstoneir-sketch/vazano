@@ -14,7 +14,7 @@ export class SuppliersService {
     return this.prisma.organization.findMany({
       where: { kind: 'SUPPLIER', supplierProfile: { verificationStatus: { in: ['PENDING', 'NEEDS_CORRECTION'] } } },
       include: {
-        supplierProfile: { include: { categories: { include: { category: true } } } },
+        supplierProfile: { include: { categories: { include: { category: true } }, serviceProvinceLinks: { include: { province: true } } } },
         members: { where: { status: 'ACTIVE', role: 'SUPPLIER_OWNER' }, include: { user: { select: { id: true, mobile: true, firstName: true, lastName: true } } } },
       },
       orderBy: { updatedAt: 'asc' },
@@ -25,7 +25,7 @@ export class SuppliersService {
     this.assertCanManageProfile(user, organizationId);
     const organization = await this.prisma.organization.findFirst({
       where: { id: organizationId, kind: 'SUPPLIER' },
-      include: { supplierProfile: { include: { categories: { include: { category: true } } } } },
+      include: { supplierProfile: { include: { categories: { include: { category: true } }, serviceProvinceLinks: { include: { province: true } } } } },
     });
     if (!organization) throw new NotFoundException('سازمان فروشنده پیدا نشد.');
     return organization;
@@ -35,12 +35,16 @@ export class SuppliersService {
     this.assertCanManageProfile(user, organizationId);
     const organization = await this.prisma.organization.findFirst({ where: { id: organizationId, kind: 'SUPPLIER' } });
     if (!organization) throw new NotFoundException('سازمان فروشنده پیدا نشد.');
-    if (!input.nationwideCoverage && input.serviceProvinces.length === 0) {
+    const serviceProvinceIds = input.nationwideCoverage ? [] : [...new Set(input.serviceProvinceIds)];
+    if (!input.nationwideCoverage && serviceProvinceIds.length === 0) {
       throw new BadRequestException('حداقل یک استان خدمت‌رسانی یا پوشش کل ایران را انتخاب کنید.');
     }
     const categoryIds = [...new Set(input.categories.map((item) => item.categoryId))];
     const categoryCount = await this.prisma.category.count({ where: { id: { in: categoryIds }, isActive: true } });
     if (categoryCount !== categoryIds.length) throw new BadRequestException('یک یا چند دسته‌بندی انتخاب‌شده معتبر نیست.');
+    const provinces = await this.prisma.province.findMany({ where: { id: { in: serviceProvinceIds }, isActive: true }, select: { id: true, nameFa: true } });
+    if (provinces.length !== serviceProvinceIds.length) throw new BadRequestException('یک یا چند استان خدمت‌رسانی معتبر نیست.');
+    const serviceProvinceNames = provinces.map((province) => province.nameFa);
 
     return this.prisma.$transaction(async (tx) => {
       const profile = await tx.supplierProfile.upsert({
@@ -49,13 +53,13 @@ export class SuppliersService {
           organizationId,
           description: input.description,
           nationwideCoverage: input.nationwideCoverage,
-          serviceProvinces: input.nationwideCoverage ? [] : [...new Set(input.serviceProvinces)],
+          serviceProvinces: serviceProvinceNames,
           verificationStatus: 'PENDING',
         },
         update: {
           description: input.description,
           nationwideCoverage: input.nationwideCoverage,
-          serviceProvinces: input.nationwideCoverage ? [] : [...new Set(input.serviceProvinces)],
+          serviceProvinces: serviceProvinceNames,
           verificationStatus: 'PENDING',
           verificationReason: null,
           verifiedAt: null,
@@ -63,6 +67,10 @@ export class SuppliersService {
       });
       await tx.supplierCategory.deleteMany({ where: { supplierProfileId: profile.id } });
       await tx.supplierCategory.createMany({ data: categoryIds.map((categoryId) => ({ supplierProfileId: profile.id, categoryId })) });
+      await tx.supplierServiceProvince.deleteMany({ where: { supplierProfileId: profile.id } });
+      if (serviceProvinceIds.length > 0) {
+        await tx.supplierServiceProvince.createMany({ data: serviceProvinceIds.map((provinceId) => ({ supplierProfileId: profile.id, provinceId })) });
+      }
       await tx.organization.update({ where: { id: organizationId }, data: { status: 'PENDING' } });
       await tx.auditLog.create({
         data: { actorUserId: user.id, organizationId, action: 'supplier.profile.submit', entityType: 'SupplierProfile', entityId: profile.id },
@@ -70,7 +78,7 @@ export class SuppliersService {
       await tx.outboxEvent.create({
         data: { aggregateType: 'SupplierProfile', aggregateId: profile.id, eventType: 'ir.vazano.supplier.profile.submitted.v1', payload: { organizationId, categoryIds } },
       });
-      return tx.supplierProfile.findUniqueOrThrow({ where: { id: profile.id }, include: { categories: { include: { category: true } } } });
+      return tx.supplierProfile.findUniqueOrThrow({ where: { id: profile.id }, include: { categories: { include: { category: true } }, serviceProvinceLinks: { include: { province: true } } } });
     });
   }
 

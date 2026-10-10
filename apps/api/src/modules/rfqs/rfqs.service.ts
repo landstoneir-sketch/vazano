@@ -171,8 +171,10 @@ export class RfqsService {
           subscriptions: { some: { status: 'ACTIVE', startsAt: { lte: now }, expiresAt: { gt: now } } },
         },
         categories: { some: { categoryId: { in: categoryIds } } },
-        ...(rfq.deliveryProvince
-          ? { OR: [{ nationwideCoverage: true }, { serviceProvinces: { has: rfq.deliveryProvince } }] }
+        ...(rfq.deliveryProvinceId
+          ? { OR: [{ nationwideCoverage: true }, { serviceProvinceLinks: { some: { provinceId: rfq.deliveryProvinceId } } }] }
+          : rfq.deliveryProvince
+            ? { OR: [{ nationwideCoverage: true }, { serviceProvinces: { has: rfq.deliveryProvince } }] }
           : {}),
       },
       include: { categories: { where: { categoryId: { in: categoryIds } }, select: { categoryId: true } } },

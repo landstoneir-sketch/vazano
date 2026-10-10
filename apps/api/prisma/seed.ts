@@ -249,6 +249,16 @@ async function main(): Promise<void> {
       data: { deliveryProvinceId: province.id, deliveryCityId: capital.id },
     });
   }
+  const legacySupplierProfiles = await prisma.supplierProfile.findMany({
+    where: { nationwideCoverage: false },
+    select: { id: true, serviceProvinces: true },
+  });
+  const provinceReferences = await prisma.province.findMany({ select: { id: true, nameFa: true } });
+  const provinceIdByName = new Map(provinceReferences.map((province) => [province.nameFa, province.id]));
+  for (const profile of legacySupplierProfiles) {
+    const provinceIds = profile.serviceProvinces.map((name) => provinceIdByName.get(name)).filter((id): id is string => Boolean(id));
+    await prisma.supplierServiceProvince.createMany({ data: provinceIds.map((provinceId) => ({ supplierProfileId: profile.id, provinceId })), skipDuplicates: true });
+  }
 
   const industry = await prisma.industry.upsert({
     where: { code: 'building-materials' },

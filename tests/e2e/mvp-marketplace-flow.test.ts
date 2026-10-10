@@ -49,6 +49,15 @@ async function cleanupTestData() {
   await prisma.user.deleteMany({
     where: { OR: [{ id: TEST_USER_ID }, { mobile: TEST_MOBILE_NORMALIZED }] },
   });
+  const supplierProfile = await prisma.supplierProfile.findUnique({ where: { organizationId: SUPPLIER_ORGANIZATION_ID }, select: { id: true } });
+  if (supplierProfile) {
+    await prisma.supplierServiceProvince.deleteMany({ where: { supplierProfileId: supplierProfile.id } });
+    await prisma.supplierProfile.update({
+      where: { id: supplierProfile.id },
+      data: { nationwideCoverage: true, serviceProvinces: [], verificationStatus: 'VERIFIED', verificationReason: null, verifiedAt: new Date() },
+    });
+    await prisma.organization.update({ where: { id: SUPPLIER_ORGANIZATION_ID }, data: { status: 'ACTIVE' } });
+  }
 }
 
 async function prepareTestUser() {
@@ -107,6 +116,21 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   await page.getByLabel('کد تأیید').fill('11111');
   await page.getByRole('button', { name: 'ورود' }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
+
+  await page.goto(`/supplier/profile/${SUPPLIER_ORGANIZATION_ID}`);
+  await expect(page.getByRole('heading', { name: 'توانمندی و محدوده تأمین' })).toBeVisible();
+  await expect(page.getByText('وضعیت تأیید: VERIFIED')).toBeVisible();
+  await page.getByLabel('امکان تأمین در کل ایران').uncheck();
+  await expect(page.getByLabel('امکان تأمین در کل ایران')).not.toBeChecked();
+  await page.getByLabel('تهران', { exact: true }).check();
+  await page.getByRole('button', { name: 'ارسال برای بررسی' }).click();
+  await expect(page.getByText('پروفایل برای بررسی وازانو ارسال شد.')).toBeVisible();
+
+  await page.goto('/admin/suppliers');
+  const supplierReviewCard = page.locator('article').filter({ hasText: 'سنگ نمونه وازانو' });
+  await expect(supplierReviewCard).toContainText('پوشش: تهران');
+  await supplierReviewCard.getByRole('button', { name: 'تأیید و فعال‌سازی' }).click();
+  await expect(page.getByText('فروشنده تأیید و فعال شد.')).toBeVisible();
 
   await page.goto('/admin/catalog');
   await expect(page.getByRole('heading', { name: 'دسته‌بندی‌ها و ویژگی‌های محصول' })).toBeVisible();
