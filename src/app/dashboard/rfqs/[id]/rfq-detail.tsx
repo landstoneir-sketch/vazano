@@ -8,12 +8,17 @@ import { formatProductSpecifications, type ProductAttributeBinding, type Product
 
 type RfqItem = { id: string; title: string; quantity: string; specifications: ProductSpecifications; category: { nameFa: string; attributeBindings: ProductAttributeBinding[] }; unit: { symbolFa: string } };
 type QualityControlRequest = { status: string; purchaseAmountRial: string | null; feeBps: number; feeAmountRial: string | null; acceptedAt: string | null };
-type Rfq = { id: string; code: string; title: string; operationalStatus: string; deliveryProvince: string | null; deliveryCity: string | null; displayPricesTaxInclusive: boolean; qualityControlRequested: boolean; qualityControlRequest: QualityControlRequest | null; items: RfqItem[] };
+type ContractRequest = { id: string; code: string; status: 'REQUESTED' | 'UNDER_REVIEW' | 'TERMS_PREPARED' | 'ACCEPTED' | 'COMPLETED' | 'CANCELLED'; termsSummary: string | null; cancellationReason: string | null; acceptedAt: string | null };
+type Rfq = { id: string; code: string; title: string; operationalStatus: string; deliveryProvince: string | null; deliveryCity: string | null; displayPricesTaxInclusive: boolean; qualityControlRequested: boolean; qualityControlRequest: QualityControlRequest | null; contractRequest: ContractRequest | null; items: RfqItem[] };
 type QuotationItem = { id: string; quantity: string; unitPriceRial: string; lineNetRial: string; isAlternative: boolean; offeredDescription: string | null; rfqItem: RfqItem };
 type Quotation = { id: string; code: string; status: string; finalAmountRial: string; taxRial: string; shippingRial: string; preparationDays: number | null; validUntil: string | null; supplierOrganization: { id: string; displayName: string; province: string | null; city: string | null }; items: QuotationItem[] };
 type Attachment = { id: string; originalName: string; status: string; sizeBytes: number };
 
 function toman(value: string) { return `${(Number(value) / 10).toLocaleString('fa-IR')} تومان`; }
+
+const contractStatusLabels: Record<ContractRequest['status'], string> = {
+  REQUESTED: 'ثبت‌شده', UNDER_REVIEW: 'در حال بررسی', TERMS_PREPARED: 'شرایط آماده تأیید', ACCEPTED: 'تأییدشده', COMPLETED: 'تکمیل‌شده', CANCELLED: 'لغوشده',
+};
 
 export function RfqDetail({ rfqId }: { rfqId: string }) {
   const [rfq, setRfq] = useState<Rfq | null>(null);
@@ -58,6 +63,26 @@ export function RfqDetail({ rfqId }: { rfqId: string }) {
     finally { setBusyId(''); }
   }
 
+  async function requestContract() {
+    if (!window.confirm('درخواست هماهنگی قرارداد برای پیشنهاد منتخب ثبت شود؟')) return;
+    setBusyId('contract'); setMessage('');
+    try {
+      await apiRequest(`/contracts/rfqs/${rfqId}`, { method: 'POST', body: JSON.stringify({}) });
+      setMessage('درخواست هماهنگی قرارداد ثبت شد.'); await load();
+    } catch (reason) { setMessage(reason instanceof Error ? reason.message : 'ثبت درخواست قرارداد انجام نشد.'); }
+    finally { setBusyId(''); }
+  }
+
+  async function acceptContractTerms() {
+    if (!window.confirm('شرایط خلاصه‌شده را بررسی کرده‌اید و تأیید می‌کنید؟')) return;
+    setBusyId('contract-terms'); setMessage('');
+    try {
+      await apiRequest(`/contracts/rfqs/${rfqId}/accept-terms`, { method: 'POST' });
+      setMessage('تأیید شرایط قرارداد ثبت شد.'); await load();
+    } catch (reason) { setMessage(reason instanceof Error ? reason.message : 'تأیید شرایط قرارداد انجام نشد.'); }
+    finally { setBusyId(''); }
+  }
+
   async function downloadAttachment(id: string) {
     try {
       const data = await apiRequest<{ url: string }>(`/attachments/${id}/download-url`);
@@ -89,6 +114,15 @@ export function RfqDetail({ rfqId }: { rfqId: string }) {
       {rfq.qualityControlRequest?.status === 'QUOTED' && <button className="button button-primary" type="button" disabled={busyId === 'quality-control'} onClick={() => void acceptQualityControl()}>تأیید درخواست و کارمزد کنترل کیفیت</button>}
       {['ACCEPTED', 'IN_PROGRESS', 'COMPLETED'].includes(rfq.qualityControlRequest?.status ?? '') && <div className="message message-success">درخواست کنترل کیفیت تأیید شده است.</div>}
       <p className="muted">تأیید این مرحله برداشت خودکار وجه نیست؛ هماهنگی و پرداخت خدمت در مرحله بعد انجام می‌شود.</p>
+    </article>}
+    {rfq.operationalStatus === 'SELLER_SELECTED' && <article className="card"><h2>هماهنگی قرارداد</h2>
+      {!rfq.contractRequest && <><p>در صورت نیاز می‌توانید از وازانو بخواهید هماهنگی تهیه شرایط قرارداد با فروشنده منتخب را آغاز کند.</p><button className="button button-primary" type="button" disabled={busyId === 'contract'} onClick={() => void requestContract()}>درخواست قرارداد</button></>}
+      {rfq.contractRequest && <><p>کد درخواست: <strong>{rfq.contractRequest.code}</strong> · وضعیت: <strong>{contractStatusLabels[rfq.contractRequest.status]}</strong></p>
+        {rfq.contractRequest.termsSummary && <div className="message"><strong>خلاصه شرایط:</strong><br />{rfq.contractRequest.termsSummary}</div>}
+        {rfq.contractRequest.status === 'TERMS_PREPARED' && <button className="button button-primary" type="button" disabled={busyId === 'contract-terms'} onClick={() => void acceptContractTerms()}>تأیید شرایط قرارداد</button>}
+        {rfq.contractRequest.status === 'CANCELLED' && <p className="message message-error">دلیل لغو: {rfq.contractRequest.cancellationReason ?? 'ثبت نشده'}</p>}
+      </>}
+      <p className="muted">این بخش خدمت هماهنگی است و به‌تنهایی امضای الکترونیکی یا قرارداد حقوقی لازم‌الاجرا ایجاد نمی‌کند.</p>
     </article>}
     <h2>مقایسه پیشنهادها</h2>
     {quotations.length === 0 && <div className="card">هنوز پیشنهاد قیمتی دریافت نشده است.</div>}
