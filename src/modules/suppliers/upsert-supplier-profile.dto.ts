@@ -18,7 +18,7 @@ export class UpsertSupplierProfileDto {
   @IsArray()
   @ArrayMaxSize(40)
   @IsString({ each: true })
-  serviceProvinces!: string[];
+  serviceProvinceIds!: string[];
 
   @IsArray()
   @ArrayMinSize(1)
