@@ -11,6 +11,7 @@ const managementLinks: Array<{ href: Route; label: string }> = [
   { href: '/admin/locations', label: 'استان‌ها و شهرها' },
   { href: '/admin/quality-control', label: 'عملیات کنترل کیفیت' },
   { href: '/admin/contracts' as Route, label: 'درخواست‌های قرارداد' },
+  { href: '/admin/reports' as Route, label: 'گزارش مدیریتی' },
   { href: '/admin/billing', label: 'اشتراک‌ها و پرداخت‌ها' },
   { href: '/admin/settings', label: 'تنظیمات کسب‌وکار' },
   { href: '/admin/content', label: 'مدیریت محتوا' },
