@@ -84,10 +84,10 @@ jobs:
     env:
       NODE_ENV: development
       TZ: Asia/Tehran
-      API_PORT: 3001
-      WEB_ORIGIN: http://localhost:3000
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:3001/v1
-      API_INTERNAL_URL: http://localhost:3001/v1
+      API_PORT: 3101
+      WEB_ORIGIN: http://localhost:3100
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:3101/v1
+      API_INTERNAL_URL: http://localhost:3101/v1
       DATABASE_URL: postgresql://vazano:ci_only_password@localhost:5432/vazano?schema=public
       REDIS_URL: redis://localhost:6379
       SESSION_TTL_DAYS: 30
@@ -104,7 +104,7 @@ jobs:
       PAYMENT_PROVIDER: zarinpal
       ZARINPAL_ENABLED: "false"
       ZARINPAL_SANDBOX: "true"
-      PUBLIC_API_URL: http://localhost:3001
+      PUBLIC_API_URL: http://localhost:3101
       SEED_ADMIN_MOBILE: "09120000000"
       SEED_DEMO_DATA: "true"
       NOTIFICATION_WORKER_ENABLED: "false"
