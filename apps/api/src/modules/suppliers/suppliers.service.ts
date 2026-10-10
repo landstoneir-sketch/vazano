@@ -9,6 +9,60 @@ import { VerifySupplierDto } from './verify-supplier.dto';
 export class SuppliersService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async performance(user: AuthenticatedUser) {
+    const organizationIds = user.memberships
+      .filter((membership) => ['SUPPLIER_OWNER', 'SUPPLIER_MANAGER', 'SUPPLIER_SALES'].includes(membership.role))
+      .map((membership) => membership.organizationId);
+    if (organizationIds.length === 0) return [];
+    const since = new Date();
+    since.setUTCDate(since.getUTCDate() - 30);
+    const organizations = await this.prisma.organization.findMany({
+      where: { id: { in: organizationIds }, kind: 'SUPPLIER' },
+      select: {
+        id: true,
+        displayName: true,
+        supplierProfile: { select: { verificationStatus: true } },
+        creditWallet: { select: { cachedBalanceCredits: true } },
+        subscriptions: {
+          where: { status: { in: ['ACTIVE', 'GRACE'] } },
+          select: { status: true, expiresAt: true, graceEndsAt: true, plan: { select: { nameFa: true } } },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
+    });
+
+    return Promise.all(organizations.map(async (organization) => {
+      const [invitations, submittedOpportunities, wins, recentInvitations, responseSamples] = await Promise.all([
+        this.prisma.rfqInvitation.count({ where: { supplierOrganizationId: organization.id } }),
+        this.prisma.rfqInvitation.count({ where: { supplierOrganizationId: organization.id, status: 'RESPONDED' } }),
+        this.prisma.quotation.count({ where: { supplierOrganizationId: organization.id, status: 'ACCEPTED' } }),
+        this.prisma.rfqInvitation.count({ where: { supplierOrganizationId: organization.id, invitedAt: { gte: since } } }),
+        this.prisma.rfqInvitation.findMany({
+          where: { supplierOrganizationId: organization.id, respondedAt: { not: null } },
+          select: { invitedAt: true, respondedAt: true },
+          orderBy: { respondedAt: 'desc' },
+          take: 500,
+        }),
+      ]);
+      const totalResponseHours = responseSamples.reduce((total, item) => total + ((item.respondedAt!.getTime() - item.invitedAt.getTime()) / 3_600_000), 0);
+      return {
+        organizationId: organization.id,
+        organizationName: organization.displayName,
+        verificationStatus: organization.supplierProfile?.verificationStatus ?? 'INCOMPLETE',
+        invitations,
+        respondedOpportunities: submittedOpportunities,
+        wins,
+        recentInvitations,
+        responseRatePercent: invitations > 0 ? Math.round((submittedOpportunities / invitations) * 1000) / 10 : 0,
+        winRatePercent: submittedOpportunities > 0 ? Math.round((wins / submittedOpportunities) * 1000) / 10 : 0,
+        averageResponseHours: responseSamples.length > 0 ? Math.round((totalResponseHours / responseSamples.length) * 10) / 10 : null,
+        availableCredits: organization.creditWallet?.cachedBalanceCredits ?? 0n,
+        subscription: organization.subscriptions[0] ?? null,
+      };
+    }));
+  }
+
   listVerificationQueue(user: AuthenticatedUser) {
     if (!user.permissions.includes('supplier.verify')) throw new ForbiddenException('مجوز مشاهده صف بررسی فروشندگان را ندارید.');
     return this.prisma.organization.findMany({

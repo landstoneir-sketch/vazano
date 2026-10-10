@@ -16,6 +16,11 @@ export class SuppliersController {
     return this.suppliers.listVerificationQueue(user);
   }
 
+  @Get('performance')
+  performance(@CurrentUser() user: AuthenticatedUser) {
+    return this.suppliers.performance(user);
+  }
+
   @Get('organizations/:organizationId/profile')
   getProfile(@CurrentUser() user: AuthenticatedUser, @Param('organizationId') organizationId: string) {
     return this.suppliers.getProfile(user, organizationId);
