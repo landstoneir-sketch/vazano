@@ -7,7 +7,8 @@ import { apiRequest } from '../../../../lib/api';
 import { formatProductSpecifications, type ProductAttributeBinding, type ProductSpecifications } from '../../../../lib/product-specifications';
 
 type RfqItem = { id: string; title: string; quantity: string; specifications: ProductSpecifications; category: { nameFa: string; attributeBindings: ProductAttributeBinding[] }; unit: { symbolFa: string } };
-type Rfq = { id: string; code: string; title: string; operationalStatus: string; deliveryProvince: string | null; deliveryCity: string | null; displayPricesTaxInclusive: boolean; items: RfqItem[] };
+type QualityControlRequest = { status: string; purchaseAmountRial: string | null; feeBps: number; feeAmountRial: string | null; acceptedAt: string | null };
+type Rfq = { id: string; code: string; title: string; operationalStatus: string; deliveryProvince: string | null; deliveryCity: string | null; displayPricesTaxInclusive: boolean; qualityControlRequested: boolean; qualityControlRequest: QualityControlRequest | null; items: RfqItem[] };
 type QuotationItem = { id: string; quantity: string; unitPriceRial: string; lineNetRial: string; isAlternative: boolean; offeredDescription: string | null; rfqItem: RfqItem };
 type Quotation = { id: string; code: string; status: string; finalAmountRial: string; taxRial: string; shippingRial: string; preparationDays: number | null; validUntil: string | null; supplierOrganization: { id: string; displayName: string; province: string | null; city: string | null }; items: QuotationItem[] };
 type Attachment = { id: string; originalName: string; status: string; sizeBytes: number };
@@ -47,6 +48,16 @@ export function RfqDetail({ rfqId }: { rfqId: string }) {
     finally { setBusyId(''); }
   }
 
+  async function acceptQualityControl() {
+    if (!window.confirm('تأیید می‌کنید که درخواست کنترل کیفیت با کارمزد نمایش‌داده‌شده ثبت شود؟')) return;
+    setBusyId('quality-control'); setMessage('');
+    try {
+      await apiRequest(`/quality-control/rfqs/${rfqId}/accept`, { method: 'POST' });
+      setMessage('خدمت کنترل کیفیت و کارمزد آن تأیید شد.'); await load();
+    } catch (reason) { setMessage(reason instanceof Error ? reason.message : 'تأیید کنترل کیفیت انجام نشد.'); }
+    finally { setBusyId(''); }
+  }
+
   async function downloadAttachment(id: string) {
     try {
       const data = await apiRequest<{ url: string }>(`/attachments/${id}/download-url`);
@@ -71,6 +82,14 @@ export function RfqDetail({ rfqId }: { rfqId: string }) {
         {attachment.status === 'READY' ? <button type="button" className="button button-secondary" onClick={() => void downloadAttachment(attachment.id)}>دریافت امن</button> : <span className="muted">در انتظار بررسی امنیتی</span>}
       </div>)}</div>
     </article>
+    {rfq.qualityControlRequested && <article className="card"><h2>کنترل کیفیت توسط وازانو</h2>
+      {rfq.qualityControlRequest?.status === 'REQUESTED' && <p>درخواست ثبت شده است؛ مبلغ خدمت پس از انتخاب فروشنده محاسبه می‌شود.</p>}
+      {rfq.qualityControlRequest?.purchaseAmountRial && <p>مبلغ خرید: <strong>{toman(rfq.qualityControlRequest.purchaseAmountRial)}</strong> · نرخ خدمت: {(rfq.qualityControlRequest.feeBps / 100).toLocaleString('fa-IR')}٪</p>}
+      {rfq.qualityControlRequest?.feeAmountRial && <p className="price">کارمزد کنترل کیفیت: {toman(rfq.qualityControlRequest.feeAmountRial)}</p>}
+      {rfq.qualityControlRequest?.status === 'QUOTED' && <button className="button button-primary" type="button" disabled={busyId === 'quality-control'} onClick={() => void acceptQualityControl()}>تأیید درخواست و کارمزد کنترل کیفیت</button>}
+      {['ACCEPTED', 'IN_PROGRESS', 'COMPLETED'].includes(rfq.qualityControlRequest?.status ?? '') && <div className="message message-success">درخواست کنترل کیفیت تأیید شده است.</div>}
+      <p className="muted">تأیید این مرحله برداشت خودکار وجه نیست؛ هماهنگی و پرداخت خدمت در مرحله بعد انجام می‌شود.</p>
+    </article>}
     <h2>مقایسه پیشنهادها</h2>
     {quotations.length === 0 && <div className="card">هنوز پیشنهاد قیمتی دریافت نشده است.</div>}
     <div className="comparison-grid">{quotations.map((quote) => <article className={`card quote-card ${quote.status === 'ACCEPTED' ? 'selected-card' : ''}`} key={quote.id}>
