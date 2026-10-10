@@ -20,6 +20,7 @@ import { AdminOperationsModule } from './modules/admin-operations/admin-operatio
 import { CmsModule } from './modules/cms/cms.module';
 import { LocationsModule } from './modules/locations/locations.module';
 import { QualityControlModule } from './modules/quality-control/quality-control.module';
+import { ContractsModule } from './modules/contracts/contracts.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { QualityControlModule } from './modules/quality-control/quality-control.
     CmsModule,
     LocationsModule,
     QualityControlModule,
+    ContractsModule,
   ],
   controllers: [HealthController],
 })
