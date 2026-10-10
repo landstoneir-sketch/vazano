@@ -21,6 +21,7 @@ import { CmsModule } from './modules/cms/cms.module';
 import { LocationsModule } from './modules/locations/locations.module';
 import { QualityControlModule } from './modules/quality-control/quality-control.module';
 import { ContractsModule } from './modules/contracts/contracts.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { ContractsModule } from './modules/contracts/contracts.module';
     LocationsModule,
     QualityControlModule,
     ContractsModule,
+    ReportsModule,
   ],
   controllers: [HealthController],
 })

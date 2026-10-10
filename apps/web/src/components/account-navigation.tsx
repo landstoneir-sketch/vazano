@@ -18,6 +18,7 @@ function adminLanding(account: AuthenticatedAccount): Route | null {
   if (account.permissions.includes('location.manage')) return '/admin/locations' as Route;
   if (account.permissions.includes('quality_control.manage')) return '/admin/quality-control' as Route;
   if (account.permissions.includes('contract.manage')) return '/admin/contracts' as Route;
+  if (account.permissions.includes('report.read')) return '/admin/reports' as Route;
   if (account.permissions.includes('content.manage')) return '/admin/content' as Route;
   if (account.permissions.includes('billing.read')) return '/admin/billing' as Route;
   return null;
