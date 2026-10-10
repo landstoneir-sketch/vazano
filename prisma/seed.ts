@@ -7,13 +7,13 @@ const permissions = [
   'category.read', 'category.manage', 'rfq.create', 'rfq.create_on_behalf', 'rfq.read', 'rfq.review',
   'rfq.manage', 'quotation.create', 'quotation.read', 'quotation.manage', 'subscription.read',
   'subscription.manage', 'billing.read', 'billing.manage', 'payment.manage', 'content.manage',
-  'support.manage', 'quality_control.manage', 'contract.manage', 'audit.read', 'settings.read', 'settings.manage', 'location.read', 'location.manage',
+  'support.manage', 'quality_control.manage', 'contract.manage', 'report.read', 'audit.read', 'settings.read', 'settings.manage', 'location.read', 'location.manage',
 ];
 const roles: Record<string, string[]> = {
   SUPER_ADMIN: permissions,
   ADMIN: permissions.filter((key) => !['settings.manage'].includes(key)),
   SUPPORT: ['user.read', 'organization.read', 'rfq.read', 'rfq.create_on_behalf', 'quotation.read', 'support.manage', 'quality_control.manage', 'contract.manage'],
-  FINANCE: ['organization.read', 'subscription.read', 'subscription.manage', 'billing.read', 'billing.manage', 'payment.manage'],
+  FINANCE: ['organization.read', 'subscription.read', 'subscription.manage', 'billing.read', 'billing.manage', 'payment.manage', 'report.read'],
   CONTENT_MANAGER: ['category.read', 'category.manage', 'content.manage', 'location.read', 'location.manage'],
   BUYER_OWNER: ['organization.read', 'organization.manage', 'category.read', 'rfq.create', 'rfq.read', 'quotation.read'],
   BUYER_MEMBER: ['organization.read', 'category.read', 'rfq.create', 'rfq.read', 'quotation.read'],
