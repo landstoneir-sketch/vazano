@@ -19,6 +19,7 @@ import { SupportModule } from './modules/support/support.module';
 import { AdminOperationsModule } from './modules/admin-operations/admin-operations.module';
 import { CmsModule } from './modules/cms/cms.module';
 import { LocationsModule } from './modules/locations/locations.module';
+import { QualityControlModule } from './modules/quality-control/quality-control.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { LocationsModule } from './modules/locations/locations.module';
     AdminOperationsModule,
     CmsModule,
     LocationsModule,
+    QualityControlModule,
   ],
   controllers: [HealthController],
 })

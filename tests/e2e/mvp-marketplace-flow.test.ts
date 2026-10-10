@@ -21,7 +21,11 @@ async function cleanupTestData() {
     ? await prisma.quotation.findMany({ where: { rfqId: { in: rfqIds } }, select: { id: true } })
     : [];
   const quotationIds = quotations.map(({ id }) => id);
-  const aggregateIds = [TEST_USER_ID, ...rfqIds, ...quotationIds];
+  const qualityControlRequests = rfqIds.length
+    ? await prisma.qualityControlRequest.findMany({ where: { rfqId: { in: rfqIds } }, select: { id: true } })
+    : [];
+  const qualityControlRequestIds = qualityControlRequests.map(({ id }) => id);
+  const aggregateIds = [TEST_USER_ID, ...rfqIds, ...quotationIds, ...qualityControlRequestIds];
 
   if (aggregateIds.length) {
     await prisma.outboxEvent.deleteMany({ where: { aggregateId: { in: aggregateIds } } });
@@ -35,6 +39,9 @@ async function cleanupTestData() {
   await prisma.securityEvent.deleteMany({
     where: { OR: [{ userId: TEST_USER_ID }, { resolvedByUserId: TEST_USER_ID }] },
   });
+  if (rfqIds.length) {
+    await prisma.qualityControlRequest.deleteMany({ where: { rfqId: { in: rfqIds } } });
+  }
   if (quotationIds.length) {
     await prisma.attachment.deleteMany({ where: { quotationId: { in: quotationIds } } });
     await prisma.quotation.deleteMany({ where: { id: { in: quotationIds } } });
@@ -170,6 +177,7 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   await page.getByLabel('استان تحویل').selectOption({ label: 'تهران' });
   await expect(page.getByLabel('شهر تحویل')).toBeEnabled();
   await page.getByLabel('شهر تحویل').selectOption({ index: 1 });
+  await page.getByLabel(/کنترل کیفیت توسط وازانو/).check();
   await page.getByRole('button', { name: 'ذخیره پیش‌نویس استعلام' }).click();
   await expect(page.getByText('پیش‌نویس ثبت شد.')).toBeVisible();
   await page.getByRole('button', { name: 'ارسال برای بررسی وازانو' }).click();
@@ -205,4 +213,11 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   await page.getByRole('button', { name: 'انتخاب فروشنده' }).click();
   await expect(page.getByText('فروشنده منتخب ثبت شد.')).toBeVisible();
   await expect(page.getByText('فروشنده منتخب', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'تأیید درخواست و کارمزد کنترل کیفیت' })).toBeVisible();
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'تأیید درخواست و کارمزد کنترل کیفیت' }).click();
+  await expect(page.getByText('خدمت کنترل کیفیت و کارمزد آن تأیید شد.')).toBeVisible();
+  const qualityControl = await prisma.qualityControlRequest.findUnique({ where: { rfqId: rfqId! } });
+  expect(qualityControl?.status).toBe('ACCEPTED');
+  expect(qualityControl?.feeAmountRial).toBe(37_500_000n);
 });
