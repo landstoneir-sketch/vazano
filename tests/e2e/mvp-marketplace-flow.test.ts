@@ -25,7 +25,11 @@ async function cleanupTestData() {
     ? await prisma.qualityControlRequest.findMany({ where: { rfqId: { in: rfqIds } }, select: { id: true } })
     : [];
   const qualityControlRequestIds = qualityControlRequests.map(({ id }) => id);
-  const aggregateIds = [TEST_USER_ID, ...rfqIds, ...quotationIds, ...qualityControlRequestIds];
+  const contractRequests = rfqIds.length
+    ? await prisma.contractRequest.findMany({ where: { rfqId: { in: rfqIds } }, select: { id: true } })
+    : [];
+  const contractRequestIds = contractRequests.map(({ id }) => id);
+  const aggregateIds = [TEST_USER_ID, ...rfqIds, ...quotationIds, ...qualityControlRequestIds, ...contractRequestIds];
 
   if (aggregateIds.length) {
     await prisma.outboxEvent.deleteMany({ where: { aggregateId: { in: aggregateIds } } });
@@ -40,6 +44,7 @@ async function cleanupTestData() {
     where: { OR: [{ userId: TEST_USER_ID }, { resolvedByUserId: TEST_USER_ID }] },
   });
   if (rfqIds.length) {
+    await prisma.contractRequest.deleteMany({ where: { rfqId: { in: rfqIds } } });
     await prisma.qualityControlRequest.deleteMany({ where: { rfqId: { in: rfqIds } } });
   }
   if (quotationIds.length) {
@@ -231,4 +236,32 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   const completedQualityControl = await prisma.qualityControlRequest.findUnique({ where: { rfqId: rfqId! } });
   expect(completedQualityControl?.status).toBe('COMPLETED');
   expect(completedQualityControl?.completedAt).not.toBeNull();
+
+  await page.goto(`/dashboard/rfqs/${rfqId}`);
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'درخواست قرارداد' }).click();
+  await expect(page.getByText('درخواست هماهنگی قرارداد ثبت شد.')).toBeVisible();
+  expect((await prisma.contractRequest.findUnique({ where: { rfqId: rfqId! } }))?.status).toBe('REQUESTED');
+
+  await page.goto('/admin/contracts');
+  const contractCard = page.locator('article').filter({ hasText: TEST_RFQ_TITLE });
+  await contractCard.getByRole('button', { name: 'شروع بررسی' }).click();
+  await expect(page.getByText('بررسی درخواست آغاز شد.')).toBeVisible();
+  page.once('dialog', (dialog) => dialog.accept('شرایط نمونه قرارداد برای تأیید اجرایی خریدار'));
+  await contractCard.getByRole('button', { name: 'ثبت و ارسال شرایط' }).click();
+  await expect(page.getByText('شرایط برای تأیید خریدار ارسال شد.')).toBeVisible();
+
+  await page.goto(`/dashboard/rfqs/${rfqId}`);
+  await expect(page.getByText('شرایط نمونه قرارداد برای تأیید اجرایی خریدار')).toBeVisible();
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'تأیید شرایط قرارداد' }).click();
+  await expect(page.getByText('تأیید شرایط قرارداد ثبت شد.')).toBeVisible();
+
+  await page.goto('/admin/contracts');
+  const acceptedContractCard = page.locator('article').filter({ hasText: TEST_RFQ_TITLE });
+  await acceptedContractCard.getByRole('button', { name: 'ثبت تکمیل هماهنگی' }).click();
+  await expect(page.getByText('فرایند هماهنگی قرارداد تکمیل شد.')).toBeVisible();
+  const completedContract = await prisma.contractRequest.findUnique({ where: { rfqId: rfqId! } });
+  expect(completedContract?.status).toBe('COMPLETED');
+  expect(completedContract?.completedAt).not.toBeNull();
 });

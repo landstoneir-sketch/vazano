@@ -7,12 +7,12 @@ const permissions = [
   'category.read', 'category.manage', 'rfq.create', 'rfq.create_on_behalf', 'rfq.read', 'rfq.review',
   'rfq.manage', 'quotation.create', 'quotation.read', 'quotation.manage', 'subscription.read',
   'subscription.manage', 'billing.read', 'billing.manage', 'payment.manage', 'content.manage',
-  'support.manage', 'quality_control.manage', 'audit.read', 'settings.read', 'settings.manage', 'location.read', 'location.manage',
+  'support.manage', 'quality_control.manage', 'contract.manage', 'audit.read', 'settings.read', 'settings.manage', 'location.read', 'location.manage',
 ];
 const roles: Record<string, string[]> = {
   SUPER_ADMIN: permissions,
   ADMIN: permissions.filter((key) => !['settings.manage'].includes(key)),
-  SUPPORT: ['user.read', 'organization.read', 'rfq.read', 'rfq.create_on_behalf', 'quotation.read', 'support.manage', 'quality_control.manage'],
+  SUPPORT: ['user.read', 'organization.read', 'rfq.read', 'rfq.create_on_behalf', 'quotation.read', 'support.manage', 'quality_control.manage', 'contract.manage'],
   FINANCE: ['organization.read', 'subscription.read', 'subscription.manage', 'billing.read', 'billing.manage', 'payment.manage'],
   CONTENT_MANAGER: ['category.read', 'category.manage', 'content.manage', 'location.read', 'location.manage'],
   BUYER_OWNER: ['organization.read', 'organization.manage', 'category.read', 'rfq.create', 'rfq.read', 'quotation.read'],
@@ -145,6 +145,27 @@ const inAppNotificationTemplates = [
     titleTemplate: 'پیشنهاد قیمت انتخاب شد',
     bodyTemplate: 'پیشنهاد {{quotationCode}} از {{supplierName}} برای استعلام {{rfqCode}} انتخاب شد.',
     actionPathTemplate: '/supplier',
+  },
+  {
+    code: 'IN_APP_CONTRACT_REQUESTED_FA_V1',
+    eventType: 'ir.vazano.contract.requested.v1',
+    titleTemplate: 'درخواست قرارداد جدید {{contractCode}}',
+    bodyTemplate: '{{buyerName}} برای استعلام {{rfqCode}} درخواست هماهنگی قرارداد ثبت کرد.',
+    actionPathTemplate: '/admin/contracts',
+  },
+  {
+    code: 'IN_APP_CONTRACT_TERMS_PREPARED_FA_V1',
+    eventType: 'ir.vazano.contract.terms_prepared.v1',
+    titleTemplate: 'شرایط قرارداد آماده بررسی است',
+    bodyTemplate: 'خلاصه شرایط درخواست {{contractCode}} برای استعلام {{rfqCode}} آماده تأیید شما است.',
+    actionPathTemplate: '/dashboard/rfqs/{{rfqId}}',
+  },
+  {
+    code: 'IN_APP_CONTRACT_ACCEPTED_FA_V1',
+    eventType: 'ir.vazano.contract.accepted.v1',
+    titleTemplate: 'شرایط قرارداد تأیید شد',
+    bodyTemplate: 'خریدار شرایط درخواست {{contractCode}} برای استعلام {{rfqCode}} را تأیید کرد.',
+    actionPathTemplate: '/admin/contracts',
   },
   {
     code: 'IN_APP_MESSAGE_SENT_FA_V1',

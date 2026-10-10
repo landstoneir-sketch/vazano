@@ -255,6 +255,15 @@ enum QualityControlStatus {
   CANCELLED
 }
 
+enum ContractRequestStatus {
+  REQUESTED
+  UNDER_REVIEW
+  TERMS_PREPARED
+  ACCEPTED
+  COMPLETED
+  CANCELLED
+}
+
 enum SupplierVerificationStatus {
   INCOMPLETE
   PENDING
@@ -352,6 +361,7 @@ model User {
   resolvedSecurityEvents  SecurityEvent[]          @relation("SecurityEventResolver")
   updatedCmsPages         CmsPage[]                @relation("CmsPageUpdater")
   updatedFaqItems         FaqItem[]                @relation("FaqItemUpdater")
+  requestedContracts      ContractRequest[]        @relation("ContractRequester")
 
   @@map("users")
 }
@@ -394,32 +404,34 @@ model FaqItem {
 }
 
 model Organization {
-  id                     String               @id @default(cuid())
-  kind                   OrganizationKind
-  type                   OrganizationType
-  legalName              String               @map("legal_name")
-  displayName            String               @map("display_name")
-  nationalId             String?              @unique @map("national_id")
-  province               String?
-  city                   String?
-  status                 OrganizationStatus   @default(PENDING)
-  createdAt              DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt              DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
-  members                OrganizationMember[]
-  scopedRoles            UserRole[]
-  buyerRfqs              Rfq[]
-  subscriptions          Subscription[]
-  creditWallet           CreditWallet?
-  supplierProfile        SupplierProfile?
-  rfqInvitations         RfqInvitation[]      @relation("InvitedSupplier")
-  quotations             Quotation[]          @relation("SupplierQuotations")
-  notifications          Notification[]
-  attachments            Attachment[]
-  buyerMessageThreads    MessageThread[]      @relation("BuyerMessageThreads")
-  supplierMessageThreads MessageThread[]      @relation("SupplierMessageThreads")
-  sentMessages           Message[]            @relation("MessageSenderOrganization")
-  supportTickets         SupportTicket[]      @relation("SupportTicketOrganization")
-  subjectSupportTickets  SupportTicket[]      @relation("SupportTicketSubjectOrganization")
+  id                       String               @id @default(cuid())
+  kind                     OrganizationKind
+  type                     OrganizationType
+  legalName                String               @map("legal_name")
+  displayName              String               @map("display_name")
+  nationalId               String?              @unique @map("national_id")
+  province                 String?
+  city                     String?
+  status                   OrganizationStatus   @default(PENDING)
+  createdAt                DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  members                  OrganizationMember[]
+  scopedRoles              UserRole[]
+  buyerRfqs                Rfq[]
+  subscriptions            Subscription[]
+  creditWallet             CreditWallet?
+  supplierProfile          SupplierProfile?
+  rfqInvitations           RfqInvitation[]      @relation("InvitedSupplier")
+  quotations               Quotation[]          @relation("SupplierQuotations")
+  notifications            Notification[]
+  attachments              Attachment[]
+  buyerMessageThreads      MessageThread[]      @relation("BuyerMessageThreads")
+  supplierMessageThreads   MessageThread[]      @relation("SupplierMessageThreads")
+  sentMessages             Message[]            @relation("MessageSenderOrganization")
+  supportTickets           SupportTicket[]      @relation("SupportTicketOrganization")
+  subjectSupportTickets    SupportTicket[]      @relation("SupportTicketSubjectOrganization")
+  buyerContractRequests    ContractRequest[]    @relation("BuyerContractRequests")
+  supplierContractRequests ContractRequest[]    @relation("SupplierContractRequests")
 
   @@index([kind, status])
   @@map("organizations")
@@ -801,6 +813,7 @@ model Rfq {
   deliveryCityRef           City?                  @relation("RfqDeliveryCity", fields: [deliveryCityId], references: [id], onDelete: Restrict)
   items                     RfqItem[]
   qualityControlRequest     QualityControlRequest?
+  contractRequest           ContractRequest?
   invitations               RfqInvitation[]
   quotations                Quotation[]
   attachments               Attachment[]
@@ -928,6 +941,7 @@ model Quotation {
   items                  QuotationItem[]
   attachments            Attachment[]
   qualityControlRequest  QualityControlRequest?
+  contractRequest        ContractRequest?
 
   @@unique([rfqId, supplierOrganizationId, version])
   @@index([rfqId, status, submittedAt])
@@ -1220,6 +1234,38 @@ model QualityControlRequest {
 
   @@index([status, requestedAt])
   @@map("quality_control_requests")
+}
+
+model ContractRequest {
+  id                     String                @id @default(cuid())
+  code                   String                @unique
+  rfqId                  String                @unique @map("rfq_id")
+  selectedQuotationId    String                @unique @map("selected_quotation_id")
+  buyerOrganizationId    String                @map("buyer_organization_id")
+  supplierOrganizationId String                @map("supplier_organization_id")
+  requestedByUserId      String                @map("requested_by_user_id")
+  status                 ContractRequestStatus @default(REQUESTED)
+  buyerNote              String?               @map("buyer_note") @db.Text
+  termsSummary           String?               @map("terms_summary") @db.Text
+  cancellationReason     String?               @map("cancellation_reason") @db.Text
+  requestedAt            DateTime              @default(now()) @map("requested_at") @db.Timestamptz(3)
+  reviewedAt             DateTime?             @map("reviewed_at") @db.Timestamptz(3)
+  termsPreparedAt        DateTime?             @map("terms_prepared_at") @db.Timestamptz(3)
+  acceptedAt             DateTime?             @map("accepted_at") @db.Timestamptz(3)
+  completedAt            DateTime?             @map("completed_at") @db.Timestamptz(3)
+  cancelledAt            DateTime?             @map("cancelled_at") @db.Timestamptz(3)
+  createdAt              DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+  rfq                    Rfq                   @relation(fields: [rfqId], references: [id], onDelete: Restrict)
+  selectedQuotation      Quotation             @relation(fields: [selectedQuotationId], references: [id], onDelete: Restrict)
+  buyerOrganization      Organization          @relation("BuyerContractRequests", fields: [buyerOrganizationId], references: [id], onDelete: Restrict)
+  supplierOrganization   Organization          @relation("SupplierContractRequests", fields: [supplierOrganizationId], references: [id], onDelete: Restrict)
+  requestedBy            User                  @relation("ContractRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([status, requestedAt])
+  @@index([buyerOrganizationId, requestedAt])
+  @@index([supplierOrganizationId, requestedAt])
+  @@map("contract_requests")
 }
 
 model SystemSetting {

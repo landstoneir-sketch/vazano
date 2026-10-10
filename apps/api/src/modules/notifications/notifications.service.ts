@@ -10,6 +10,9 @@ const SUPPORTED_EVENT_TYPES = [
   'ir.vazano.rfq.distributed.v1',
   'ir.vazano.quotation.submitted.v1',
   'ir.vazano.quotation.accepted.v1',
+  'ir.vazano.contract.requested.v1',
+  'ir.vazano.contract.terms_prepared.v1',
+  'ir.vazano.contract.accepted.v1',
   'ir.vazano.message.sent.v1',
   'ir.vazano.support.ticket.created.v1',
   'ir.vazano.support.ticket.status_changed.v1',
@@ -287,6 +290,60 @@ export class NotificationsService {
             actionPath: '/supplier',
             variables,
           })),
+        ]);
+      }
+      case 'ir.vazano.contract.requested.v1': {
+        const [request, operators] = await Promise.all([
+          tx.contractRequest.findUnique({
+            where: { id: event.aggregateId },
+            select: { code: true, rfq: { select: { code: true } }, buyerOrganization: { select: { displayName: true } } },
+          }),
+          tx.user.findMany({
+            where: { status: 'ACTIVE', userRoles: { some: { organizationId: null, role: { key: { in: ['SUPER_ADMIN', 'ADMIN', 'SUPPORT'] } } } } },
+            select: { id: true },
+          }),
+        ]);
+        if (!request) return [];
+        return operators.map(({ id }) => ({
+          userId: id,
+          actionPath: '/admin/contracts',
+          variables: { contractCode: request.code, rfqCode: request.rfq.code, buyerName: request.buyerOrganization.displayName },
+        }));
+      }
+      case 'ir.vazano.contract.terms_prepared.v1': {
+        const request = await tx.contractRequest.findUnique({
+          where: { id: event.aggregateId },
+          select: { code: true, requestedByUserId: true, buyerOrganizationId: true, rfq: { select: { id: true, code: true } } },
+        });
+        if (!request) return [];
+        return [{
+          userId: request.requestedByUserId,
+          organizationId: request.buyerOrganizationId,
+          actionPath: `/dashboard/rfqs/${request.rfq.id}`,
+          variables: { contractCode: request.code, rfqCode: request.rfq.code, rfqId: request.rfq.id },
+        }];
+      }
+      case 'ir.vazano.contract.accepted.v1': {
+        const [request, operators] = await Promise.all([
+          tx.contractRequest.findUnique({
+            where: { id: event.aggregateId },
+            select: {
+              code: true,
+              supplierOrganizationId: true,
+              rfq: { select: { code: true } },
+              supplierOrganization: { select: { members: { where: { status: 'ACTIVE' }, select: { userId: true } } } },
+            },
+          }),
+          tx.user.findMany({
+            where: { status: 'ACTIVE', userRoles: { some: { organizationId: null, role: { key: { in: ['SUPER_ADMIN', 'ADMIN', 'SUPPORT'] } } } } },
+            select: { id: true },
+          }),
+        ]);
+        if (!request) return [];
+        const variables = { contractCode: request.code, rfqCode: request.rfq.code };
+        return this.uniqueTargets([
+          ...operators.map(({ id }) => ({ userId: id, actionPath: '/admin/contracts', variables })),
+          ...request.supplierOrganization.members.map(({ userId }) => ({ userId, organizationId: request.supplierOrganizationId, actionPath: '/supplier', variables })),
         ]);
       }
       case 'ir.vazano.message.sent.v1': {

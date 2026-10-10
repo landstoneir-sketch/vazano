@@ -31,6 +31,7 @@ describe('route access policy', () => {
     expect(canAccessRoute('/admin/users', contentManager)).toBe(false);
     expect(canAccessRoute('/admin/locations', { ...contentManager, permissions: ['location.manage'] })).toBe(true);
     expect(canAccessRoute('/admin/quality-control', { ...contentManager, permissions: ['quality_control.manage'] })).toBe(true);
+    expect(canAccessRoute('/admin/contracts', { ...contentManager, permissions: ['contract.manage'] })).toBe(true);
 
     const catalogManager = { ...contentManager, permissions: ['category.manage'] };
     expect(canAccessRoute('/admin/catalog', catalogManager)).toBe(true);
