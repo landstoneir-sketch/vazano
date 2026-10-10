@@ -5,6 +5,7 @@ import type { AuthenticatedUser } from '../auth/auth.types';
 import { PrismaService } from '../../shared/prisma/prisma.service';
 import { CreateQuotationDto } from './create-quotation.dto';
 import { calculateProposalFeeCredits, calculateQuotationTotals, PROPOSAL_FEE_POLICY_VERSION, startOfTehranDay } from './quotation-policies';
+import { calculateQualityControlFeeRial } from '../rfqs/rfq-policies';
 
 const categoryDetailsInclude = {
   attributeBindings: {
@@ -192,6 +193,22 @@ export class QuotationsService {
       await tx.quotation.updateMany({ where: { rfqId: quotation.rfqId, status: 'SUBMITTED', id: { not: quotation.id } }, data: { status: 'REJECTED' } });
       const result = await tx.quotation.update({ where: { id: quotation.id }, data: { status: 'ACCEPTED' } });
       await tx.rfq.update({ where: { id: quotation.rfqId }, data: { operationalStatus: 'SELLER_SELECTED', lifecycleState: 'CLOSED', closedAt: new Date() } });
+      if (quotation.rfq.qualityControlRequested) {
+        const qualityControl = await tx.qualityControlRequest.findUnique({ where: { rfqId: quotation.rfqId } });
+        if (qualityControl && qualityControl.status === 'REQUESTED') {
+          const feeAmountRial = calculateQualityControlFeeRial(quotation.finalAmountRial, qualityControl.feeBps);
+          await tx.qualityControlRequest.update({
+            where: { id: qualityControl.id },
+            data: { status: 'QUOTED', selectedQuotationId: quotation.id, purchaseAmountRial: quotation.finalAmountRial, feeAmountRial },
+          });
+          await tx.auditLog.create({
+            data: { actorUserId: user.id, organizationId: quotation.rfq.buyerOrganizationId, action: 'quality_control.quote.create', entityType: 'QualityControlRequest', entityId: qualityControl.id, metadata: { quotationId: quotation.id, purchaseAmountRial: quotation.finalAmountRial.toString(), feeAmountRial: feeAmountRial.toString(), feeBps: qualityControl.feeBps } },
+          });
+          await tx.outboxEvent.create({
+            data: { aggregateType: 'QualityControlRequest', aggregateId: qualityControl.id, eventType: 'ir.vazano.quality_control.quoted.v1', payload: { rfqId: quotation.rfqId, quotationId: quotation.id, feeAmountRial: feeAmountRial.toString() } },
+          });
+        }
+      }
       await tx.auditLog.create({ data: { actorUserId: user.id, organizationId: quotation.rfq.buyerOrganizationId, action: 'quotation.accept', entityType: 'Quotation', entityId: quotation.id } });
       await tx.outboxEvent.create({ data: { aggregateType: 'Quotation', aggregateId: quotation.id, eventType: 'ir.vazano.quotation.accepted.v1', payload: { quotationId: quotation.id, rfqId: quotation.rfqId } } });
       return result;
@@ -208,7 +225,7 @@ export class QuotationsService {
   private async findBuyerRfq(user: AuthenticatedUser, rfqId: string) {
     const rfq = await this.prisma.rfq.findUnique({
       where: { id: rfqId },
-      include: { items: { include: { category: { include: categoryDetailsInclude }, unit: true }, orderBy: { sortOrder: 'asc' } } },
+      include: { items: { include: { category: { include: categoryDetailsInclude }, unit: true }, orderBy: { sortOrder: 'asc' } }, qualityControlRequest: true },
     });
     if (!rfq) throw new NotFoundException('استعلام پیدا نشد.');
     const isMember = user.memberships.some((membership) => membership.organizationId === rfq.buyerOrganizationId);
