@@ -59,12 +59,12 @@ export class SubscriptionBillingService {
     if (!intent) throw new NotFoundException('تراکنش اشتراک پیدا نشد.');
     if (intent.status === 'SUCCEEDED') return { success: true, alreadyVerified: true, referenceId: intent.providerReference };
     if (callbackStatus !== 'OK') {
-      await this.prisma.paymentIntent.update({ where: { id: intent.id }, data: { status: 'CANCELLED', callbackPayload: { status: callbackStatus } } });
+      await this.prisma.paymentIntent.updateMany({ where: { id: intent.id, status: { not: 'SUCCEEDED' } }, data: { status: 'CANCELLED', callbackPayload: { status: callbackStatus } } });
       return { success: false, cancelled: true };
     }
     const verification = await this.payments.verify({ amountRial: intent.amountRial, authority });
     if (!verification.success) {
-      await this.prisma.paymentIntent.update({ where: { id: intent.id }, data: { status: 'FAILED', callbackPayload: { status: callbackStatus, code: verification.code } } });
+      await this.prisma.paymentIntent.updateMany({ where: { id: intent.id, status: { not: 'SUCCEEDED' } }, data: { status: 'FAILED', callbackPayload: { status: callbackStatus, code: verification.code } } });
       return verification;
     }
 

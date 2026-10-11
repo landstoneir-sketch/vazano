@@ -7,12 +7,13 @@ import { apiRequest } from '../../../../lib/api';
 import { formatProductSpecifications, type ProductAttributeBinding, type ProductSpecifications } from '../../../../lib/product-specifications';
 
 type RfqItem = { id: string; title: string; quantity: string; specifications: ProductSpecifications; category: { nameFa: string; attributeBindings: ProductAttributeBinding[] }; unit: { symbolFa: string } };
-type QualityControlRequest = { status: string; purchaseAmountRial: string | null; feeBps: number; feeAmountRial: string | null; acceptedAt: string | null };
+type QualityControlRequest = { status: string; purchaseAmountRial: string | null; feeBps: number; feeAmountRial: string | null; acceptedAt: string | null; paymentReceipt: null | { receiptNumber: string; providerReference: string | null; paidAt: string } };
 type ContractRequest = { id: string; code: string; status: 'REQUESTED' | 'UNDER_REVIEW' | 'TERMS_PREPARED' | 'ACCEPTED' | 'COMPLETED' | 'CANCELLED'; termsSummary: string | null; cancellationReason: string | null; acceptedAt: string | null };
 type Rfq = { id: string; code: string; title: string; operationalStatus: string; deliveryProvince: string | null; deliveryCity: string | null; displayPricesTaxInclusive: boolean; qualityControlRequested: boolean; qualityControlRequest: QualityControlRequest | null; contractRequest: ContractRequest | null; items: RfqItem[] };
 type QuotationItem = { id: string; quantity: string; unitPriceRial: string; lineNetRial: string; isAlternative: boolean; offeredDescription: string | null; rfqItem: RfqItem };
 type Quotation = { id: string; code: string; status: string; finalAmountRial: string; taxRial: string; shippingRial: string; preparationDays: number | null; validUntil: string | null; supplierOrganization: { id: string; displayName: string; province: string | null; city: string | null }; items: QuotationItem[] };
 type Attachment = { id: string; originalName: string; status: string; sizeBytes: number };
+type CheckoutResult = { paymentIntentId: string; authority?: string; redirectUrl: string; alreadyPaid?: boolean };
 
 function toman(value: string) { return `${(Number(value) / 10).toLocaleString('fa-IR')} تومان`; }
 
@@ -20,7 +21,7 @@ const contractStatusLabels: Record<ContractRequest['status'], string> = {
   REQUESTED: 'ثبت‌شده', UNDER_REVIEW: 'در حال بررسی', TERMS_PREPARED: 'شرایط آماده تأیید', ACCEPTED: 'تأییدشده', COMPLETED: 'تکمیل‌شده', CANCELLED: 'لغوشده',
 };
 
-export function RfqDetail({ rfqId }: { rfqId: string }) {
+export function RfqDetail({ rfqId, qualityPaymentResult }: { rfqId: string; qualityPaymentResult?: string }) {
   const [rfq, setRfq] = useState<Rfq | null>(null);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -45,6 +46,11 @@ export function RfqDetail({ rfqId }: { rfqId: string }) {
     return () => { active = false; };
   }, [rfqId]);
 
+  useEffect(() => {
+    if (qualityPaymentResult !== 'success') return;
+    sessionStorage.removeItem(`vazano:quality-control-checkout:${rfqId}`);
+  }, [qualityPaymentResult, rfqId]);
+
   async function accept(id: string) {
     if (!window.confirm('انتخاب این فروشنده را تأیید می‌کنید؟')) return;
     setBusyId(id); setMessage('');
@@ -53,14 +59,19 @@ export function RfqDetail({ rfqId }: { rfqId: string }) {
     finally { setBusyId(''); }
   }
 
-  async function acceptQualityControl() {
-    if (!window.confirm('تأیید می‌کنید که درخواست کنترل کیفیت با کارمزد نمایش‌داده‌شده ثبت شود؟')) return;
+  async function payQualityControl() {
+    if (!window.confirm('برای پرداخت کارمزد نمایش‌داده‌شده به درگاه امن زرین‌پال منتقل می‌شوید. ادامه می‌دهید؟')) return;
     setBusyId('quality-control'); setMessage('');
     try {
-      await apiRequest(`/quality-control/rfqs/${rfqId}/accept`, { method: 'POST' });
-      setMessage('خدمت کنترل کیفیت و کارمزد آن تأیید شد.'); await load();
-    } catch (reason) { setMessage(reason instanceof Error ? reason.message : 'تأیید کنترل کیفیت انجام نشد.'); }
-    finally { setBusyId(''); }
+      const storageKey = `vazano:quality-control-checkout:${rfqId}`;
+      let idempotencyKey = sessionStorage.getItem(storageKey);
+      if (!idempotencyKey) {
+        idempotencyKey = `quality-control:${rfqId}:${crypto.randomUUID()}`;
+        sessionStorage.setItem(storageKey, idempotencyKey);
+      }
+      const result = await apiRequest<CheckoutResult>(`/quality-control/rfqs/${rfqId}/checkout`, { method: 'POST', body: JSON.stringify({ idempotencyKey }) });
+      window.location.assign(result.redirectUrl);
+    } catch (reason) { setMessage(reason instanceof Error ? reason.message : 'شروع پرداخت کنترل کیفیت انجام نشد.'); setBusyId(''); }
   }
 
   async function requestContract() {
@@ -95,6 +106,9 @@ export function RfqDetail({ rfqId }: { rfqId: string }) {
   if (!rfq) return <div className="card">{message || 'در حال دریافت اطلاعات…'}</div>;
   return <div className="stack">
     <div><div className="eyebrow">{rfq.code}</div><h1>{rfq.title}</h1><p className="muted">{rfq.deliveryProvince ?? 'استان نامشخص'}، {rfq.deliveryCity ?? 'شهر نامشخص'} · {rfq.operationalStatus}</p></div>
+    {qualityPaymentResult === 'success' && <div className="message message-success">پرداخت کنترل کیفیت تأیید شد و درخواست وارد صف عملیات وازانو شده است.</div>}
+    {qualityPaymentResult === 'cancelled' && <div className="message message-error">پرداخت کنترل کیفیت لغو شد و درخواست هنوز فعال نشده است.</div>}
+    {qualityPaymentResult === 'failed' && <div className="message message-error">تأیید پرداخت کنترل کیفیت انجام نشد. در صورت کسر وجه، شماره پیگیری را برای پشتیبانی ارسال کنید.</div>}
     {message && <div className="message message-success">{message}</div>}
     <article className="card"><h2>اقلام درخواستی</h2><ul>{rfq.items.map((item) => {
       const details = formatProductSpecifications(item.specifications, item.category.attributeBindings);
@@ -111,9 +125,10 @@ export function RfqDetail({ rfqId }: { rfqId: string }) {
       {rfq.qualityControlRequest?.status === 'REQUESTED' && <p>درخواست ثبت شده است؛ مبلغ خدمت پس از انتخاب فروشنده محاسبه می‌شود.</p>}
       {rfq.qualityControlRequest?.purchaseAmountRial && <p>مبلغ خرید: <strong>{toman(rfq.qualityControlRequest.purchaseAmountRial)}</strong> · نرخ خدمت: {(rfq.qualityControlRequest.feeBps / 100).toLocaleString('fa-IR')}٪</p>}
       {rfq.qualityControlRequest?.feeAmountRial && <p className="price">کارمزد کنترل کیفیت: {toman(rfq.qualityControlRequest.feeAmountRial)}</p>}
-      {rfq.qualityControlRequest?.status === 'QUOTED' && <button className="button button-primary" type="button" disabled={busyId === 'quality-control'} onClick={() => void acceptQualityControl()}>تأیید درخواست و کارمزد کنترل کیفیت</button>}
-      {['ACCEPTED', 'IN_PROGRESS', 'COMPLETED'].includes(rfq.qualityControlRequest?.status ?? '') && <div className="message message-success">درخواست کنترل کیفیت تأیید شده است.</div>}
-      <p className="muted">تأیید این مرحله برداشت خودکار وجه نیست؛ هماهنگی و پرداخت خدمت در مرحله بعد انجام می‌شود.</p>
+      {rfq.qualityControlRequest?.status === 'QUOTED' && <button className="button button-primary" type="button" disabled={busyId === 'quality-control'} onClick={() => void payQualityControl()}>{busyId === 'quality-control' ? 'در حال اتصال به زرین‌پال…' : 'پرداخت کارمزد و فعال‌سازی خدمت'}</button>}
+      {['ACCEPTED', 'IN_PROGRESS', 'COMPLETED'].includes(rfq.qualityControlRequest?.status ?? '') && <div className="message message-success">هزینه خدمت پرداخت و درخواست کنترل کیفیت فعال شده است.</div>}
+      {rfq.qualityControlRequest?.paymentReceipt && <p>رسید: <strong>{rfq.qualityControlRequest.paymentReceipt.receiptNumber}</strong>{rfq.qualityControlRequest.paymentReceipt.providerReference ? ` · پیگیری درگاه: ${rfq.qualityControlRequest.paymentReceipt.providerReference}` : ''}</p>}
+      <p className="muted">فعال‌سازی خدمت فقط پس از تأیید قطعی پرداخت توسط زرین‌پال انجام می‌شود.</p>
     </article>}
     {rfq.operationalStatus === 'SELLER_SELECTED' && <article className="card"><h2>هماهنگی قرارداد</h2>
       {!rfq.contractRequest && <><p>در صورت نیاز می‌توانید از وازانو بخواهید هماهنگی تهیه شرایط قرارداد با فروشنده منتخب را آغاز کند.</p><button className="button button-primary" type="button" disabled={busyId === 'contract'} onClick={() => void requestContract()}>درخواست قرارداد</button></>}
