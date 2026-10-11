@@ -227,7 +227,7 @@ export class QuotationsService {
       where: { id: rfqId },
       include: {
         items: { include: { category: { include: categoryDetailsInclude }, unit: true }, orderBy: { sortOrder: 'asc' } },
-        qualityControlRequest: { include: { paymentReceipt: { select: { receiptNumber: true, providerReference: true, paidAt: true } } } },
+        qualityControlRequest: { include: { paymentReceipt: { select: { id: true, receiptNumber: true, providerReference: true, paidAt: true } } } },
         contractRequest: true,
       },
     });
