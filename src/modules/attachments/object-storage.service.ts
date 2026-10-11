@@ -44,6 +44,10 @@ export class ObjectStorageService implements OnModuleInit {
     }
   }
 
+  async checkHealth(): Promise<void> {
+    await this.client.send(new HeadBucketCommand({ Bucket: this.bucket }));
+  }
+
   createUploadUrl(storageKey: string, mimeType: string): Promise<string> {
     return getSignedUrl(this.client, new PutObjectCommand({ Bucket: this.bucket, Key: storageKey, ContentType: mimeType }), { expiresIn: this.uploadTtlSeconds });
   }
