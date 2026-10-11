@@ -57,11 +57,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
+      - name: Validate production deployment manifest
+        env:
+          VAZANO_ENV_FILE: .env.production.example
+        run: docker compose --env-file .env.production.example -f compose.production.yml config --quiet
+
       - name: Build web runtime image
         run: docker build --target web-runner --tag vazano-web:${{ github.sha }} .
 
       - name: Build API runtime image
         run: docker build --target api-runner --tag vazano-api:${{ github.sha }} .
+
+      - name: Build migration runtime image
+        run: docker build --target migration-runner --tag vazano-migration:${{ github.sha }} .
 
   e2e:
     needs: quality
