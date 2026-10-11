@@ -419,6 +419,7 @@ model Organization {
   scopedRoles              UserRole[]
   buyerRfqs                Rfq[]
   subscriptions            Subscription[]
+  paymentReceipts          PaymentReceipt[]
   creditWallet             CreditWallet?
   supplierProfile          SupplierProfile?
   rfqInvitations           RfqInvitation[]      @relation("InvitedSupplier")
@@ -1144,6 +1145,7 @@ model Subscription {
   organization        Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   plan                SubscriptionPlan       @relation(fields: [planId], references: [id], onDelete: Restrict)
   reminders           SubscriptionReminder[]
+  paymentReceipt      PaymentReceipt?
 
   @@index([organizationId, status])
   @@index([status, expiresAt])
@@ -1213,10 +1215,31 @@ model PaymentIntent {
   verifiedAt          DateTime?       @map("verified_at") @db.Timestamptz(3)
   createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  paymentReceipt      PaymentReceipt?
 
   @@index([referenceType, referenceId])
   @@index([status, createdAt])
   @@map("payment_intents")
+}
+
+model PaymentReceipt {
+  id                String        @id @default(cuid())
+  receiptNumber     String        @unique @map("receipt_number")
+  organizationId    String        @map("organization_id")
+  subscriptionId    String        @unique @map("subscription_id")
+  paymentIntentId   String        @unique @map("payment_intent_id")
+  amountRial        BigInt        @map("amount_rial")
+  taxRial           BigInt        @default(0) @map("tax_rial")
+  currency          String        @default("IRR")
+  providerReference String?       @map("provider_reference")
+  paidAt            DateTime      @map("paid_at") @db.Timestamptz(3)
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  subscription      Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  paymentIntent     PaymentIntent @relation(fields: [paymentIntentId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, paidAt])
+  @@map("payment_receipts")
 }
 
 model QualityControlRequest {

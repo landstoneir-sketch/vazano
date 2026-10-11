@@ -21,6 +21,12 @@ export class SubscriptionsController {
     return this.subscriptions.listForOrganization(user, organizationId);
   }
 
+  @Get('organizations/:organizationId/receipts')
+  @UseGuards(SessionGuard)
+  listReceiptsForOrganization(@CurrentUser() user: AuthenticatedUser, @Param('organizationId') organizationId: string) {
+    return this.subscriptions.listReceiptsForOrganization(user, organizationId);
+  }
+
   @Post('organizations/:organizationId/checkout')
   @UseGuards(SessionGuard)
   checkout(@CurrentUser() user: AuthenticatedUser, @Param('organizationId') organizationId: string, @Body() input: StartSubscriptionCheckoutDto) {

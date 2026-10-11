@@ -29,13 +29,35 @@ export class SubscriptionsService {
   }
 
   listForOrganization(user: AuthenticatedUser, organizationId: string) {
-    if (!user.memberships.some((membership) => membership.organizationId === organizationId) && !user.permissions.includes('subscription.manage')) {
-      throw new ForbiddenException('دسترسی به اشتراک این سازمان مجاز نیست.');
-    }
+    this.requireOrganizationBillingAccess(user, organizationId);
     return this.prisma.subscription.findMany({
       where: { organizationId },
       include: { plan: true },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  listReceiptsForOrganization(user: AuthenticatedUser, organizationId: string) {
+    this.requireOrganizationBillingAccess(user, organizationId);
+    return this.prisma.paymentReceipt.findMany({
+      where: { organizationId },
+      select: {
+        id: true,
+        receiptNumber: true,
+        amountRial: true,
+        taxRial: true,
+        currency: true,
+        providerReference: true,
+        paidAt: true,
+        subscription: { select: { plan: { select: { code: true, nameFa: true } } } },
+      },
+      orderBy: { paidAt: 'desc' },
+    });
+  }
+
+  private requireOrganizationBillingAccess(user: AuthenticatedUser, organizationId: string): void {
+    if (!user.memberships.some((membership) => membership.organizationId === organizationId) && !user.permissions.includes('subscription.manage')) {
+      throw new ForbiddenException('دسترسی به اطلاعات مالی این سازمان مجاز نیست.');
+    }
   }
 }
