@@ -20,7 +20,10 @@ type Payment = {
   providerReference: string | null; createdAt: string; payerOrganization: { displayName: string; legalName: string } | null;
   reconciliationStatus: 'NOT_CHECKED' | 'MATCHED' | 'ACTION_REQUIRED' | 'PROVIDER_UNCONFIRMED';
   lastReconciledAt: string | null; lastProviderCode: number | null;
+  reconciliationResolution: PaymentResolution | null; reconciliationResolutionNote: string | null;
+  reconciliationResolvedAt: string | null;
 };
+type PaymentResolution = 'CUSTOMER_RETRY_REQUIRED' | 'PROVIDER_SUPPORT_REQUIRED' | 'REFUND_REVIEW_REQUIRED' | 'NO_FINANCIAL_ACTION';
 type PaymentReceipt = {
   id: string; receiptNumber: string; amountRial: string; taxRial: string; providerReference: string | null; paidAt: string;
   organization: { displayName: string; legalName: string };
@@ -69,6 +72,7 @@ export function BillingManager() {
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [reconcilingPaymentId, setReconcilingPaymentId] = useState('');
+  const [resolvingPaymentId, setResolvingPaymentId] = useState('');
 
   const load = useCallback(async () => {
     setError('');
@@ -127,6 +131,18 @@ export function BillingManager() {
     finally { setReconcilingPaymentId(''); }
   }
 
+  async function resolvePayment(payment: Payment, resolution: PaymentResolution, note: string) {
+    setResolvingPaymentId(payment.id); setError(''); setMessage('');
+    try {
+      await apiRequest(`/admin/billing/payments/${payment.id}/resolve-reconciliation`, {
+        method: 'POST', body: JSON.stringify({ resolution, note }),
+      });
+      setMessage('نتیجه رسیدگی مالی ثبت شد؛ وضعیت پرداخت یا خدمت به‌صورت خودکار تغییر نکرد.');
+      await load();
+    } catch (reason: unknown) { setError(reason instanceof Error ? reason.message : 'ثبت نتیجه رسیدگی انجام نشد.'); }
+    finally { setResolvingPaymentId(''); }
+  }
+
   if (!overview && !error) return <div className="card">در حال دریافت اطلاعات اشتراک و پرداخت…</div>;
 
   return <div className="stack">
@@ -135,7 +151,7 @@ export function BillingManager() {
     <div className="tab-list" role="tablist" aria-label="بخش مالی"><button className={tab === 'plans' ? 'tab-active' : ''} type="button" onClick={() => setTab('plans')}>پلن‌ها</button><button className={tab === 'subscriptions' ? 'tab-active' : ''} type="button" onClick={() => setTab('subscriptions')}>اشتراک‌ها</button><button className={tab === 'payments' ? 'tab-active' : ''} type="button" onClick={() => setTab('payments')}>پرداخت‌ها</button><button className={tab === 'receipts' ? 'tab-active' : ''} type="button" onClick={() => setTab('receipts')}>رسیدها</button></div>
     {tab === 'plans' && overview && <section className="card stack"><div className="admin-card-title"><div><h2>مدیریت پلن‌ها</h2><p>قیمت را به تومان وارد کنید؛ مبلغ در دیتابیس با واحد ریال و به‌صورت عدد صحیح ذخیره می‌شود.</p></div><button className="button button-secondary" type="button" onClick={() => { setDraft(emptyPlan); setError(''); setMessage(''); }}>پلن جدید</button></div><div className="content-item-list">{overview.plans.map((plan) => <button className={draft.id === plan.id ? 'content-item-active' : ''} type="button" key={plan.id} onClick={() => { setDraft(fromPlan(plan)); setError(''); setMessage(''); }}><strong>{plan.nameFa}</strong><span>{formatToman(plan.priceRial)} · {plan.isActive ? 'فعال' : 'غیرفعال'}</span></button>)}</div><PlanForm draft={draft} setDraft={setDraft} busy={busy} onSubmit={savePlan} /></section>}
     {tab === 'subscriptions' && overview && <SubscriptionList items={overview.subscriptions} />}
-    {tab === 'payments' && overview && <PaymentList items={overview.payments} busyId={reconcilingPaymentId} onReconcile={reconcilePayment} />}
+    {tab === 'payments' && overview && <PaymentList items={overview.payments} reconcilingId={reconcilingPaymentId} resolvingId={resolvingPaymentId} onReconcile={reconcilePayment} onResolve={resolvePayment} />}
     {tab === 'receipts' && overview && <ReceiptList items={overview.receipts} />}
   </div>;
 }
@@ -163,8 +179,15 @@ function SubscriptionList({ items }: { items: Subscription[] }) {
   return <section className="stack"><h2>آخرین اشتراک‌ها</h2>{items.length === 0 && <div className="card">هنوز اشتراکی ثبت نشده است.</div>}{items.map((item) => <article className="card admin-card-title" key={item.id}><div><div className="eyebrow">{item.plan.nameFa}</div><h3>{item.organization.displayName || item.organization.legalName}</h3><p>{formatToman(item.priceRialSnapshot)} · ثبت {new Date(item.createdAt).toLocaleDateString('fa-IR')}</p></div><div><span className={`status-badge ${statusClass(item.status)}`}>{subscriptionStatusLabel(item.status)}</span><p>{item.expiresAt ? `پایان: ${new Date(item.expiresAt).toLocaleDateString('fa-IR')}` : 'هنوز فعال نشده'}</p></div></article>)}</section>;
 }
 
-function PaymentList({ items, busyId, onReconcile }: { items: Payment[]; busyId: string; onReconcile: (payment: Payment) => Promise<void> }) {
-  return <section className="stack"><h2>آخرین پرداخت‌ها</h2>{items.length === 0 && <div className="card">هنوز پرداختی ثبت نشده است.</div>}{items.map((item) => <article className="card admin-card-title" key={item.id}><div><div className="eyebrow">{item.provider} · {item.purpose}</div><h3>{item.payerOrganization?.displayName ?? item.payerOrganization?.legalName ?? 'پرداخت‌کننده بدون سازمان'}</h3><p>{formatToman(item.amountRial)} · {new Date(item.createdAt).toLocaleString('fa-IR')}</p><p className="muted">تطبیق: {reconciliationStatusLabel(item.reconciliationStatus)}{item.lastReconciledAt ? ` · ${new Date(item.lastReconciledAt).toLocaleString('fa-IR')}` : ''}</p></div><div><span className={`status-badge ${statusClass(item.status)}`}>{paymentStatusLabel(item.status)}</span>{item.providerReference && <p>پیگیری: {item.providerReference}</p>}{item.authority && <button className="button button-secondary" type="button" disabled={Boolean(busyId)} onClick={() => void onReconcile(item)}>{busyId === item.id ? 'در حال استعلام…' : 'تطبیق با زرین‌پال'}</button>}</div></article>)}</section>;
+function PaymentList({ items, reconcilingId, resolvingId, onReconcile, onResolve }: { items: Payment[]; reconcilingId: string; resolvingId: string; onReconcile: (payment: Payment) => Promise<void>; onResolve: (payment: Payment, resolution: PaymentResolution, note: string) => Promise<void> }) {
+  const openCount = items.filter((item) => ['ACTION_REQUIRED', 'PROVIDER_UNCONFIRMED'].includes(item.reconciliationStatus) && !item.reconciliationResolvedAt).length;
+  return <section className="stack"><div><h2>آخرین پرداخت‌ها</h2><p className="muted">{openCount.toLocaleString('fa-IR')} تراکنش در صف رسیدگی مالی است.</p></div>{items.length === 0 && <div className="card">هنوز پرداختی ثبت نشده است.</div>}{items.map((item) => <article className="card stack" key={item.id}><div className="admin-card-title"><div><div className="eyebrow">{item.provider} · {item.purpose}</div><h3>{item.payerOrganization?.displayName ?? item.payerOrganization?.legalName ?? 'پرداخت‌کننده بدون سازمان'}</h3><p>{formatToman(item.amountRial)} · {new Date(item.createdAt).toLocaleString('fa-IR')}</p><p className="muted">تطبیق: {reconciliationStatusLabel(item.reconciliationStatus)}{item.lastReconciledAt ? ` · ${new Date(item.lastReconciledAt).toLocaleString('fa-IR')}` : ''}</p>{item.reconciliationResolvedAt && <p className="muted">نتیجه رسیدگی: {resolutionLabel(item.reconciliationResolution)} · {new Date(item.reconciliationResolvedAt).toLocaleString('fa-IR')}</p>}</div><div><span className={`status-badge ${statusClass(item.status)}`}>{paymentStatusLabel(item.status)}</span>{item.providerReference && <p>پیگیری: {item.providerReference}</p>}{item.authority && <button className="button button-secondary" type="button" disabled={Boolean(reconcilingId || resolvingId)} onClick={() => void onReconcile(item)}>{reconcilingId === item.id ? 'در حال استعلام…' : 'تطبیق با زرین‌پال'}</button>}</div></div>{['ACTION_REQUIRED', 'PROVIDER_UNCONFIRMED'].includes(item.reconciliationStatus) && !item.reconciliationResolvedAt && <PaymentResolutionForm payment={item} busy={resolvingId === item.id} disabled={Boolean(reconcilingId || resolvingId)} onResolve={onResolve} />}{item.reconciliationResolutionNote && <div className="message">یادداشت مالی: {item.reconciliationResolutionNote}</div>}</article>)}</section>;
+}
+
+function PaymentResolutionForm({ payment, busy, disabled, onResolve }: { payment: Payment; busy: boolean; disabled: boolean; onResolve: (payment: Payment, resolution: PaymentResolution, note: string) => Promise<void> }) {
+  const [resolution, setResolution] = useState<PaymentResolution>('CUSTOMER_RETRY_REQUIRED');
+  const [note, setNote] = useState('');
+  return <form className="payment-resolution-form" onSubmit={(event) => { event.preventDefault(); void onResolve(payment, resolution, note); }}><label className="form-field"><span>اقدام پیشنهادی مالی</span><select value={resolution} onChange={(event) => setResolution(event.target.value as PaymentResolution)}><option value="CUSTOMER_RETRY_REQUIRED">ارسال لینک پرداخت مجدد به مشتری</option><option value="PROVIDER_SUPPORT_REQUIRED">پیگیری با پشتیبانی درگاه</option><option value="REFUND_REVIEW_REQUIRED">ارجاع برای بررسی استرداد</option><option value="NO_FINANCIAL_ACTION">بدون اقدام مالی</option></select></label><label className="form-field"><span>شرح مستند رسیدگی</span><textarea minLength={10} maxLength={1000} rows={2} value={note} onChange={(event) => setNote(event.target.value)} required /></label><button className="button button-primary" disabled={disabled}>{busy ? 'در حال ثبت…' : 'ثبت نتیجه رسیدگی'}</button></form>;
 }
 
 function ReceiptList({ items }: { items: PaymentReceipt[] }) {
@@ -175,3 +198,4 @@ function statusClass(status: string): string { return ['ACTIVE', 'SUCCEEDED', 'V
 function subscriptionStatusLabel(status: string): string { return ({ DRAFT: 'پیش‌نویس', ACTIVE: 'فعال', GRACE: 'مهلت تنفس', EXPIRED: 'منقضی', SUSPENDED: 'تعلیق‌شده', CANCELLED: 'لغوشده' } as Record<string, string>)[status] ?? status; }
 function paymentStatusLabel(status: string): string { return ({ CREATED: 'ایجادشده', REDIRECT_PENDING: 'در انتظار بازگشت از درگاه', VERIFY_PENDING: 'در حال تأیید', SUCCEEDED: 'موفق', FAILED: 'ناموفق', CANCELLED: 'لغوشده' } as Record<string, string>)[status] ?? status; }
 function reconciliationStatusLabel(status: Payment['reconciliationStatus']): string { return ({ NOT_CHECKED: 'بررسی‌نشده', MATCHED: 'منطبق', ACTION_REQUIRED: 'نیازمند اقدام', PROVIDER_UNCONFIRMED: 'تأییدنشده در درگاه' } as const)[status]; }
+function resolutionLabel(resolution: PaymentResolution | null): string { return resolution ? ({ CUSTOMER_RETRY_REQUIRED: 'پرداخت مجدد مشتری', PROVIDER_SUPPORT_REQUIRED: 'پیگیری با درگاه', REFUND_REVIEW_REQUIRED: 'بررسی استرداد', NO_FINANCIAL_ACTION: 'بدون اقدام مالی' } as const)[resolution] : 'ثبت‌نشده'; }
