@@ -20,7 +20,8 @@ type Payment = {
 type PaymentReceipt = {
   id: string; receiptNumber: string; amountRial: string; taxRial: string; providerReference: string | null; paidAt: string;
   organization: { displayName: string; legalName: string };
-  subscription: { plan: { code: string; nameFa: string } };
+  subscription: null | { plan: { code: string; nameFa: string } };
+  qualityControlRequest: null | { rfq: { code: string; title: string } };
 };
 type Overview = { summary: Record<string, number>; plans: Plan[]; subscriptions: Subscription[]; payments: Payment[]; receipts: PaymentReceipt[] };
 type Tab = 'plans' | 'subscriptions' | 'payments' | 'receipts';
@@ -151,7 +152,7 @@ function PaymentList({ items }: { items: Payment[] }) {
 }
 
 function ReceiptList({ items }: { items: PaymentReceipt[] }) {
-  return <section className="stack"><h2>رسیدهای قطعی پرداخت</h2>{items.length === 0 && <div className="card">هنوز رسید پرداختی صادر نشده است.</div>}{items.map((item) => <article className="card admin-card-title" key={item.id}><div><div className="eyebrow">{item.receiptNumber}</div><h3>{item.organization.displayName || item.organization.legalName}</h3><p>{item.subscription.plan.nameFa} · {formatToman(item.amountRial)} · بدون مالیات</p></div><div><span className="status-badge status-active">پرداخت‌شده</span><p>{new Date(item.paidAt).toLocaleString('fa-IR')}</p>{item.providerReference && <p>پیگیری: {item.providerReference}</p>}</div></article>)}</section>;
+  return <section className="stack"><h2>رسیدهای قطعی پرداخت</h2>{items.length === 0 && <div className="card">هنوز رسید پرداختی صادر نشده است.</div>}{items.map((item) => <article className="card admin-card-title" key={item.id}><div><div className="eyebrow">{item.receiptNumber}</div><h3>{item.organization.displayName || item.organization.legalName}</h3><p>{item.subscription?.plan.nameFa ?? (item.qualityControlRequest ? `کنترل کیفیت ${item.qualityControlRequest.rfq.code}` : 'خدمت وازانو')} · {formatToman(item.amountRial)} · بدون مالیات</p></div><div><span className="status-badge status-active">پرداخت‌شده</span><p>{new Date(item.paidAt).toLocaleString('fa-IR')}</p>{item.providerReference && <p>پیگیری: {item.providerReference}</p>}</div></article>)}</section>;
 }
 
 function statusClass(status: string): string { return ['ACTIVE', 'SUCCEEDED', 'VERIFIED'].includes(status) ? 'status-active' : ['FAILED', 'SUSPENDED', 'EXPIRED'].includes(status) ? 'status-suspended' : 'severity-medium'; }
