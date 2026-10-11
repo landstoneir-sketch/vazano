@@ -10,6 +10,8 @@ RUN npm ci
 FROM dependencies AS builder
 WORKDIR /app
 COPY . .
+ARG NEXT_PUBLIC_API_BASE_URL=/v1
+ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run prisma:generate && npm run build
 

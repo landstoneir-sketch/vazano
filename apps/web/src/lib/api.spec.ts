@@ -10,7 +10,9 @@ describe('apiRequest', () => {
   });
 
   it('returns data from the standard API envelope', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ data: { status: 'ok' } })));
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ data: { status: 'ok' } }));
+    vi.stubGlobal('fetch', fetchMock);
     await expect(apiRequest<{ status: string }>('/health')).resolves.toEqual({ status: 'ok' });
+    expect(fetchMock).toHaveBeenCalledWith('/v1/health', expect.objectContaining({ credentials: 'include' }));
   });
 });

@@ -3,21 +3,8 @@ setlocal EnableExtensions
 chcp 65001 >nul
 cd /d "%~dp0"
 
-docker info >nul 2>&1
-if errorlevel 1 (
-  echo [Vazano] Docker Desktop is not running. Starting it now...
-  if not exist "C:\Program Files\Docker\Docker\Docker Desktop.exe" (
-    echo Docker Desktop was not found on this computer.
-    goto :error
-  )
-  start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe" --accept-license
-  for /L %%I in (1,1,45) do (
-    docker info >nul 2>&1 && goto :docker_ready
-    timeout /t 2 /nobreak >nul
-  )
-  echo Docker Desktop did not become ready within 90 seconds.
-  goto :error
-)
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\wait-for-docker.ps1" -TimeoutSeconds 90
+if errorlevel 1 goto :error
 
 :docker_ready
 echo [Vazano] Starting PostgreSQL, Redis and object storage...

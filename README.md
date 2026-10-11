@@ -67,6 +67,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\backup-database.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\verify-database-backup.ps1 -BackupPath .\backups\vazano-postgres-YYYYMMDD-HHMMSS.dump
 ```
 
+## مرز شبکه در محیط انتشار
+
+Image وب به‌صورت پیش‌فرض API را از مسیر هم‌دامنه `/v1` فراخوانی می‌کند؛ بنابراین آدرس داخلی یا `localhost` داخل مرورگر کاربر نهایی قرار نمی‌گیرد. نمونه تنظیم Reverse Proxy در `deploy/nginx.conf` مسیر `/v1` را به سرویس خصوصی `api:3001` و سایر مسیرها را به `web:3000` می‌فرستد. TLS باید در Load Balancer یا Reverse Proxy لبه فعال باشد و API مستقیماً روی اینترنت منتشر نشود.
+
 ## کنترل کیفیت
 
 ```bash
