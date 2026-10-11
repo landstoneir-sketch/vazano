@@ -2,12 +2,14 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../shared/prisma/prisma.service';
 import type { AuthenticatedUser } from '../auth/auth.types';
+import { resolvePaymentReconciliationStatus } from '../payments/payment-reconciliation-policy';
+import { PaymentsService } from '../payments/payments.service';
 import { CreateSubscriptionPlanDto } from './create-subscription-plan.dto';
 import { UpdateSubscriptionPlanDto } from './update-subscription-plan.dto';
 
 @Injectable()
 export class AdminBillingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly payments: PaymentsService) {}
 
   async overview(user: AuthenticatedUser) {
     this.requireAnyPermission(user, ['billing.read', 'billing.manage']);
@@ -124,6 +126,43 @@ export class AdminBillingService {
       } });
       return tx.subscriptionPlan.findUniqueOrThrow({ where: { id: plan.id } });
     });
+  }
+
+  async reconcilePayment(user: AuthenticatedUser, paymentId: string) {
+    this.requireAnyPermission(user, ['billing.manage']);
+    const payment = await this.prisma.paymentIntent.findUnique({ where: { id: paymentId } });
+    if (!payment) throw new NotFoundException('تراکنش پرداخت پیدا نشد.');
+    if (payment.provider !== 'ZARINPAL') throw new BadRequestException('تطبیق خودکار برای ارائه‌دهنده این تراکنش پشتیبانی نمی‌شود.');
+    if (!payment.authority) throw new ConflictException('شناسه مرجع درگاه برای این تراکنش ثبت نشده است.');
+
+    const verification = await this.payments.verify({ amountRial: payment.amountRial, authority: payment.authority });
+    const reconciliationStatus = resolvePaymentReconciliationStatus(payment.status, verification.success);
+    const reconciledAt = new Date();
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.paymentIntent.update({
+        where: { id: payment.id },
+        data: { reconciliationStatus, lastReconciledAt: reconciledAt, lastProviderCode: verification.code },
+      });
+      await tx.auditLog.create({ data: {
+        actorUserId: user.id,
+        organizationId: payment.payerOrganizationId,
+        action: 'payment.reconcile',
+        entityType: 'PaymentIntent',
+        entityId: payment.id,
+        metadata: {
+          localStatus: payment.status,
+          providerSuccess: verification.success,
+          providerCode: verification.code,
+          providerReference: verification.referenceId ?? null,
+          reconciliationStatus,
+        },
+      } });
+      return result;
+    });
+    return {
+      payment: updated,
+      provider: { success: verification.success, code: verification.code, referenceId: verification.referenceId ?? null },
+    };
   }
 
   private validatePlanAmountsAndLimits(priceRial: string, grantCredits: string, dailyLimit: number, maxLimit: number): void {

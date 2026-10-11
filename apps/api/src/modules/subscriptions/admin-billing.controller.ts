@@ -25,4 +25,9 @@ export class AdminBillingController {
   updatePlan(@CurrentUser() user: AuthenticatedUser, @Param('planId') planId: string, @Body() input: UpdateSubscriptionPlanDto) {
     return this.billing.updatePlan(user, planId, input);
   }
+
+  @Post('payments/:paymentId/reconcile')
+  reconcilePayment(@CurrentUser() user: AuthenticatedUser, @Param('paymentId') paymentId: string) {
+    return this.billing.reconcilePayment(user, paymentId);
+  }
 }

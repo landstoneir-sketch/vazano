@@ -16,6 +16,8 @@ type Subscription = {
 type Payment = {
   id: string; provider: string; purpose: string; status: string; amountRial: string; authority: string | null;
   providerReference: string | null; createdAt: string; payerOrganization: { displayName: string; legalName: string } | null;
+  reconciliationStatus: 'NOT_CHECKED' | 'MATCHED' | 'ACTION_REQUIRED' | 'PROVIDER_UNCONFIRMED';
+  lastReconciledAt: string | null; lastProviderCode: number | null;
 };
 type PaymentReceipt = {
   id: string; receiptNumber: string; amountRial: string; taxRial: string; providerReference: string | null; paidAt: string;
@@ -25,6 +27,7 @@ type PaymentReceipt = {
 };
 type Overview = { summary: Record<string, number>; plans: Plan[]; subscriptions: Subscription[]; payments: Payment[]; receipts: PaymentReceipt[] };
 type Tab = 'plans' | 'subscriptions' | 'payments' | 'receipts';
+type ReconciliationResult = { payment: { reconciliationStatus: Payment['reconciliationStatus'] }; provider: { success: boolean; code: number; referenceId: string | null } };
 
 type PlanDraft = {
   id?: string; code: string; nameFa: string; descriptionFa: string; billingCycle: BillingCycle; durationIso: string;
@@ -63,6 +66,7 @@ export function BillingManager() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [reconcilingPaymentId, setReconcilingPaymentId] = useState('');
 
   const load = useCallback(async () => {
     setError('');
@@ -111,6 +115,16 @@ export function BillingManager() {
     finally { setBusy(false); }
   }
 
+  async function reconcilePayment(payment: Payment) {
+    setReconcilingPaymentId(payment.id); setError(''); setMessage('');
+    try {
+      const result = await apiRequest<ReconciliationResult>(`/admin/billing/payments/${payment.id}/reconcile`, { method: 'POST' });
+      setMessage(result.payment.reconciliationStatus === 'MATCHED' ? 'تراکنش با اطلاعات زرین‌پال منطبق است.' : result.payment.reconciliationStatus === 'ACTION_REQUIRED' ? 'مغایرت مالی شناسایی شد و نیازمند بررسی مسئول مالی است.' : 'پرداخت هنوز توسط زرین‌پال تأیید نشده است.');
+      await load();
+    } catch (reason: unknown) { setError(reason instanceof Error ? reason.message : 'تطبیق تراکنش انجام نشد.'); }
+    finally { setReconcilingPaymentId(''); }
+  }
+
   if (!overview && !error) return <div className="card">در حال دریافت اطلاعات اشتراک و پرداخت…</div>;
 
   return <div className="stack">
@@ -119,7 +133,7 @@ export function BillingManager() {
     <div className="tab-list" role="tablist" aria-label="بخش مالی"><button className={tab === 'plans' ? 'tab-active' : ''} type="button" onClick={() => setTab('plans')}>پلن‌ها</button><button className={tab === 'subscriptions' ? 'tab-active' : ''} type="button" onClick={() => setTab('subscriptions')}>اشتراک‌ها</button><button className={tab === 'payments' ? 'tab-active' : ''} type="button" onClick={() => setTab('payments')}>پرداخت‌ها</button><button className={tab === 'receipts' ? 'tab-active' : ''} type="button" onClick={() => setTab('receipts')}>رسیدها</button></div>
     {tab === 'plans' && overview && <section className="card stack"><div className="admin-card-title"><div><h2>مدیریت پلن‌ها</h2><p>قیمت را به تومان وارد کنید؛ مبلغ در دیتابیس با واحد ریال و به‌صورت عدد صحیح ذخیره می‌شود.</p></div><button className="button button-secondary" type="button" onClick={() => { setDraft(emptyPlan); setError(''); setMessage(''); }}>پلن جدید</button></div><div className="content-item-list">{overview.plans.map((plan) => <button className={draft.id === plan.id ? 'content-item-active' : ''} type="button" key={plan.id} onClick={() => { setDraft(fromPlan(plan)); setError(''); setMessage(''); }}><strong>{plan.nameFa}</strong><span>{formatToman(plan.priceRial)} · {plan.isActive ? 'فعال' : 'غیرفعال'}</span></button>)}</div><PlanForm draft={draft} setDraft={setDraft} busy={busy} onSubmit={savePlan} /></section>}
     {tab === 'subscriptions' && overview && <SubscriptionList items={overview.subscriptions} />}
-    {tab === 'payments' && overview && <PaymentList items={overview.payments} />}
+    {tab === 'payments' && overview && <PaymentList items={overview.payments} busyId={reconcilingPaymentId} onReconcile={reconcilePayment} />}
     {tab === 'receipts' && overview && <ReceiptList items={overview.receipts} />}
   </div>;
 }
@@ -147,8 +161,8 @@ function SubscriptionList({ items }: { items: Subscription[] }) {
   return <section className="stack"><h2>آخرین اشتراک‌ها</h2>{items.length === 0 && <div className="card">هنوز اشتراکی ثبت نشده است.</div>}{items.map((item) => <article className="card admin-card-title" key={item.id}><div><div className="eyebrow">{item.plan.nameFa}</div><h3>{item.organization.displayName || item.organization.legalName}</h3><p>{formatToman(item.priceRialSnapshot)} · ثبت {new Date(item.createdAt).toLocaleDateString('fa-IR')}</p></div><div><span className={`status-badge ${statusClass(item.status)}`}>{subscriptionStatusLabel(item.status)}</span><p>{item.expiresAt ? `پایان: ${new Date(item.expiresAt).toLocaleDateString('fa-IR')}` : 'هنوز فعال نشده'}</p></div></article>)}</section>;
 }
 
-function PaymentList({ items }: { items: Payment[] }) {
-  return <section className="stack"><h2>آخرین پرداخت‌ها</h2>{items.length === 0 && <div className="card">هنوز پرداختی ثبت نشده است.</div>}{items.map((item) => <article className="card admin-card-title" key={item.id}><div><div className="eyebrow">{item.provider} · {item.purpose}</div><h3>{item.payerOrganization?.displayName ?? item.payerOrganization?.legalName ?? 'پرداخت‌کننده بدون سازمان'}</h3><p>{formatToman(item.amountRial)} · {new Date(item.createdAt).toLocaleString('fa-IR')}</p></div><div><span className={`status-badge ${statusClass(item.status)}`}>{paymentStatusLabel(item.status)}</span>{item.providerReference && <p>پیگیری: {item.providerReference}</p>}</div></article>)}</section>;
+function PaymentList({ items, busyId, onReconcile }: { items: Payment[]; busyId: string; onReconcile: (payment: Payment) => Promise<void> }) {
+  return <section className="stack"><h2>آخرین پرداخت‌ها</h2>{items.length === 0 && <div className="card">هنوز پرداختی ثبت نشده است.</div>}{items.map((item) => <article className="card admin-card-title" key={item.id}><div><div className="eyebrow">{item.provider} · {item.purpose}</div><h3>{item.payerOrganization?.displayName ?? item.payerOrganization?.legalName ?? 'پرداخت‌کننده بدون سازمان'}</h3><p>{formatToman(item.amountRial)} · {new Date(item.createdAt).toLocaleString('fa-IR')}</p><p className="muted">تطبیق: {reconciliationStatusLabel(item.reconciliationStatus)}{item.lastReconciledAt ? ` · ${new Date(item.lastReconciledAt).toLocaleString('fa-IR')}` : ''}</p></div><div><span className={`status-badge ${statusClass(item.status)}`}>{paymentStatusLabel(item.status)}</span>{item.providerReference && <p>پیگیری: {item.providerReference}</p>}{item.authority && <button className="button button-secondary" type="button" disabled={Boolean(busyId)} onClick={() => void onReconcile(item)}>{busyId === item.id ? 'در حال استعلام…' : 'تطبیق با زرین‌پال'}</button>}</div></article>)}</section>;
 }
 
 function ReceiptList({ items }: { items: PaymentReceipt[] }) {
@@ -157,4 +171,5 @@ function ReceiptList({ items }: { items: PaymentReceipt[] }) {
 
 function statusClass(status: string): string { return ['ACTIVE', 'SUCCEEDED', 'VERIFIED'].includes(status) ? 'status-active' : ['FAILED', 'SUSPENDED', 'EXPIRED'].includes(status) ? 'status-suspended' : 'severity-medium'; }
 function subscriptionStatusLabel(status: string): string { return ({ DRAFT: 'پیش‌نویس', ACTIVE: 'فعال', GRACE: 'مهلت تنفس', EXPIRED: 'منقضی', SUSPENDED: 'تعلیق‌شده', CANCELLED: 'لغوشده' } as Record<string, string>)[status] ?? status; }
-function paymentStatusLabel(status: string): string { return ({ CREATED: 'ایجادشده', PENDING: 'در انتظار', SUCCEEDED: 'موفق', FAILED: 'ناموفق', CANCELLED: 'لغوشده' } as Record<string, string>)[status] ?? status; }
+function paymentStatusLabel(status: string): string { return ({ CREATED: 'ایجادشده', REDIRECT_PENDING: 'در انتظار بازگشت از درگاه', VERIFY_PENDING: 'در حال تأیید', SUCCEEDED: 'موفق', FAILED: 'ناموفق', CANCELLED: 'لغوشده' } as Record<string, string>)[status] ?? status; }
+function reconciliationStatusLabel(status: Payment['reconciliationStatus']): string { return ({ NOT_CHECKED: 'بررسی‌نشده', MATCHED: 'منطبق', ACTION_REQUIRED: 'نیازمند اقدام', PROVIDER_UNCONFIRMED: 'تأییدنشده در درگاه' } as const)[status]; }

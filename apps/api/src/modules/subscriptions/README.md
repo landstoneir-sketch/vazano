@@ -13,3 +13,4 @@ This module owns seller plan purchase, payment activation, credits, renewal sche
 - Zarinpal callbacks are verified server-side and redirect to a non-sensitive success/cancel/failure result in the seller workspace.
 - Successful subscription payments create one immutable Rial receipt with zero tax for the current tax-exclusive MVP policy; repeated callbacks cannot create duplicate activation, credit, or receipt records.
 - Organization members can view their payment receipts; cross-organization receipt access is rejected in the backend.
+- Finance managers can explicitly reconcile a payment against Zarinpal. The result is stored as `MATCHED`, `ACTION_REQUIRED`, or `PROVIDER_UNCONFIRMED` and every check is written to the audit trail; reconciliation never activates a service or changes money state automatically.
