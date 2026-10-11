@@ -63,8 +63,8 @@ export class AttachmentsService {
 
   async complete(user: AuthenticatedUser, attachmentId: string) {
     const attachment = await this.findManageableAttachment(user, attachmentId);
-    if (attachment.status === 'READY' || attachment.status === 'PENDING_SCAN') return this.publicAttachment(attachment);
-    if (attachment.status !== 'PENDING_UPLOAD') throw new ConflictException('این فایل در وضعیت قابل تکمیل نیست.');
+    if (attachment.status === 'READY') return this.publicAttachment(attachment);
+    if (!['PENDING_UPLOAD', 'PENDING_SCAN'].includes(attachment.status)) throw new ConflictException('این فایل در وضعیت قابل تکمیل نیست.');
 
     let object: { sizeBytes: number; mimeType?: string };
     try {
@@ -77,16 +77,18 @@ export class AttachmentsService {
       throw new BadRequestException('اندازه یا نوع فایل بارگذاری‌شده با درخواست اولیه یکسان نیست.');
     }
 
-    const safety = this.fileSafety.inspect();
+    const content = this.fileSafety.requiresContent() ? await this.storage.read(attachment.storageKey) : undefined;
+    const safety = await this.fileSafety.inspect(content);
     const now = new Date();
     const updated = await this.prisma.$transaction(async (tx) => {
       const result = await tx.attachment.update({
         where: { id: attachment.id },
         data: {
-          status: safety.verdict === 'CLEAN' ? 'READY' : 'PENDING_SCAN',
+          status: safety.verdict === 'CLEAN' ? 'READY' : safety.verdict === 'INFECTED' ? 'QUARANTINED' : 'PENDING_SCAN',
           scanProvider: safety.provider,
+          scanReason: 'reason' in safety ? safety.reason : null,
           uploadedAt: now,
-          scannedAt: safety.verdict === 'CLEAN' ? now : null,
+          scannedAt: safety.verdict === 'PENDING' ? null : now,
         },
       });
       await tx.auditLog.create({
@@ -96,7 +98,7 @@ export class AttachmentsService {
           action: 'attachment.upload.complete',
           entityType: 'Attachment',
           entityId: attachment.id,
-          metadata: { status: result.status, scanProvider: safety.provider },
+          metadata: { status: result.status, scanProvider: safety.provider, scanReason: 'reason' in safety ? safety.reason : undefined },
         },
       });
       return result;
@@ -112,8 +114,9 @@ export class AttachmentsService {
     if (!rfq || !this.canReadRfq(user, rfq.buyerOrganizationId, rfq.invitations.map((item) => item.supplierOrganizationId))) {
       throw new NotFoundException('استعلام پیدا نشد.');
     }
+    const canManage = this.canManageBuyerOrganization(user, rfq.buyerOrganizationId);
     const attachments = await this.prisma.attachment.findMany({
-      where: { rfqId, status: { not: 'DELETED' } },
+      where: { rfqId, status: canManage ? { not: 'DELETED' } : 'READY' },
       orderBy: { createdAt: 'asc' },
     });
     return attachments.map((attachment) => this.publicAttachment(attachment));
