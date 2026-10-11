@@ -237,6 +237,13 @@ const inAppNotificationTemplates = [
     bodyTemplate: 'مهلت ۷روزه تمدید اشتراک «{{planName}}» پایان یافت و خدمات حرفه‌ای حساب محدود شد.',
     actionPathTemplate: '/plans',
   },
+  {
+    code: 'IN_APP_PAYMENT_RETRY_REQUESTED_FA_V1',
+    eventType: 'ir.vazano.payment.retry_requested.v1',
+    titleTemplate: 'پرداخت نیازمند اقدام شما است',
+    bodyTemplate: 'پرداخت {{paymentPurpose}} به مبلغ {{amountToman}} تومان قطعی نشده است. برای پرداخت مجدد وارد صفحه مربوط شوید.',
+    actionPathTemplate: '/supplier/subscription',
+  },
 ] as const;
 
 async function main(): Promise<void> {
