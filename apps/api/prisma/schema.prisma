@@ -519,11 +519,13 @@ model OtpCode {
   purpose    OtpPurpose
   codeHash   String     @map("code_hash")
   attempts   Int        @default(0)
+  ipAddress  String?    @map("ip_address")
   expiresAt  DateTime   @map("expires_at") @db.Timestamptz(3)
   consumedAt DateTime?  @map("consumed_at") @db.Timestamptz(3)
   createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@index([mobile, purpose, createdAt])
+  @@index([ipAddress, createdAt])
   @@map("otp_codes")
 }
 

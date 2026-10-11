@@ -1,19 +1,26 @@
-import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus } from '@nestjs/common';
+import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import type { RequestWithId } from './request-security';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(HttpExceptionFilter.name);
+
   catch(exception: unknown, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<Response>();
-    const request = host.switchToHttp().getRequest<Request>();
+    const request = host.switchToHttp().getRequest<Request & RequestWithId>();
     const status = exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
     const payload = exception instanceof HttpException ? exception.getResponse() : null;
     const message = typeof payload === 'string' ? payload : this.extractMessage(payload, status);
+    const requestId = request.requestId ?? null;
+    if (status >= 500) {
+      this.logger.error(JSON.stringify({ event: 'http.request.failed', requestId, method: request.method, path: request.path, status }), exception instanceof Error ? exception.stack : undefined);
+    }
     response.status(status).json({
       error: {
         code: this.codeFor(status),
         message,
-        requestId: request.headers['x-request-id'] ?? null,
+        requestId,
       },
     });
   }
