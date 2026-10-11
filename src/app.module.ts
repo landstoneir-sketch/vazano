@@ -22,10 +22,11 @@ import { LocationsModule } from './modules/locations/locations.module';
 import { QualityControlModule } from './modules/quality-control/quality-control.module';
 import { ContractsModule } from './modules/contracts/contracts.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { validateEnvironment } from './config/environment';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, cache: true, envFilePath: ['.env', '../../.env'] }),
+    ConfigModule.forRoot({ isGlobal: true, cache: true, envFilePath: ['.env', '../../.env'], validate: validateEnvironment }),
     PrismaModule,
     AuthModule,
     UsersModule,

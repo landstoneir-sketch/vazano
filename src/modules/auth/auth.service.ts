@@ -19,11 +19,16 @@ export class AuthService {
 
   async requestOtp(rawMobile: string, purpose: OtpPurpose, ipAddress?: string, userAgent?: string): Promise<RequestOtpResult> {
     const mobile = normalizeIranianMobile(rawMobile);
-    const recentCount = await this.prisma.otpCode.count({ where: { mobile, createdAt: { gte: new Date(Date.now() - 60_000) } } });
-    if (recentCount >= 3) {
+    const windowStartedAt = new Date(Date.now() - 60_000);
+    const [recentMobileCount, recentIpCount] = await Promise.all([
+      this.prisma.otpCode.count({ where: { mobile, createdAt: { gte: windowStartedAt } } }),
+      ipAddress ? this.prisma.otpCode.count({ where: { ipAddress, createdAt: { gte: windowStartedAt } } }) : Promise.resolve(0),
+    ]);
+    const ipLimit = Number(this.config.get<string>('OTP_IP_REQUESTS_PER_MINUTE', '10'));
+    if (recentMobileCount >= 3 || (ipAddress && recentIpCount >= ipLimit)) {
       await this.prisma.securityEvent.create({ data: {
         eventType: 'auth.otp.request_rate_limited', severity: 'MEDIUM', outcome: 'BLOCKED',
-        subjectHash: this.hashSubject(mobile), ipAddress, userAgent: this.safeUserAgent(userAgent), metadata: { purpose },
+        subjectHash: this.hashSubject(mobile), ipAddress, userAgent: this.safeUserAgent(userAgent), metadata: { purpose, recentMobileCount, recentIpCount, ipLimit },
       } });
       throw new HttpException('تعداد درخواست‌ها زیاد است؛ یک دقیقه بعد دوباره تلاش کنید.', HttpStatus.TOO_MANY_REQUESTS);
     }
@@ -32,7 +37,7 @@ export class AuthService {
     const ttl = this.config.get<number>('OTP_TTL_SECONDS', 120);
     const otp = await this.prisma.$transaction(async (tx) => {
       await tx.otpCode.updateMany({ where: { mobile, purpose, consumedAt: null }, data: { consumedAt: new Date() } });
-      return tx.otpCode.create({ data: { mobile, purpose, codeHash: this.hashOtp(mobile, purpose, code), expiresAt: new Date(Date.now() + ttl * 1000) } });
+      return tx.otpCode.create({ data: { mobile, purpose, codeHash: this.hashOtp(mobile, purpose, code), ipAddress, expiresAt: new Date(Date.now() + ttl * 1000) } });
     });
     try { await this.sms.sendOtp(mobile, code); }
     catch (error) {
