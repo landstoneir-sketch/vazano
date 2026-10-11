@@ -225,7 +225,11 @@ export class QuotationsService {
   private async findBuyerRfq(user: AuthenticatedUser, rfqId: string) {
     const rfq = await this.prisma.rfq.findUnique({
       where: { id: rfqId },
-      include: { items: { include: { category: { include: categoryDetailsInclude }, unit: true }, orderBy: { sortOrder: 'asc' } }, qualityControlRequest: true, contractRequest: true },
+      include: {
+        items: { include: { category: { include: categoryDetailsInclude }, unit: true }, orderBy: { sortOrder: 'asc' } },
+        qualityControlRequest: { include: { paymentReceipt: { select: { receiptNumber: true, providerReference: true, paidAt: true } } } },
+        contractRequest: true,
+      },
     });
     if (!rfq) throw new NotFoundException('استعلام پیدا نشد.');
     const isMember = user.memberships.some((membership) => membership.organizationId === rfq.buyerOrganizationId);

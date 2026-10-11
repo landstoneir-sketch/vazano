@@ -1226,7 +1226,8 @@ model PaymentReceipt {
   id                String        @id @default(cuid())
   receiptNumber     String        @unique @map("receipt_number")
   organizationId    String        @map("organization_id")
-  subscriptionId    String        @unique @map("subscription_id")
+  subscriptionId    String?       @unique @map("subscription_id")
+  qualityControlRequestId String? @unique @map("quality_control_request_id")
   paymentIntentId   String        @unique @map("payment_intent_id")
   amountRial        BigInt        @map("amount_rial")
   taxRial           BigInt        @default(0) @map("tax_rial")
@@ -1235,7 +1236,8 @@ model PaymentReceipt {
   paidAt            DateTime      @map("paid_at") @db.Timestamptz(3)
   createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  subscription      Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  subscription      Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  qualityControlRequest QualityControlRequest? @relation(fields: [qualityControlRequestId], references: [id], onDelete: Restrict)
   paymentIntent     PaymentIntent @relation(fields: [paymentIntentId], references: [id], onDelete: Restrict)
 
   @@index([organizationId, paidAt])
@@ -1256,6 +1258,7 @@ model QualityControlRequest {
   completedAt         DateTime?            @map("completed_at") @db.Timestamptz(3)
   rfq                 Rfq                  @relation(fields: [rfqId], references: [id], onDelete: Restrict)
   selectedQuotation   Quotation?           @relation(fields: [selectedQuotationId], references: [id], onDelete: Restrict)
+  paymentReceipt      PaymentReceipt?
 
   @@index([status, requestedAt])
   @@map("quality_control_requests")

@@ -26,6 +26,7 @@ export class AdminBillingService {
         include: {
           organization: { select: { id: true, displayName: true, legalName: true } },
           subscription: { select: { plan: { select: { code: true, nameFa: true } } } },
+          qualityControlRequest: { select: { rfq: { select: { code: true, title: true } } } },
         },
         orderBy: { paidAt: 'desc' },
         take: 100,

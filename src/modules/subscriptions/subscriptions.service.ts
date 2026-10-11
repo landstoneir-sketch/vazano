@@ -40,7 +40,7 @@ export class SubscriptionsService {
   listReceiptsForOrganization(user: AuthenticatedUser, organizationId: string) {
     this.requireOrganizationBillingAccess(user, organizationId);
     return this.prisma.paymentReceipt.findMany({
-      where: { organizationId },
+      where: { organizationId, subscriptionId: { not: null } },
       select: {
         id: true,
         receiptNumber: true,
