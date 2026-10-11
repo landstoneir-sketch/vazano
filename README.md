@@ -50,6 +50,22 @@ npm run dev
 - `/admin/content` — مدیریت صفحات و FAQ
 - `/admin/users` — مدیریت کاربران و نشست‌ها
 - `/admin/audit-logs` — ممیزی و رخدادهای امنیتی
+- `/admin/reports` — گزارش مدیریتی و شاخص‌های واقعی عملیات
+- `/admin/contracts` — صف هماهنگی قراردادهای درخواستی
+
+## پشتیبان‌گیری و آزمون بازیابی
+
+برای تهیه نسخه پشتیبان فشرده از PostgreSQL محلی، دستور زیر را اجرا کنید. فایل Dump و SHA-256 آن داخل پوشه نادیده‌گرفته‌شده `backups` قرار می‌گیرند:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\backup-database.ps1
+```
+
+سالم‌بودن نسخه پشتیبان با Restore در یک دیتابیس موقت و ایزوله بررسی می‌شود؛ دیتابیس اصلی تغییر نمی‌کند و دیتابیس آزمون پس از پایان حذف می‌شود:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\verify-database-backup.ps1 -BackupPath .\backups\vazano-postgres-YYYYMMDD-HHMMSS.dump
+```
 
 ## کنترل کیفیت
 
