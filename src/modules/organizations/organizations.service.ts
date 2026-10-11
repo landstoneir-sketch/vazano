@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { MemberRole, OrganizationKind, Prisma } from '@prisma/client';
 import { PrismaService } from '../../shared/prisma/prisma.service';
+import type { AuthenticatedUser } from '../auth/auth.types';
 import { normalizeIranianMobile } from '../auth/domain/mobile';
 import { CreateOrganizationDto } from './create-organization.dto';
 import { InviteOrganizationMemberDto } from './invite-organization-member.dto';
@@ -15,6 +16,40 @@ export class OrganizationsService {
       include: { members: { where: { userId }, select: { role: true, status: true } } },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async listBuyerOptions(user: AuthenticatedUser) {
+    if (!user.permissions.includes('rfq.create_on_behalf')) {
+      throw new ForbiddenException('مجوز مشاهده حساب‌های خریدار را ندارید.');
+    }
+    const organizations = await this.prisma.organization.findMany({
+      where: {
+        kind: 'BUYER',
+        status: 'ACTIVE',
+        members: { some: { status: 'ACTIVE', role: { in: ['BUYER_OWNER', 'BUYER_MEMBER'] } } },
+      },
+      select: {
+        id: true,
+        displayName: true,
+        province: true,
+        city: true,
+        members: {
+          where: { status: 'ACTIVE', role: { in: ['BUYER_OWNER', 'BUYER_MEMBER'] } },
+          select: { role: true, user: { select: { id: true, firstName: true, lastName: true, mobile: true } } },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+      orderBy: { displayName: 'asc' },
+    });
+    return organizations.map(({ members, ...organization }) => ({
+      ...organization,
+      contacts: members.map(({ role, user: contact }) => ({
+        id: contact.id,
+        role,
+        displayName: [contact.firstName, contact.lastName].filter(Boolean).join(' ') || this.maskMobile(contact.mobile),
+        mobileMasked: this.maskMobile(contact.mobile),
+      })),
+    }));
   }
 
   listInvitations(userId: string) {
