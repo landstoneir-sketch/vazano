@@ -5,6 +5,7 @@ import type { AuthenticatedUser } from '../auth/auth.types';
 import { resolvePaymentReconciliationStatus } from '../payments/payment-reconciliation-policy';
 import { PaymentsService } from '../payments/payments.service';
 import { CreateSubscriptionPlanDto } from './create-subscription-plan.dto';
+import { ResolvePaymentReconciliationDto } from './resolve-payment-reconciliation.dto';
 import { UpdateSubscriptionPlanDto } from './update-subscription-plan.dto';
 
 @Injectable()
@@ -141,7 +142,15 @@ export class AdminBillingService {
     const updated = await this.prisma.$transaction(async (tx) => {
       const result = await tx.paymentIntent.update({
         where: { id: payment.id },
-        data: { reconciliationStatus, lastReconciledAt: reconciledAt, lastProviderCode: verification.code },
+        data: {
+          reconciliationStatus,
+          lastReconciledAt: reconciledAt,
+          lastProviderCode: verification.code,
+          reconciliationResolution: null,
+          reconciliationResolutionNote: null,
+          reconciliationResolvedAt: null,
+          reconciliationResolvedByUserId: null,
+        },
       });
       await tx.auditLog.create({ data: {
         actorUserId: user.id,
@@ -163,6 +172,45 @@ export class AdminBillingService {
       payment: updated,
       provider: { success: verification.success, code: verification.code, referenceId: verification.referenceId ?? null },
     };
+  }
+
+  async resolvePaymentReconciliation(user: AuthenticatedUser, paymentId: string, input: ResolvePaymentReconciliationDto) {
+    this.requireAnyPermission(user, ['billing.manage']);
+    const payment = await this.prisma.paymentIntent.findUnique({ where: { id: paymentId } });
+    if (!payment) throw new NotFoundException('تراکنش پرداخت پیدا نشد.');
+    if (!['ACTION_REQUIRED', 'PROVIDER_UNCONFIRMED'].includes(payment.reconciliationStatus)) {
+      throw new ConflictException('این تراکنش در صف رسیدگی مالی قرار ندارد.');
+    }
+    if (payment.reconciliationResolvedAt) throw new ConflictException('رسیدگی این تراکنش قبلاً ثبت شده است.');
+
+    const note = input.note.trim();
+    if (note.length < 10) throw new BadRequestException('توضیح رسیدگی باید حداقل ۱۰ نویسه مفید داشته باشد.');
+    return this.prisma.$transaction(async (tx) => {
+      const result = await tx.paymentIntent.updateMany({
+        where: { id: payment.id, reconciliationResolvedAt: null, reconciliationStatus: payment.reconciliationStatus },
+        data: {
+          reconciliationResolution: input.resolution,
+          reconciliationResolutionNote: note,
+          reconciliationResolvedAt: new Date(),
+          reconciliationResolvedByUserId: user.id,
+        },
+      });
+      if (result.count !== 1) throw new ConflictException('وضعیت تراکنش هم‌زمان تغییر کرده است؛ اطلاعات را دوباره بارگذاری کنید.');
+      await tx.auditLog.create({ data: {
+        actorUserId: user.id,
+        organizationId: payment.payerOrganizationId,
+        action: 'payment.reconciliation.resolve',
+        entityType: 'PaymentIntent',
+        entityId: payment.id,
+        metadata: {
+          localStatus: payment.status,
+          reconciliationStatus: payment.reconciliationStatus,
+          resolution: input.resolution,
+          note,
+        },
+      } });
+      return tx.paymentIntent.findUniqueOrThrow({ where: { id: payment.id } });
+    });
   }
 
   private validatePlanAmountsAndLimits(priceRial: string, grantCredits: string, dailyLimit: number, maxLimit: number): void {

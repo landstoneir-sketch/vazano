@@ -4,6 +4,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { SessionGuard } from '../auth/session.guard';
 import { AdminBillingService } from './admin-billing.service';
 import { CreateSubscriptionPlanDto } from './create-subscription-plan.dto';
+import { ResolvePaymentReconciliationDto } from './resolve-payment-reconciliation.dto';
 import { UpdateSubscriptionPlanDto } from './update-subscription-plan.dto';
 
 @Controller('admin/billing')
@@ -29,5 +30,14 @@ export class AdminBillingController {
   @Post('payments/:paymentId/reconcile')
   reconcilePayment(@CurrentUser() user: AuthenticatedUser, @Param('paymentId') paymentId: string) {
     return this.billing.reconcilePayment(user, paymentId);
+  }
+
+  @Post('payments/:paymentId/resolve-reconciliation')
+  resolvePaymentReconciliation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('paymentId') paymentId: string,
+    @Body() input: ResolvePaymentReconciliationDto,
+  ) {
+    return this.billing.resolvePaymentReconciliation(user, paymentId, input);
   }
 }
