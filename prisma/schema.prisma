@@ -236,6 +236,13 @@ enum PaymentStatus {
   CANCELLED
 }
 
+enum PaymentReconciliationStatus {
+  NOT_CHECKED
+  MATCHED
+  ACTION_REQUIRED
+  PROVIDER_UNCONFIRMED
+}
+
 enum CreditEntryType {
   GRANT
   RESERVE
@@ -1213,12 +1220,16 @@ model PaymentIntent {
   idempotencyKey      String          @unique @map("idempotency_key")
   callbackPayload     Json?           @map("callback_payload")
   verifiedAt          DateTime?       @map("verified_at") @db.Timestamptz(3)
+  reconciliationStatus PaymentReconciliationStatus @default(NOT_CHECKED) @map("reconciliation_status")
+  lastReconciledAt    DateTime?       @map("last_reconciled_at") @db.Timestamptz(3)
+  lastProviderCode    Int?            @map("last_provider_code")
   createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
   paymentReceipt      PaymentReceipt?
 
   @@index([referenceType, referenceId])
   @@index([status, createdAt])
+  @@index([reconciliationStatus, updatedAt])
   @@map("payment_intents")
 }
 
