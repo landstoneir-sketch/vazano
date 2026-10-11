@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import type { Route } from 'next';
 import { apiRequest } from '../../../lib/api';
 import { formatProductSpecifications, type ProductAttributeBinding, type ProductSpecifications } from '../../../lib/product-specifications';
 
@@ -45,6 +47,7 @@ export function ReviewQueue() {
   }
 
   return <div className="stack">
+    <div className="actions"><Link className="button button-primary" href={'/admin/rfqs/new' as Route}>ثبت استعلام از طرف خریدار</Link></div>
     {message && <div className="message">{message}</div>}
     {items.length === 0 && <div className="card">استعلامی در صف بررسی نیست.</div>}
     {items.map((rfq) => <article className="card" key={rfq.id}>

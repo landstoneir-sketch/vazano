@@ -41,6 +41,10 @@ describe('route access policy', () => {
     const financeManager = { ...contentManager, permissions: ['billing.read'], globalRoles: ['FINANCE'] };
     expect(canAccessRoute('/admin/billing', financeManager)).toBe(true);
     expect(canAccessRoute('/admin/settings', financeManager)).toBe(false);
+
+    const operator = { ...buyer, permissions: ['rfq.create_on_behalf'], globalRoles: ['SUPPORT'] };
+    expect(canAccessRoute('/admin/rfqs/new', operator)).toBe(true);
+    expect(canAccessRoute('/admin/rfqs', operator)).toBe(false);
   });
 
   it('allows the super admin to access all admin pages', () => {

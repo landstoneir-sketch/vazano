@@ -11,6 +11,7 @@ import { UpdateMemberRoleDto } from './update-member-role.dto';
 export class OrganizationsController {
   constructor(private readonly organizations: OrganizationsService) {}
   @Get('mine') list(@CurrentUser() user: AuthenticatedUser) { return this.organizations.listForUser(user.id); }
+  @Get('admin/buyer-options') listBuyerOptions(@CurrentUser() user: AuthenticatedUser) { return this.organizations.listBuyerOptions(user); }
   @Get('invitations/mine') listInvitations(@CurrentUser() user: AuthenticatedUser) { return this.organizations.listInvitations(user.id); }
   @Post('invitations/:membershipId/accept') acceptInvitation(@CurrentUser() user: AuthenticatedUser, @Param('membershipId') membershipId: string) { return this.organizations.respondToInvitation(user.id, membershipId, true); }
   @Post('invitations/:membershipId/reject') rejectInvitation(@CurrentUser() user: AuthenticatedUser, @Param('membershipId') membershipId: string) { return this.organizations.respondToInvitation(user.id, membershipId, false); }

@@ -264,7 +264,7 @@ export class RfqsService {
 
   private async create(user: AuthenticatedUser, input: CreateRfqDto, source: RfqSource) {
     const organization = await this.prisma.organization.findUnique({ where: { id: input.buyerOrganizationId } });
-    if (!organization || organization.kind !== 'BUYER') throw new NotFoundException('سازمان خریدار پیدا نشد.');
+    if (!organization || organization.kind !== 'BUYER' || organization.status !== 'ACTIVE') throw new NotFoundException('سازمان خریدار فعال پیدا نشد.');
 
     const buyerContactUserId = source === RfqSource.PLATFORM_OPERATOR ? input.buyerContactUserId! : user.id;
     const membership = await this.prisma.organizationMember.findFirst({

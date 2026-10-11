@@ -4,7 +4,8 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { apiRequest } from '../../../../lib/api';
 
-type Organization = { id: string; displayName: string; kind: string };
+type BuyerContact = { id: string; displayName: string; mobileMasked: string; role: string };
+type Organization = { id: string; displayName: string; kind?: string; province?: string | null; city?: string | null; contacts?: BuyerContact[] };
 type Industry = { id: string; nameFa: string };
 type Category = { id: string; industryId: string; parentId: string | null; nameFa: string };
 type Unit = { id: string; nameFa: string; symbolFa: string };
@@ -25,7 +26,7 @@ type CreatedRfq = { id: string; code: string; commitmentStatus: string; commitme
 type Attachment = { id: string; originalName: string; status: string; sizeBytes: number };
 type UploadIntent = { attachment: Attachment; upload: { url: string; method: 'PUT'; headers: Record<string, string> } };
 
-export function NewRfqForm() {
+export function NewRfqForm({ operatorMode = false }: { operatorMode?: boolean }) {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [industries, setIndustries] = useState<Industry[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -33,6 +34,7 @@ export function NewRfqForm() {
   const [provinces, setProvinces] = useState<Province[]>([]);
   const [cities, setCities] = useState<City[]>([]);
   const [organizationId, setOrganizationId] = useState('');
+  const [buyerContactUserId, setBuyerContactUserId] = useState('');
   const [industryId, setIndustryId] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [unitId, setUnitId] = useState('');
@@ -53,17 +55,18 @@ export function NewRfqForm() {
 
   useEffect(() => {
     void Promise.all([
-      apiRequest<Organization[]>('/organizations/mine'),
+      apiRequest<Organization[]>(operatorMode ? '/organizations/admin/buyer-options' : '/organizations/mine'),
       apiRequest<Industry[]>('/catalog/industries'),
       apiRequest<Category[]>('/catalog/categories'),
       apiRequest<Unit[]>('/catalog/units'),
       apiRequest<Province[]>('/locations/provinces'),
     ]).then(([orgData, industryData, categoryData, unitData, provinceData]) => {
-      const buyers = orgData.filter((item) => item.kind === 'BUYER');
+      const buyers = operatorMode ? orgData : orgData.filter((item) => item.kind === 'BUYER');
       setOrganizations(buyers); setIndustries(industryData); setCategories(categoryData); setUnits(unitData); setProvinces(provinceData);
       setOrganizationId(buyers[0]?.id ?? ''); setIndustryId(industryData[0]?.id ?? ''); setUnitId(unitData[0]?.id ?? '');
+      setBuyerContactUserId(buyers[0]?.contacts?.[0]?.id ?? '');
     }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'دریافت اطلاعات اولیه انجام نشد.'));
-  }, []);
+  }, [operatorMode]);
 
   const selectableCategories = useMemo(() => categories.filter((item) => item.industryId === industryId && item.parentId), [categories, industryId]);
 
@@ -99,8 +102,9 @@ export function NewRfqForm() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError(''); setCreated(null);
     try {
-      const rfq = await apiRequest<CreatedRfq>('/rfqs', { method: 'POST', body: JSON.stringify({
+      const rfq = await apiRequest<CreatedRfq>(operatorMode ? '/rfqs/on-behalf' : '/rfqs', { method: 'POST', body: JSON.stringify({
         buyerOrganizationId: organizationId,
+        ...(operatorMode ? { buyerContactUserId } : {}),
         primaryDomainId: industryId,
         title,
         deliveryProvinceId: provinceId,
@@ -149,7 +153,11 @@ export function NewRfqForm() {
     }
   }
 
-  if (!error && organizations.length === 0) return <div className="card"><p>برای ثبت استعلام ابتدا حساب خریدار ایجاد کنید.</p><Link className="button button-primary" href="/dashboard/organization">ایجاد حساب خریدار</Link></div>;
+  if (!error && organizations.length === 0) return operatorMode
+    ? <div className="card"><p>حساب خریدار فعال و دارای فرد تماس پیدا نشد.</p></div>
+    : <div className="card"><p>برای ثبت استعلام ابتدا حساب خریدار ایجاد کنید.</p><Link className="button button-primary" href="/dashboard/organization">ایجاد حساب خریدار</Link></div>;
+
+  const selectedOrganization = organizations.find((item) => item.id === organizationId);
 
   return <form className="card form-grid" onSubmit={submit}>
     {error && <div className="message message-error">{error}</div>}
@@ -162,7 +170,8 @@ export function NewRfqForm() {
       </div>
       {attachments.length > 0 && <ul>{attachments.map((attachment) => <li key={attachment.id}>{attachment.originalName} — {attachmentStatusLabel(attachment.status)}</li>)}</ul>}
     </fieldset>}
-    <label className="form-field"><span>حساب خریدار</span><select value={organizationId} onChange={(event) => setOrganizationId(event.target.value)} required>{organizations.map((item) => <option value={item.id} key={item.id}>{item.displayName}</option>)}</select></label>
+    <label className="form-field"><span>حساب خریدار</span><select value={organizationId} onChange={(event) => { const nextId = event.target.value; setOrganizationId(nextId); setBuyerContactUserId(organizations.find((item) => item.id === nextId)?.contacts?.[0]?.id ?? ''); }} required>{organizations.map((item) => <option value={item.id} key={item.id}>{item.displayName}{operatorMode && item.province ? ` — ${item.province}` : ''}</option>)}</select></label>
+    {operatorMode && <label className="form-field"><span>فرد تماس خریدار</span><select value={buyerContactUserId} onChange={(event) => setBuyerContactUserId(event.target.value)} required><option value="">انتخاب کنید</option>{selectedOrganization?.contacts?.map((contact) => <option value={contact.id} key={contact.id}>{contact.displayName} — {contact.mobileMasked}</option>)}</select></label>}
     <label className="form-field"><span>حوزه اصلی</span><select value={industryId} onChange={(event) => { setIndustryId(event.target.value); setCategoryId(''); setProductAttributes([]); setSpecifications({}); }} required>{industries.map((item) => <option value={item.id} key={item.id}>{item.nameFa}</option>)}</select></label>
     <label className="form-field full"><span>عنوان استعلام</span><input value={title} onChange={(event) => setTitle(event.target.value)} required minLength={3} placeholder="مثلاً تأمین سنگ نمای پروژه مسکونی" /></label>
     <fieldset className="fieldset full"><legend>ردیف محصول</legend><div className="form-columns">
@@ -189,7 +198,7 @@ export function NewRfqForm() {
     <label className="check-field"><input type="checkbox" checked={installationRequired} onChange={(event) => setInstallationRequired(event.target.checked)} /><span>نیاز به نصب دارم</span></label>
     <label className="check-field"><input type="checkbox" checked={qualityControlRequested} onChange={(event) => setQualityControlRequested(event.target.checked)} /><span>کنترل کیفیت توسط وازانو (کارمزد ۳٪ مبلغ خرید)</span></label>
     <div className="message">وازانو واسط اطلاعات است. مبلغ کالا، حمل، نصب و مالیات مستقیماً میان خریدار و فروشنده تعیین می‌شود.</div>
-    <button className="button button-primary" disabled={busy || !organizationId || !provinceId}>{busy ? 'در حال ثبت…' : 'ذخیره پیش‌نویس استعلام'}</button>
+    <button className="button button-primary" disabled={busy || !organizationId || !provinceId || (operatorMode && !buyerContactUserId)}>{busy ? 'در حال ثبت…' : operatorMode ? 'ثبت پیش‌نویس از طرف خریدار' : 'ذخیره پیش‌نویس استعلام'}</button>
   </form>;
 }
 
