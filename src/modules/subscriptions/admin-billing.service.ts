@@ -209,6 +209,18 @@ export class AdminBillingService {
           note,
         },
       } });
+      if (input.resolution === 'CUSTOMER_RETRY_REQUIRED') {
+        await tx.outboxEvent.create({ data: {
+          aggregateType: 'PaymentIntent',
+          aggregateId: payment.id,
+          eventType: 'ir.vazano.payment.retry_requested.v1',
+          payload: {
+            paymentId: payment.id,
+            payerOrganizationId: payment.payerOrganizationId,
+            purpose: payment.purpose,
+          },
+        } });
+      }
       return tx.paymentIntent.findUniqueOrThrow({ where: { id: payment.id } });
     });
   }

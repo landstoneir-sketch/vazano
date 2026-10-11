@@ -23,6 +23,7 @@ const SUPPORTED_EVENT_TYPES = [
   'ir.vazano.subscription.renewal.3_days_before.v1',
   'ir.vazano.subscription.renewal.expired.v1',
   'ir.vazano.subscription.renewal.grace_ended.v1',
+  'ir.vazano.payment.retry_requested.v1',
 ] as const;
 
 type NotificationTarget = {
@@ -507,6 +508,47 @@ export class NotificationsService {
           variables,
         }));
       }
+      case 'ir.vazano.payment.retry_requested.v1': {
+        const payment = await tx.paymentIntent.findUnique({
+          where: { id: event.aggregateId },
+          select: { amountRial: true, purpose: true, referenceId: true, payerOrganizationId: true },
+        });
+        if (!payment?.payerOrganizationId) return [];
+        const organization = await tx.organization.findUnique({
+          where: { id: payment.payerOrganizationId },
+          select: {
+            members: {
+              where: {
+                status: 'ACTIVE',
+                role: { in: ['BUYER_OWNER', 'SUPPLIER_OWNER', 'SUPPLIER_MANAGER'] },
+              },
+              select: { userId: true },
+            },
+          },
+        });
+        if (!organization) return [];
+        let actionPath = payment.purpose === 'SUBSCRIPTION'
+          ? '/supplier/subscription'
+          : `/dashboard/rfqs/${payment.referenceId}`;
+        if (payment.purpose === 'QUALITY_CONTROL') {
+          const qualityControl = await tx.qualityControlRequest.findUnique({
+            where: { id: payment.referenceId },
+            select: { rfqId: true },
+          });
+          if (!qualityControl) return [];
+          actionPath = `/dashboard/rfqs/${qualityControl.rfqId}`;
+        }
+        const variables = {
+          amountToman: (payment.amountRial / 10n).toLocaleString('fa-IR'),
+          paymentPurpose: this.paymentPurposeLabel(payment.purpose),
+        };
+        return organization.members.map((member) => ({
+          userId: member.userId,
+          organizationId: payment.payerOrganizationId ?? undefined,
+          actionPath,
+          variables,
+        }));
+      }
       default:
         return [];
     }
@@ -543,5 +585,13 @@ export class NotificationsService {
       SUBMITTED: 'ثبت‌شده', ACKNOWLEDGED: 'دریافت‌شده', IN_REVIEW: 'در حال بررسی',
       WAITING_FOR_REQUESTER: 'در انتظار پاسخ شما', RESOLVED: 'حل‌شده', CLOSED: 'بسته‌شده', REJECTED: 'ردشده',
     } as Record<string, string>)[status] ?? status;
+  }
+
+  private paymentPurposeLabel(purpose: string): string {
+    return ({
+      SUBSCRIPTION: 'اشتراک فروشنده',
+      BUYER_COMMITMENT: 'سپرده تعهد خریدار',
+      QUALITY_CONTROL: 'خدمت کنترل کیفیت',
+    } as Record<string, string>)[purpose] ?? 'خدمت وازانو';
   }
 }

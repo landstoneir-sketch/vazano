@@ -11,7 +11,7 @@ describe('AdminBillingService payment reconciliation resolution', () => {
   it('records a finance decision without changing payment status', async () => {
     let updateInput: Prisma.PaymentIntentUpdateManyArgs | undefined;
     const payment = {
-      id: 'payment-1', payerOrganizationId: 'organization-1', status: 'FAILED',
+      id: 'payment-1', payerOrganizationId: 'organization-1', purpose: 'SUBSCRIPTION', status: 'FAILED',
       reconciliationStatus: 'ACTION_REQUIRED', reconciliationResolvedAt: null,
     };
     const tx = {
@@ -20,6 +20,7 @@ describe('AdminBillingService payment reconciliation resolution', () => {
         findUniqueOrThrow: jest.fn().mockResolvedValue({ ...payment, reconciliationResolvedAt: new Date() }),
       },
       auditLog: { create: jest.fn().mockResolvedValue({}) },
+      outboxEvent: { create: jest.fn().mockResolvedValue({}) },
     };
     const prisma = {
       paymentIntent: { findUnique: jest.fn().mockResolvedValue(payment) },
@@ -28,17 +29,22 @@ describe('AdminBillingService payment reconciliation resolution', () => {
     const service = new AdminBillingService(prisma as never, {} as never);
 
     await service.resolvePaymentReconciliation(financeUser, payment.id, {
-      resolution: PaymentReconciliationResolution.PROVIDER_SUPPORT_REQUIRED, note: 'پیگیری با پشتیبانی زرین‌پال ثبت شد.',
+      resolution: PaymentReconciliationResolution.CUSTOMER_RETRY_REQUIRED, note: 'ارسال مسیر امن پرداخت مجدد به مشتری ثبت شد.',
     });
 
     expect(updateInput?.where).toEqual({ id: payment.id, reconciliationResolvedAt: null, reconciliationStatus: 'ACTION_REQUIRED' });
     expect(updateInput?.data).toMatchObject({
-      reconciliationResolution: PaymentReconciliationResolution.PROVIDER_SUPPORT_REQUIRED,
-      reconciliationResolutionNote: 'پیگیری با پشتیبانی زرین‌پال ثبت شد.',
+      reconciliationResolution: PaymentReconciliationResolution.CUSTOMER_RETRY_REQUIRED,
+      reconciliationResolutionNote: 'ارسال مسیر امن پرداخت مجدد به مشتری ثبت شد.',
       reconciliationResolvedByUserId: financeUser.id,
     });
     expect(updateInput?.data).not.toHaveProperty('status');
     expect(tx.auditLog.create).toHaveBeenCalledTimes(1);
+    expect(tx.outboxEvent.create).toHaveBeenCalledWith({ data: {
+      aggregateType: 'PaymentIntent', aggregateId: payment.id,
+      eventType: 'ir.vazano.payment.retry_requested.v1',
+      payload: { paymentId: payment.id, payerOrganizationId: payment.payerOrganizationId, purpose: payment.purpose },
+    } });
   });
 
   it('rejects resolution for a reconciled payment', async () => {
