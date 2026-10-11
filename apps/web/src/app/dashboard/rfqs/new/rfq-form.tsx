@@ -160,7 +160,7 @@ export function NewRfqForm() {
         <input aria-label="انتخاب فایل پیوست" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.xls,.xlsx,.docx" onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)} />
         <button className="button button-secondary" type="button" disabled={busy || !selectedFile} onClick={() => void uploadAttachment()}>بارگذاری فایل</button>
       </div>
-      {attachments.length > 0 && <ul>{attachments.map((attachment) => <li key={attachment.id}>{attachment.originalName} — {attachment.status === 'READY' ? 'آماده' : 'در انتظار بررسی امنیتی'}</li>)}</ul>}
+      {attachments.length > 0 && <ul>{attachments.map((attachment) => <li key={attachment.id}>{attachment.originalName} — {attachmentStatusLabel(attachment.status)}</li>)}</ul>}
     </fieldset>}
     <label className="form-field"><span>حساب خریدار</span><select value={organizationId} onChange={(event) => setOrganizationId(event.target.value)} required>{organizations.map((item) => <option value={item.id} key={item.id}>{item.displayName}</option>)}</select></label>
     <label className="form-field"><span>حوزه اصلی</span><select value={industryId} onChange={(event) => { setIndustryId(event.target.value); setCategoryId(''); setProductAttributes([]); setSpecifications({}); }} required>{industries.map((item) => <option value={item.id} key={item.id}>{item.nameFa}</option>)}</select></label>
@@ -191,4 +191,11 @@ export function NewRfqForm() {
     <div className="message">وازانو واسط اطلاعات است. مبلغ کالا، حمل، نصب و مالیات مستقیماً میان خریدار و فروشنده تعیین می‌شود.</div>
     <button className="button button-primary" disabled={busy || !organizationId || !provinceId}>{busy ? 'در حال ثبت…' : 'ذخیره پیش‌نویس استعلام'}</button>
   </form>;
+}
+
+function attachmentStatusLabel(status: string): string {
+  if (status === 'READY') return 'آماده';
+  if (status === 'QUARANTINED') return 'قرنطینه‌شده؛ این فایل قابل استفاده نیست';
+  if (status === 'REJECTED') return 'ردشده';
+  return 'در انتظار بررسی امنیتی';
 }

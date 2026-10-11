@@ -104,7 +104,7 @@ export function RfqDetail({ rfqId }: { rfqId: string }) {
       {attachments.length === 0 && <p>فایلی به این استعلام پیوست نشده است.</p>}
       <div className="stack">{attachments.map((attachment) => <div className="list-card" key={attachment.id}>
         <span>{attachment.originalName} · {(attachment.sizeBytes / 1024 / 1024).toLocaleString('fa-IR', { maximumFractionDigits: 1 })} مگابایت</span>
-        {attachment.status === 'READY' ? <button type="button" className="button button-secondary" onClick={() => void downloadAttachment(attachment.id)}>دریافت امن</button> : <span className="muted">در انتظار بررسی امنیتی</span>}
+        {attachment.status === 'READY' ? <button type="button" className="button button-secondary" onClick={() => void downloadAttachment(attachment.id)}>دریافت امن</button> : <span className="muted">{attachmentStatusLabel(attachment.status)}</span>}
       </div>)}</div>
     </article>
     {rfq.qualityControlRequested && <article className="card"><h2>کنترل کیفیت توسط وازانو</h2>
@@ -137,4 +137,10 @@ export function RfqDetail({ rfqId }: { rfqId: string }) {
     </article>)}</div>
     <p className="muted">قیمت اصلی بدون مالیات نمایش داده می‌شود؛ مالیات و هزینه‌های جانبی به‌صورت شفاف و جداگانه آمده‌اند.</p>
   </div>;
+}
+
+function attachmentStatusLabel(status: string): string {
+  if (status === 'QUARANTINED') return 'قرنطینه‌شده؛ امکان دریافت وجود ندارد';
+  if (status === 'REJECTED') return 'ردشده';
+  return 'در انتظار بررسی امنیتی';
 }

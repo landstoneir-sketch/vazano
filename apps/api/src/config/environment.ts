@@ -15,7 +15,10 @@ export function validateEnvironment(environment: Environment): Environment {
     if ((environment.SMS_PROVIDER ?? 'debug') !== 'smsir') throw new Error('A production SMS provider must be configured.');
     requireValue(environment, 'SMSIR_API_KEY', 16);
     requirePositiveInteger(environment, 'SMSIR_TEMPLATE_ID');
-    if (environment.FILE_SCAN_MODE === 'development-bypass') throw new Error('File scanning bypass is forbidden in production.');
+    if (environment.FILE_SCAN_MODE !== 'clamav') throw new Error('FILE_SCAN_MODE must be clamav in production.');
+    requireValue(environment, 'CLAMAV_HOST');
+    requirePositiveInteger(environment, 'CLAMAV_PORT');
+    requirePositiveInteger(environment, 'CLAMAV_TIMEOUT_MS');
     requireValue(environment, 'S3_ENDPOINT');
     requireValue(environment, 'S3_BUCKET');
     requireValue(environment, 'S3_ACCESS_KEY');

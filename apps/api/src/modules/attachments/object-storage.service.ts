@@ -10,6 +10,7 @@ import {
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { Readable } from 'node:stream';
 
 @Injectable()
 export class ObjectStorageService implements OnModuleInit {
@@ -63,6 +64,12 @@ export class ObjectStorageService implements OnModuleInit {
   async inspect(storageKey: string): Promise<{ sizeBytes: number; mimeType?: string }> {
     const result = await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: storageKey }));
     return { sizeBytes: result.ContentLength ?? 0, mimeType: result.ContentType };
+  }
+
+  async read(storageKey: string): Promise<Readable> {
+    const result = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: storageKey }));
+    if (!(result.Body instanceof Readable)) throw new Error('Object storage did not return a readable stream.');
+    return result.Body;
   }
 
   async remove(storageKey: string): Promise<void> {
