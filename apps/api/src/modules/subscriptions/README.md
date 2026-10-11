@@ -11,3 +11,5 @@ This module owns seller plan purchase, payment activation, credits, renewal sche
 - Stable plan code, billing cycle, and duration are immutable after creation. A materially different commercial offer must be created as a new plan.
 - Supplier owners start an idempotent checkout from `/supplier/subscription`; provider SDK details remain behind the payment adapter.
 - Zarinpal callbacks are verified server-side and redirect to a non-sensitive success/cancel/failure result in the seller workspace.
+- Successful subscription payments create one immutable Rial receipt with zero tax for the current tax-exclusive MVP policy; repeated callbacks cannot create duplicate activation, credit, or receipt records.
+- Organization members can view their payment receipts; cross-organization receipt access is rejected in the backend.

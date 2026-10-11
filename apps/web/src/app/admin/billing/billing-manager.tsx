@@ -17,8 +17,13 @@ type Payment = {
   id: string; provider: string; purpose: string; status: string; amountRial: string; authority: string | null;
   providerReference: string | null; createdAt: string; payerOrganization: { displayName: string; legalName: string } | null;
 };
-type Overview = { summary: Record<string, number>; plans: Plan[]; subscriptions: Subscription[]; payments: Payment[] };
-type Tab = 'plans' | 'subscriptions' | 'payments';
+type PaymentReceipt = {
+  id: string; receiptNumber: string; amountRial: string; taxRial: string; providerReference: string | null; paidAt: string;
+  organization: { displayName: string; legalName: string };
+  subscription: { plan: { code: string; nameFa: string } };
+};
+type Overview = { summary: Record<string, number>; plans: Plan[]; subscriptions: Subscription[]; payments: Payment[]; receipts: PaymentReceipt[] };
+type Tab = 'plans' | 'subscriptions' | 'payments' | 'receipts';
 
 type PlanDraft = {
   id?: string; code: string; nameFa: string; descriptionFa: string; billingCycle: BillingCycle; durationIso: string;
@@ -110,10 +115,11 @@ export function BillingManager() {
   return <div className="stack">
     {error && <div className="message message-error">{error}</div>}{message && <div className="message message-success">{message}</div>}
     <div className="dashboard-grid">{statusCards.map(([status, label]) => <article className="card billing-summary-card" key={status}><span>{label}</span><strong>{(overview?.summary[status] ?? 0).toLocaleString('fa-IR')}</strong></article>)}</div>
-    <div className="tab-list" role="tablist" aria-label="بخش مالی"><button className={tab === 'plans' ? 'tab-active' : ''} type="button" onClick={() => setTab('plans')}>پلن‌ها</button><button className={tab === 'subscriptions' ? 'tab-active' : ''} type="button" onClick={() => setTab('subscriptions')}>اشتراک‌ها</button><button className={tab === 'payments' ? 'tab-active' : ''} type="button" onClick={() => setTab('payments')}>پرداخت‌ها</button></div>
+    <div className="tab-list" role="tablist" aria-label="بخش مالی"><button className={tab === 'plans' ? 'tab-active' : ''} type="button" onClick={() => setTab('plans')}>پلن‌ها</button><button className={tab === 'subscriptions' ? 'tab-active' : ''} type="button" onClick={() => setTab('subscriptions')}>اشتراک‌ها</button><button className={tab === 'payments' ? 'tab-active' : ''} type="button" onClick={() => setTab('payments')}>پرداخت‌ها</button><button className={tab === 'receipts' ? 'tab-active' : ''} type="button" onClick={() => setTab('receipts')}>رسیدها</button></div>
     {tab === 'plans' && overview && <section className="card stack"><div className="admin-card-title"><div><h2>مدیریت پلن‌ها</h2><p>قیمت را به تومان وارد کنید؛ مبلغ در دیتابیس با واحد ریال و به‌صورت عدد صحیح ذخیره می‌شود.</p></div><button className="button button-secondary" type="button" onClick={() => { setDraft(emptyPlan); setError(''); setMessage(''); }}>پلن جدید</button></div><div className="content-item-list">{overview.plans.map((plan) => <button className={draft.id === plan.id ? 'content-item-active' : ''} type="button" key={plan.id} onClick={() => { setDraft(fromPlan(plan)); setError(''); setMessage(''); }}><strong>{plan.nameFa}</strong><span>{formatToman(plan.priceRial)} · {plan.isActive ? 'فعال' : 'غیرفعال'}</span></button>)}</div><PlanForm draft={draft} setDraft={setDraft} busy={busy} onSubmit={savePlan} /></section>}
     {tab === 'subscriptions' && overview && <SubscriptionList items={overview.subscriptions} />}
     {tab === 'payments' && overview && <PaymentList items={overview.payments} />}
+    {tab === 'receipts' && overview && <ReceiptList items={overview.receipts} />}
   </div>;
 }
 
@@ -142,6 +148,10 @@ function SubscriptionList({ items }: { items: Subscription[] }) {
 
 function PaymentList({ items }: { items: Payment[] }) {
   return <section className="stack"><h2>آخرین پرداخت‌ها</h2>{items.length === 0 && <div className="card">هنوز پرداختی ثبت نشده است.</div>}{items.map((item) => <article className="card admin-card-title" key={item.id}><div><div className="eyebrow">{item.provider} · {item.purpose}</div><h3>{item.payerOrganization?.displayName ?? item.payerOrganization?.legalName ?? 'پرداخت‌کننده بدون سازمان'}</h3><p>{formatToman(item.amountRial)} · {new Date(item.createdAt).toLocaleString('fa-IR')}</p></div><div><span className={`status-badge ${statusClass(item.status)}`}>{paymentStatusLabel(item.status)}</span>{item.providerReference && <p>پیگیری: {item.providerReference}</p>}</div></article>)}</section>;
+}
+
+function ReceiptList({ items }: { items: PaymentReceipt[] }) {
+  return <section className="stack"><h2>رسیدهای قطعی پرداخت</h2>{items.length === 0 && <div className="card">هنوز رسید پرداختی صادر نشده است.</div>}{items.map((item) => <article className="card admin-card-title" key={item.id}><div><div className="eyebrow">{item.receiptNumber}</div><h3>{item.organization.displayName || item.organization.legalName}</h3><p>{item.subscription.plan.nameFa} · {formatToman(item.amountRial)} · بدون مالیات</p></div><div><span className="status-badge status-active">پرداخت‌شده</span><p>{new Date(item.paidAt).toLocaleString('fa-IR')}</p>{item.providerReference && <p>پیگیری: {item.providerReference}</p>}</div></article>)}</section>;
 }
 
 function statusClass(status: string): string { return ['ACTIVE', 'SUCCEEDED', 'VERIFIED'].includes(status) ? 'status-active' : ['FAILED', 'SUSPENDED', 'EXPIRED'].includes(status) ? 'status-suspended' : 'severity-medium'; }

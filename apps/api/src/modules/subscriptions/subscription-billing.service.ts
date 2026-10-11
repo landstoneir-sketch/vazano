@@ -4,6 +4,7 @@ import type { AuthenticatedUser } from '../auth/auth.types';
 import { PaymentsService } from '../payments/payments.service';
 import { PrismaService } from '../../shared/prisma/prisma.service';
 import { addBillingPeriod, buildRenewalReminderSchedule, SUBSCRIPTION_GRACE_PERIOD_DAYS } from './subscription-policies';
+import { buildPaymentReceiptSnapshot } from './payment-receipt-policy';
 
 @Injectable()
 export class SubscriptionBillingService {
@@ -67,18 +68,29 @@ export class SubscriptionBillingService {
       return verification;
     }
 
-    const subscription = await this.prisma.subscription.findUnique({ where: { id: intent.referenceId }, include: { plan: true } });
-    if (!subscription) throw new NotFoundException('اشتراک مرتبط با پرداخت پیدا نشد.');
-    const current = await this.prisma.subscription.findFirst({
-      where: { organizationId: subscription.organizationId, status: { in: ['ACTIVE', 'GRACE'] }, expiresAt: { gt: new Date() }, id: { not: subscription.id } },
-      orderBy: { expiresAt: 'desc' },
-    });
-    const startsAt = current?.expiresAt ?? new Date();
-    const expiresAt = addBillingPeriod(startsAt, subscription.plan.durationIso);
-    const graceEndsAt = new Date(expiresAt.getTime() + SUBSCRIPTION_GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000);
-    const schedule = buildRenewalReminderSchedule(expiresAt);
+    return this.prisma.$transaction(async (tx) => {
+      const claim = await tx.paymentIntent.updateMany({
+        where: { id: intent.id, status: { not: 'SUCCEEDED' } },
+        data: { status: 'VERIFY_PENDING' },
+      });
+      if (claim.count === 0) {
+        const completed = await tx.paymentIntent.findUniqueOrThrow({ where: { id: intent.id } });
+        return { success: true, alreadyVerified: true, referenceId: completed.providerReference };
+      }
 
-    await this.prisma.$transaction(async (tx) => {
+      const subscription = await tx.subscription.findUnique({ where: { id: intent.referenceId }, include: { plan: true } });
+      if (!subscription) throw new NotFoundException('اشتراک مرتبط با پرداخت پیدا نشد.');
+      const paidAt = new Date();
+      const current = await tx.subscription.findFirst({
+        where: { organizationId: subscription.organizationId, status: { in: ['ACTIVE', 'GRACE'] }, expiresAt: { gt: paidAt }, id: { not: subscription.id } },
+        orderBy: { expiresAt: 'desc' },
+      });
+      const startsAt = current?.expiresAt ?? paidAt;
+      const expiresAt = addBillingPeriod(startsAt, subscription.plan.durationIso);
+      const graceEndsAt = new Date(expiresAt.getTime() + SUBSCRIPTION_GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000);
+      const schedule = buildRenewalReminderSchedule(expiresAt);
+      const receipt = buildPaymentReceiptSnapshot(intent.id, intent.amountRial, paidAt);
+
       const wallet = await tx.creditWallet.upsert({
         where: { organizationId: subscription.organizationId },
         create: { organizationId: subscription.organizationId, cachedBalanceCredits: subscription.grantCreditSnapshot },
@@ -93,11 +105,18 @@ export class SubscriptionBillingService {
         data: schedule.flatMap(({ offsetDays, scheduledAt }) => (['SMS', 'IN_APP'] as const).map((channel) => ({ subscriptionId: subscription.id, offsetDays, scheduledAt, channel }))),
         skipDuplicates: true,
       });
-      await tx.paymentIntent.update({ where: { id: intent.id }, data: { status: 'SUCCEEDED', providerReference: verification.referenceId, verifiedAt: new Date(), callbackPayload: { status: callbackStatus, code: verification.code } } });
+      await tx.paymentReceipt.create({ data: {
+        ...receipt,
+        organizationId: subscription.organizationId,
+        subscriptionId: subscription.id,
+        paymentIntentId: intent.id,
+        providerReference: verification.referenceId,
+      } });
+      await tx.paymentIntent.update({ where: { id: intent.id }, data: { status: 'SUCCEEDED', providerReference: verification.referenceId, verifiedAt: paidAt, callbackPayload: { status: callbackStatus, code: verification.code } } });
       await tx.auditLog.create({ data: { organizationId: subscription.organizationId, action: 'subscription.activate', entityType: 'Subscription', entityId: subscription.id, metadata: { paymentIntentId: intent.id, planCode: subscription.plan.code } } });
-      await tx.outboxEvent.create({ data: { aggregateType: 'Subscription', aggregateId: subscription.id, eventType: 'ir.vazano.subscription.activated.v1', payload: { subscriptionId: subscription.id, organizationId: subscription.organizationId } } });
+      await tx.outboxEvent.create({ data: { aggregateType: 'Subscription', aggregateId: subscription.id, eventType: 'ir.vazano.subscription.activated.v1', payload: { subscriptionId: subscription.id, organizationId: subscription.organizationId, receiptNumber: receipt.receiptNumber } } });
+      return { ...verification, receiptNumber: receipt.receiptNumber };
     });
-    return verification;
   }
 
   private startPayUrl(): string {

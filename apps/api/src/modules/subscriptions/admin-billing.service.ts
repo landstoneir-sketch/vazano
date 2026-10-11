@@ -11,7 +11,7 @@ export class AdminBillingService {
 
   async overview(user: AuthenticatedUser) {
     this.requireAnyPermission(user, ['billing.read', 'billing.manage']);
-    const [plans, subscriptions, payments, statusGroups] = await Promise.all([
+    const [plans, subscriptions, payments, receipts, statusGroups] = await Promise.all([
       this.prisma.subscriptionPlan.findMany({ orderBy: [{ isActive: 'desc' }, { priceRial: 'asc' }] }),
       this.prisma.subscription.findMany({
         include: {
@@ -22,6 +22,14 @@ export class AdminBillingService {
         take: 100,
       }),
       this.prisma.paymentIntent.findMany({ orderBy: { createdAt: 'desc' }, take: 100 }),
+      this.prisma.paymentReceipt.findMany({
+        include: {
+          organization: { select: { id: true, displayName: true, legalName: true } },
+          subscription: { select: { plan: { select: { code: true, nameFa: true } } } },
+        },
+        orderBy: { paidAt: 'desc' },
+        take: 100,
+      }),
       this.prisma.subscription.groupBy({ by: ['status'], _count: { _all: true } }),
     ]);
     const payerIds = [...new Set(payments.map((payment) => payment.payerOrganizationId).filter((id): id is string => Boolean(id)))];
@@ -34,6 +42,7 @@ export class AdminBillingService {
       plans,
       subscriptions,
       payments: payments.map((payment) => ({ ...payment, payerOrganization: payment.payerOrganizationId ? payerMap.get(payment.payerOrganizationId) ?? null : null })),
+      receipts,
     };
   }
 
