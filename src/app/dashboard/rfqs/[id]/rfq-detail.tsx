@@ -7,7 +7,7 @@ import { apiRequest } from '../../../../lib/api';
 import { formatProductSpecifications, type ProductAttributeBinding, type ProductSpecifications } from '../../../../lib/product-specifications';
 
 type RfqItem = { id: string; title: string; quantity: string; specifications: ProductSpecifications; category: { nameFa: string; attributeBindings: ProductAttributeBinding[] }; unit: { symbolFa: string } };
-type QualityControlRequest = { status: string; purchaseAmountRial: string | null; feeBps: number; feeAmountRial: string | null; acceptedAt: string | null; paymentReceipt: null | { receiptNumber: string; providerReference: string | null; paidAt: string } };
+type QualityControlRequest = { status: string; purchaseAmountRial: string | null; feeBps: number; feeAmountRial: string | null; acceptedAt: string | null; paymentReceipt: null | { id: string; receiptNumber: string; providerReference: string | null; paidAt: string } };
 type ContractRequest = { id: string; code: string; status: 'REQUESTED' | 'UNDER_REVIEW' | 'TERMS_PREPARED' | 'ACCEPTED' | 'COMPLETED' | 'CANCELLED'; termsSummary: string | null; cancellationReason: string | null; acceptedAt: string | null };
 type Rfq = { id: string; code: string; title: string; operationalStatus: string; deliveryProvince: string | null; deliveryCity: string | null; displayPricesTaxInclusive: boolean; qualityControlRequested: boolean; qualityControlRequest: QualityControlRequest | null; contractRequest: ContractRequest | null; items: RfqItem[] };
 type QuotationItem = { id: string; quantity: string; unitPriceRial: string; lineNetRial: string; isAlternative: boolean; offeredDescription: string | null; rfqItem: RfqItem };
@@ -127,7 +127,7 @@ export function RfqDetail({ rfqId, qualityPaymentResult }: { rfqId: string; qual
       {rfq.qualityControlRequest?.feeAmountRial && <p className="price">کارمزد کنترل کیفیت: {toman(rfq.qualityControlRequest.feeAmountRial)}</p>}
       {rfq.qualityControlRequest?.status === 'QUOTED' && <button className="button button-primary" type="button" disabled={busyId === 'quality-control'} onClick={() => void payQualityControl()}>{busyId === 'quality-control' ? 'در حال اتصال به زرین‌پال…' : 'پرداخت کارمزد و فعال‌سازی خدمت'}</button>}
       {['ACCEPTED', 'IN_PROGRESS', 'COMPLETED'].includes(rfq.qualityControlRequest?.status ?? '') && <div className="message message-success">هزینه خدمت پرداخت و درخواست کنترل کیفیت فعال شده است.</div>}
-      {rfq.qualityControlRequest?.paymentReceipt && <p>رسید: <strong>{rfq.qualityControlRequest.paymentReceipt.receiptNumber}</strong>{rfq.qualityControlRequest.paymentReceipt.providerReference ? ` · پیگیری درگاه: ${rfq.qualityControlRequest.paymentReceipt.providerReference}` : ''}</p>}
+      {rfq.qualityControlRequest?.paymentReceipt && <div className="list-card"><span>رسید: <strong>{rfq.qualityControlRequest.paymentReceipt.receiptNumber}</strong>{rfq.qualityControlRequest.paymentReceipt.providerReference ? ` · پیگیری درگاه: ${rfq.qualityControlRequest.paymentReceipt.providerReference}` : ''}</span><Link className="button button-secondary" href={`/dashboard/receipts/${rfq.qualityControlRequest.paymentReceipt.id}` as Route}>مشاهده و چاپ</Link></div>}
       <p className="muted">فعال‌سازی خدمت فقط پس از تأیید قطعی پرداخت توسط زرین‌پال انجام می‌شود.</p>
     </article>}
     {rfq.operationalStatus === 'SELLER_SELECTED' && <article className="card"><h2>هماهنگی قرارداد</h2>

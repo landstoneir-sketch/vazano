@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+import type { Route } from 'next';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '@/lib/api';
 
@@ -166,7 +168,7 @@ function PaymentList({ items, busyId, onReconcile }: { items: Payment[]; busyId:
 }
 
 function ReceiptList({ items }: { items: PaymentReceipt[] }) {
-  return <section className="stack"><h2>رسیدهای قطعی پرداخت</h2>{items.length === 0 && <div className="card">هنوز رسید پرداختی صادر نشده است.</div>}{items.map((item) => <article className="card admin-card-title" key={item.id}><div><div className="eyebrow">{item.receiptNumber}</div><h3>{item.organization.displayName || item.organization.legalName}</h3><p>{item.subscription?.plan.nameFa ?? (item.qualityControlRequest ? `کنترل کیفیت ${item.qualityControlRequest.rfq.code}` : 'خدمت وازانو')} · {formatToman(item.amountRial)} · بدون مالیات</p></div><div><span className="status-badge status-active">پرداخت‌شده</span><p>{new Date(item.paidAt).toLocaleString('fa-IR')}</p>{item.providerReference && <p>پیگیری: {item.providerReference}</p>}</div></article>)}</section>;
+  return <section className="stack"><h2>رسیدهای قطعی پرداخت</h2>{items.length === 0 && <div className="card">هنوز رسید پرداختی صادر نشده است.</div>}{items.map((item) => <article className="card admin-card-title" key={item.id}><div><div className="eyebrow">{item.receiptNumber}</div><h3>{item.organization.displayName || item.organization.legalName}</h3><p>{item.subscription?.plan.nameFa ?? (item.qualityControlRequest ? `کنترل کیفیت ${item.qualityControlRequest.rfq.code}` : 'خدمت وازانو')} · {formatToman(item.amountRial)} · بدون مالیات</p></div><div><span className="status-badge status-active">پرداخت‌شده</span><p>{new Date(item.paidAt).toLocaleString('fa-IR')}</p>{item.providerReference && <p>پیگیری: {item.providerReference}</p>}<Link className="button button-secondary" href={`/dashboard/receipts/${item.id}` as Route}>مشاهده و چاپ</Link></div></article>)}</section>;
 }
 
 function statusClass(status: string): string { return ['ACTIVE', 'SUCCEEDED', 'VERIFIED'].includes(status) ? 'status-active' : ['FAILED', 'SUSPENDED', 'EXPIRED'].includes(status) ? 'status-suspended' : 'severity-medium'; }
