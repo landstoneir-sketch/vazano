@@ -7,6 +7,7 @@ export type RouteIdentity = {
 const SUPPLIER_ROLES = new Set(['SUPPLIER_OWNER', 'SUPPLIER_MANAGER', 'SUPPLIER_SALES']);
 
 const ADMIN_PERMISSION_RULES: Array<{ prefix: string; permissions: string[] }> = [
+  { prefix: '/admin/rfqs/new', permissions: ['rfq.create_on_behalf'] },
   { prefix: '/admin/audit-logs', permissions: ['audit.read'] },
   { prefix: '/admin/billing', permissions: ['billing.read', 'billing.manage'] },
   { prefix: '/admin/catalog', permissions: ['category.manage'] },
