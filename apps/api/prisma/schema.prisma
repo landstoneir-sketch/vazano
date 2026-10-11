@@ -243,6 +243,13 @@ enum PaymentReconciliationStatus {
   PROVIDER_UNCONFIRMED
 }
 
+enum PaymentReconciliationResolution {
+  CUSTOMER_RETRY_REQUIRED
+  PROVIDER_SUPPORT_REQUIRED
+  REFUND_REVIEW_REQUIRED
+  NO_FINANCIAL_ACTION
+}
+
 enum CreditEntryType {
   GRANT
   RESERVE
@@ -369,6 +376,7 @@ model User {
   updatedCmsPages         CmsPage[]                @relation("CmsPageUpdater")
   updatedFaqItems         FaqItem[]                @relation("FaqItemUpdater")
   requestedContracts      ContractRequest[]        @relation("ContractRequester")
+  resolvedPaymentReconciliations PaymentIntent[]   @relation("PaymentReconciliationResolver")
 
   @@map("users")
 }
@@ -1223,13 +1231,19 @@ model PaymentIntent {
   reconciliationStatus PaymentReconciliationStatus @default(NOT_CHECKED) @map("reconciliation_status")
   lastReconciledAt    DateTime?       @map("last_reconciled_at") @db.Timestamptz(3)
   lastProviderCode    Int?            @map("last_provider_code")
+  reconciliationResolution PaymentReconciliationResolution? @map("reconciliation_resolution")
+  reconciliationResolutionNote String? @map("reconciliation_resolution_note") @db.Text
+  reconciliationResolvedAt DateTime?  @map("reconciliation_resolved_at") @db.Timestamptz(3)
+  reconciliationResolvedByUserId String? @map("reconciliation_resolved_by_user_id")
   createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
   paymentReceipt      PaymentReceipt?
+  reconciliationResolvedBy User?      @relation("PaymentReconciliationResolver", fields: [reconciliationResolvedByUserId], references: [id], onDelete: SetNull)
 
   @@index([referenceType, referenceId])
   @@index([status, createdAt])
   @@index([reconciliationStatus, updatedAt])
+  @@index([reconciliationResolvedAt, updatedAt])
   @@map("payment_intents")
 }
 
