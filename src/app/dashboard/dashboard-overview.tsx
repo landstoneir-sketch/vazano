@@ -47,6 +47,7 @@ export function DashboardOverview() {
       {supplierWorkspace && <Link className="button button-secondary" href="/supplier">فرصت‌های فروش</Link>}
       <Link className="button button-secondary" href="/messages">مرکز پیام</Link>
       <Link className="button button-secondary" href="/support">پشتیبانی و تخلفات</Link>
+      <Link className="button button-secondary" href="/dashboard/profile">پروفایل من</Link>
       <Link className="button button-secondary" href="/dashboard/organization">حساب‌های سازمانی</Link>
     </div>
 
