@@ -16,6 +16,7 @@ const ADMIN_PERMISSION_RULES: Array<{ prefix: string; permissions: string[] }> =
   { prefix: '/admin/quality-control', permissions: ['quality_control.manage'] },
   { prefix: '/admin/contracts', permissions: ['contract.manage'] },
   { prefix: '/admin/reports', permissions: ['report.read'] },
+  { prefix: '/admin/reviews', permissions: ['support.manage'] },
   { prefix: '/admin/rfqs', permissions: ['rfq.review', 'rfq.manage'] },
   { prefix: '/admin/settings', permissions: ['settings.read', 'settings.manage'] },
   { prefix: '/admin/suppliers', permissions: ['supplier.verify'] },
