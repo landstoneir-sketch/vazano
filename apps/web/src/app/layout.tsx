@@ -18,6 +18,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <nav aria-label="منوی اصلی">
             <Link href="/how-it-works">نحوه کار</Link>
             <Link href="/plans">پلن‌ها</Link>
+            <Link href={'/suppliers' as Route}>فروشندگان</Link>
             <Link href={'/faq' as Route}>پرسش‌ها</Link>
             <AccountNavigation />
           </nav>

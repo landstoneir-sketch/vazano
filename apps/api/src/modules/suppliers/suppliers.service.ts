@@ -9,6 +9,54 @@ import { VerifySupplierDto } from './verify-supplier.dto';
 export class SuppliersService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async listPublicProfiles() {
+    const organizations = await this.prisma.organization.findMany({
+      where: { kind: 'SUPPLIER', status: 'ACTIVE', supplierProfile: { verificationStatus: 'VERIFIED' } },
+      select: {
+        id: true, displayName: true, province: true, city: true,
+        supplierProfile: { select: { description: true, nationwideCoverage: true, categories: { select: { category: { select: { id: true, nameFa: true, slug: true } } } } } },
+      },
+      orderBy: { displayName: 'asc' },
+      take: 100,
+    });
+    const organizationIds = organizations.map((organization) => organization.id);
+    const ratings = organizationIds.length > 0 ? await this.prisma.supplierReview.groupBy({
+      by: ['supplierOrganizationId'],
+      where: { supplierOrganizationId: { in: organizationIds }, status: 'PUBLISHED' },
+      _count: { _all: true },
+      _avg: { rating: true },
+    }) : [];
+    const ratingMap = new Map(ratings.map((rating) => [rating.supplierOrganizationId, { count: rating._count._all, averageRating: rating._avg.rating }]));
+    return organizations.map((organization) => ({ ...organization, reviewSummary: ratingMap.get(organization.id) ?? { count: 0, averageRating: null } }));
+  }
+
+  async getPublicProfile(organizationId: string) {
+    const organization = await this.prisma.organization.findFirst({
+      where: { id: organizationId, kind: 'SUPPLIER', status: 'ACTIVE', supplierProfile: { verificationStatus: 'VERIFIED' } },
+      select: {
+        id: true, displayName: true, province: true, city: true,
+        supplierProfile: {
+          select: {
+            description: true, nationwideCoverage: true,
+            serviceProvinceLinks: { select: { province: { select: { id: true, nameFa: true } } }, orderBy: { province: { sortOrder: 'asc' } } },
+            categories: { select: { category: { select: { id: true, nameFa: true, slug: true } } }, orderBy: { category: { sortOrder: 'asc' } } },
+          },
+        },
+      },
+    });
+    if (!organization) throw new NotFoundException('پروفایل عمومی فروشنده پیدا نشد.');
+    const [aggregate, recentReviews] = await Promise.all([
+      this.prisma.supplierReview.aggregate({ where: { supplierOrganizationId: organization.id, status: 'PUBLISHED' }, _count: { _all: true }, _avg: { rating: true } }),
+      this.prisma.supplierReview.findMany({
+        where: { supplierOrganizationId: organization.id, status: 'PUBLISHED' },
+        select: { id: true, rating: true, comment: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      }),
+    ]);
+    return { ...organization, reviewSummary: { count: aggregate._count._all, averageRating: aggregate._avg.rating }, recentReviews };
+  }
+
   async performance(user: AuthenticatedUser) {
     const organizationIds = user.memberships
       .filter((membership) => ['SUPPLIER_OWNER', 'SUPPLIER_MANAGER', 'SUPPLIER_SALES'].includes(membership.role))
