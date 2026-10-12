@@ -1,11 +1,14 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:22-alpine AS dependencies
+ARG NODE_IMAGE=node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402
+
+FROM ${NODE_IMAGE} AS dependencies
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm install --global npm@11.16.0 --no-audit --no-fund
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 
 FROM dependencies AS builder
 WORKDIR /app
@@ -25,7 +28,7 @@ RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 vazano &&
 USER vazano
 CMD ["npm", "run", "prisma:deploy"]
 
-FROM node:22-alpine AS api-runner
+FROM ${NODE_IMAGE} AS api-runner
 WORKDIR /app
 ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 vazano
@@ -40,7 +43,7 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD wget -qO- http://127.0.0.1:3001/v1/health/ready >/dev/null || exit 1
 CMD ["node", "apps/api/dist/src/main.js"]
 
-FROM node:22-alpine AS web-runner
+FROM ${NODE_IMAGE} AS web-runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
