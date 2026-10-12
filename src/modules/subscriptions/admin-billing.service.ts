@@ -14,7 +14,7 @@ export class AdminBillingService {
 
   async overview(user: AuthenticatedUser) {
     this.requireAnyPermission(user, ['billing.read', 'billing.manage']);
-    const [plans, subscriptions, payments, receipts, statusGroups] = await Promise.all([
+    const [plans, subscriptions, payments, receipts, statusGroups, reminderGroups, reminders] = await Promise.all([
       this.prisma.subscriptionPlan.findMany({ orderBy: [{ isActive: 'desc' }, { priceRial: 'asc' }] }),
       this.prisma.subscription.findMany({
         include: {
@@ -35,6 +35,19 @@ export class AdminBillingService {
         take: 100,
       }),
       this.prisma.subscription.groupBy({ by: ['status'], _count: { _all: true } }),
+      this.prisma.subscriptionReminder.groupBy({ by: ['channel', 'status'], _count: { _all: true } }),
+      this.prisma.subscriptionReminder.findMany({
+        include: {
+          subscription: {
+            select: {
+              organization: { select: { id: true, displayName: true, legalName: true } },
+              plan: { select: { code: true, nameFa: true } },
+            },
+          },
+        },
+        orderBy: { scheduledAt: 'desc' },
+        take: 100,
+      }),
     ]);
     const payerIds = [...new Set(payments.map((payment) => payment.payerOrganizationId).filter((id): id is string => Boolean(id)))];
     const payers = payerIds.length
@@ -43,10 +56,12 @@ export class AdminBillingService {
     const payerMap = new Map(payers.map((payer) => [payer.id, payer]));
     return {
       summary: Object.fromEntries(statusGroups.map((item) => [item.status, item._count._all])),
+      reminderSummary: Object.fromEntries(reminderGroups.map((item) => [`${item.channel}:${item.status}`, item._count._all])),
       plans,
       subscriptions,
       payments: payments.map((payment) => ({ ...payment, payerOrganization: payment.payerOrganizationId ? payerMap.get(payment.payerOrganizationId) ?? null : null })),
       receipts,
+      reminders,
     };
   }
 
