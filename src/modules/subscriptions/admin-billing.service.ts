@@ -240,6 +240,34 @@ export class AdminBillingService {
     });
   }
 
+  async retryReminder(user: AuthenticatedUser, reminderId: string) {
+    this.requireAnyPermission(user, ['billing.manage']);
+    const reminder = await this.prisma.subscriptionReminder.findUnique({
+      where: { id: reminderId },
+      select: { id: true, channel: true, status: true, subscription: { select: { organizationId: true } } },
+    });
+    if (!reminder) throw new NotFoundException('اخطار تمدید پیدا نشد.');
+    if (reminder.channel !== 'SMS' || reminder.status !== 'FAILED') {
+      throw new ConflictException('فقط پیامک ناموفق را می‌توان دوباره در صف قرار داد.');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const result = await tx.subscriptionReminder.updateMany({
+        where: { id: reminder.id, channel: 'SMS', status: 'FAILED' },
+        data: { status: 'PENDING', sentAt: null, cancelledAt: null, failureReason: null },
+      });
+      if (result.count !== 1) throw new ConflictException('وضعیت اخطار هم‌زمان تغییر کرده است؛ صفحه را دوباره بارگذاری کنید.');
+      await tx.auditLog.create({ data: {
+        actorUserId: user.id,
+        organizationId: reminder.subscription.organizationId,
+        action: 'subscription.reminder.sms.requeued',
+        entityType: 'SubscriptionReminder',
+        entityId: reminder.id,
+      } });
+      return tx.subscriptionReminder.findUniqueOrThrow({ where: { id: reminder.id } });
+    });
+  }
+
   private validatePlanAmountsAndLimits(priceRial: string, grantCredits: string, dailyLimit: number, maxLimit: number): void {
     if (BigInt(priceRial) <= 0n) throw new BadRequestException('مبلغ پلن باید بیشتر از صفر باشد.');
     if (BigInt(grantCredits) < 0n) throw new BadRequestException('اعتبار پلن نمی‌تواند منفی باشد.');
