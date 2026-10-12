@@ -7,6 +7,8 @@ import { CreateSubscriptionPlanDto } from './create-subscription-plan.dto';
 import { CreateManualSubscriptionRenewalDto } from './create-manual-subscription-renewal.dto';
 import { ResolvePaymentReconciliationDto } from './resolve-payment-reconciliation.dto';
 import { UpdateSubscriptionPlanDto } from './update-subscription-plan.dto';
+import { CreateSubscriptionDiscountDto } from './create-subscription-discount.dto';
+import { UpdateSubscriptionDiscountStatusDto } from './update-subscription-discount-status.dto';
 
 @Controller('admin/billing')
 @UseGuards(SessionGuard)
@@ -26,6 +28,16 @@ export class AdminBillingController {
   @Put('plans/:planId')
   updatePlan(@CurrentUser() user: AuthenticatedUser, @Param('planId') planId: string, @Body() input: UpdateSubscriptionPlanDto) {
     return this.billing.updatePlan(user, planId, input);
+  }
+
+  @Post('discounts')
+  createDiscount(@CurrentUser() user: AuthenticatedUser, @Body() input: CreateSubscriptionDiscountDto) {
+    return this.billing.createDiscount(user, input);
+  }
+
+  @Put('discounts/:discountId/status')
+  updateDiscountStatus(@CurrentUser() user: AuthenticatedUser, @Param('discountId') discountId: string, @Body() input: UpdateSubscriptionDiscountStatusDto) {
+    return this.billing.updateDiscountStatus(user, discountId, input);
   }
 
   @Post('payments/:paymentId/reconcile')

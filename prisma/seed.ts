@@ -399,6 +399,22 @@ async function main(): Promise<void> {
       update: { ...plan, taxIncluded: false, isActive: true, entitlements: { canViewMatchedRfqs: true, dailyProposalLimit: 2, shortageOverrideMax: 6 } },
     });
   }
+  await prisma.subscriptionDiscountCode.upsert({
+    where: { code: 'DEMO10' },
+    create: {
+      code: 'DEMO10',
+      nameFa: 'تخفیف آزمایشی محیط توسعه',
+      descriptionFa: 'کد نمونه برای آزمون جریان خرید؛ در محیط عملیاتی غیرفعال شود.',
+      type: 'PERCENTAGE',
+      percentageBps: 1000,
+      minimumPurchaseRial: 0n,
+      perOrganizationLimit: 3,
+      maxRedemptions: 1000,
+      validFrom: new Date('2026-01-01T00:00:00.000Z'),
+      validUntil: new Date('2030-01-01T00:00:00.000Z'),
+    },
+    update: {},
+  });
 
   for (const [key, value, descriptionFa] of systemSettings) {
     await prisma.systemSetting.upsert({
@@ -492,7 +508,7 @@ async function main(): Promise<void> {
       const expiresAt = new Date(startsAt.getTime() + 30 * 24 * 60 * 60 * 1000);
       await prisma.subscription.upsert({
         where: { id: 'demo-supplier-subscription' },
-        create: { id: 'demo-supplier-subscription', organizationId: supplier.id, planId: demoPlan.id, status: 'ACTIVE', startsAt, expiresAt, graceEndsAt: new Date(expiresAt.getTime() + 7 * 24 * 60 * 60 * 1000), priceRialSnapshot: demoPlan.priceRial, grantCreditSnapshot: demoPlan.grantCredits, planVersionSnapshot: demoPlan.version },
+        create: { id: 'demo-supplier-subscription', organizationId: supplier.id, planId: demoPlan.id, status: 'ACTIVE', startsAt, expiresAt, graceEndsAt: new Date(expiresAt.getTime() + 7 * 24 * 60 * 60 * 1000), priceRialSnapshot: demoPlan.priceRial, listPriceRialSnapshot: demoPlan.priceRial, grantCreditSnapshot: demoPlan.grantCredits, planVersionSnapshot: demoPlan.version },
         update: { status: 'ACTIVE', startsAt, expiresAt, graceEndsAt: new Date(expiresAt.getTime() + 7 * 24 * 60 * 60 * 1000) },
       });
       const wallet = await prisma.creditWallet.upsert({

@@ -1,12 +1,13 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { SubscriptionPlan } from '@prisma/client';
+import { Prisma, type SubscriptionPlan } from '@prisma/client';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { PaymentsService } from '../payments/payments.service';
 import { PrismaService } from '../../shared/prisma/prisma.service';
 import { addBillingPeriod, buildRenewalReminderSchedule, buildTrialReminderSchedule, SUBSCRIPTION_GRACE_PERIOD_DAYS } from './subscription-policies';
 import { buildPaymentReceiptSnapshot } from './payment-receipt-policy';
 import { buildBillingInvoiceNumber } from './billing-invoice-policy';
+import { calculateSubscriptionDiscount } from './subscription-discount-policy';
 
 @Injectable()
 export class SubscriptionBillingService {
@@ -16,7 +17,7 @@ export class SubscriptionBillingService {
     private readonly config: ConfigService,
   ) {}
 
-  async startCheckout(user: AuthenticatedUser, organizationId: string, planId: string, idempotencyKey: string) {
+  async startCheckout(user: AuthenticatedUser, organizationId: string, planId: string, idempotencyKey: string, discountCode?: string) {
     const membership = user.memberships.find((item) => item.organizationId === organizationId);
     const canManage = membership?.role === 'SUPPLIER_OWNER' || user.permissions.includes('subscription.manage');
     if (!canManage) throw new ForbiddenException('مجوز خرید اشتراک برای این سازمان را ندارید.');
@@ -27,11 +28,13 @@ export class SubscriptionBillingService {
     if (!organization || organization.kind !== 'SUPPLIER') throw new NotFoundException('سازمان فروشنده پیدا نشد.');
     if (organization.status !== 'ACTIVE') throw new ConflictException('خرید اشتراک پس از تأیید فروشنده فعال می‌شود.');
     if (!plan) throw new NotFoundException('پلن اشتراک معتبر نیست.');
+    const normalizedDiscountCode = discountCode?.trim().toUpperCase() || null;
     const [existingIntent, existingTrialRequest] = await Promise.all([
       this.prisma.paymentIntent.findUnique({ where: { idempotencyKey } }),
       this.prisma.subscription.findUnique({ where: { trialActivationKey: idempotencyKey } }),
     ]);
     if (plan.isTrial) {
+      if (normalizedDiscountCode) throw new ConflictException('کد تخفیف برای پلن آزمایشی قابل استفاده نیست.');
       if (existingIntent) throw new ConflictException('کلید تکرارپذیری برای یک پرداخت استفاده شده است.');
       if (existingTrialRequest && (existingTrialRequest.organizationId !== organizationId || existingTrialRequest.planId !== plan.id || !existingTrialRequest.isTrialSnapshot)) {
         throw new ConflictException('کلید تکرارپذیری برای درخواست دیگری استفاده شده است.');
@@ -40,23 +43,70 @@ export class SubscriptionBillingService {
     }
     if (existingTrialRequest) throw new ConflictException('کلید تکرارپذیری برای یک دوره آزمایشی استفاده شده است.');
 
-    if (existingIntent && (existingIntent.purpose !== 'SUBSCRIPTION' || existingIntent.payerOrganizationId !== organizationId || existingIntent.amountRial !== plan.priceRial)) {
-      throw new ConflictException('کلید تکرارپذیری برای درخواست دیگری استفاده شده است.');
-    }
+    let subscription = existingIntent
+      ? await this.prisma.subscription.findUniqueOrThrow({ where: { id: existingIntent.referenceId } })
+      : null;
+    if (existingIntent && (
+      existingIntent.purpose !== 'SUBSCRIPTION'
+      || existingIntent.payerOrganizationId !== organizationId
+      || existingIntent.amountRial !== subscription?.priceRialSnapshot
+      || subscription.planId !== plan.id
+      || subscription.discountCodeSnapshot !== normalizedDiscountCode
+    )) throw new ConflictException('کلید تکرارپذیری برای درخواست دیگری استفاده شده است.');
     if (existingIntent?.authority && ['REDIRECT_PENDING', 'VERIFY_PENDING', 'SUCCEEDED'].includes(existingIntent.status)) {
       const callbackUrl = `${this.publicApiUrl()}/v1/subscriptions/zarinpal/callback`;
       return { paymentIntentId: existingIntent.id, subscriptionId: existingIntent.referenceId, authority: existingIntent.authority, redirectUrl: this.payments.redirectUrl(existingIntent.authority, callbackUrl) };
     }
 
-    const subscription = existingIntent
-      ? await this.prisma.subscription.findUniqueOrThrow({ where: { id: existingIntent.referenceId } })
-      : await this.prisma.subscription.create({ data: { organizationId, planId: plan.id, priceRialSnapshot: plan.priceRial, grantCreditSnapshot: plan.grantCredits, planVersionSnapshot: plan.version } });
+    let intent = existingIntent;
+    if (!subscription || !intent) {
+      try {
+        const created = await this.prisma.$transaction(async (tx) => {
+          const discount = normalizedDiscountCode
+            ? await this.resolveDiscount(tx, normalizedDiscountCode, organizationId, plan)
+            : null;
+          const discountRial = discount?.amountRial ?? 0n;
+          const createdSubscription = await tx.subscription.create({ data: {
+            organizationId,
+            planId: plan.id,
+            priceRialSnapshot: plan.priceRial - discountRial,
+            listPriceRialSnapshot: plan.priceRial,
+            discountRialSnapshot: discountRial,
+            discountCodeSnapshot: discount?.code ?? null,
+            grantCreditSnapshot: plan.grantCredits,
+            planVersionSnapshot: plan.version,
+          } });
+          if (discount) {
+            await tx.subscriptionDiscountRedemption.create({ data: {
+              discountCodeId: discount.id,
+              organizationId,
+              subscriptionId: createdSubscription.id,
+              discountAmountRial: discount.amountRial,
+            } });
+          }
+          const createdIntent = await tx.paymentIntent.create({ data: {
+            provider: this.payments.provider,
+            purpose: 'SUBSCRIPTION',
+            amountRial: createdSubscription.priceRialSnapshot,
+            payerOrganizationId: organizationId,
+            referenceType: 'Subscription',
+            referenceId: createdSubscription.id,
+            idempotencyKey,
+          } });
+          return { subscription: createdSubscription, intent: createdIntent };
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+        subscription = created.subscription;
+        intent = created.intent;
+      } catch (error: unknown) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && ['P2002', 'P2034'].includes(error.code)) {
+          throw new ConflictException('ظرفیت کد تخفیف یا وضعیت درخواست هم‌زمان تغییر کرده است؛ دوباره تلاش کنید.');
+        }
+        throw error;
+      }
+    }
     if (subscription.planId !== plan.id || subscription.organizationId !== organizationId) {
       throw new ConflictException('درخواست پرداخت با پلن انتخابی سازگار نیست.');
     }
-    const intent = existingIntent ?? await this.prisma.paymentIntent.create({
-      data: { provider: this.payments.provider, purpose: 'SUBSCRIPTION', amountRial: plan.priceRial, payerOrganizationId: organizationId, referenceType: 'Subscription', referenceId: subscription.id, idempotencyKey },
-    });
     const issuedAt = new Date();
     await this.prisma.billingInvoice.upsert({
       where: { subscriptionId: subscription.id },
@@ -66,10 +116,10 @@ export class SubscriptionBillingService {
         purpose: 'SUBSCRIPTION',
         subscriptionId: subscription.id,
         paymentIntentId: intent.id,
-        netAmountRial: plan.priceRial,
+        netAmountRial: intent.amountRial,
         taxRial: 0n,
-        totalAmountRial: plan.priceRial,
-        descriptionFa: `اشتراک ${plan.nameFa}`,
+        totalAmountRial: intent.amountRial,
+        descriptionFa: subscription.discountCodeSnapshot ? `اشتراک ${plan.nameFa} با کد تخفیف ${subscription.discountCodeSnapshot}` : `اشتراک ${plan.nameFa}`,
         issuedAt,
         dueAt: new Date(issuedAt.getTime() + 24 * 60 * 60 * 1000),
       },
@@ -93,6 +143,7 @@ export class SubscriptionBillingService {
       await this.prisma.$transaction([
         this.prisma.paymentIntent.updateMany({ where: { id: intent.id, status: { not: 'SUCCEEDED' } }, data: { status: 'CANCELLED', callbackPayload: { status: callbackStatus } } }),
         this.prisma.billingInvoice.updateMany({ where: { paymentIntentId: intent.id, status: { in: ['ISSUED', 'OVERDUE'] } }, data: { status: 'CANCELLED' } }),
+        this.prisma.subscriptionDiscountRedemption.updateMany({ where: { subscriptionId: intent.referenceId, status: 'RESERVED' }, data: { status: 'CANCELLED', cancelledAt: new Date() } }),
       ]);
       return { success: false, cancelled: true };
     }
@@ -134,6 +185,10 @@ export class SubscriptionBillingService {
         data: { walletId: wallet.id, type: 'GRANT', amountCredits: subscription.grantCreditSnapshot, referenceType: 'Subscription', referenceId: subscription.id, idempotencyKey: `subscription:${subscription.id}:grant:v1`, reasonCode: 'SUBSCRIPTION_PAYMENT_VERIFIED' },
       });
       await tx.subscription.update({ where: { id: subscription.id }, data: { status: 'ACTIVE', startsAt, expiresAt, graceEndsAt } });
+      await tx.subscriptionDiscountRedemption.updateMany({
+        where: { subscriptionId: subscription.id, status: 'RESERVED' },
+        data: { status: 'REDEEMED', redeemedAt: paidAt },
+      });
       await tx.subscriptionReminder.updateMany({ where: { subscription: { organizationId: subscription.organizationId }, status: 'PENDING' }, data: { status: 'CANCELLED', cancelledAt: new Date() } });
       await tx.subscriptionReminder.createMany({
         data: schedule.flatMap(({ offsetDays, scheduledAt }) => (['SMS', 'IN_APP'] as const).map((channel) => ({ subscriptionId: subscription.id, offsetDays, scheduledAt, channel }))),
@@ -175,6 +230,35 @@ export class SubscriptionBillingService {
     return (this.config.get<string>('PUBLIC_API_URL') ?? 'http://localhost:3001').replace(/\/$/, '');
   }
 
+  private async resolveDiscount(tx: Prisma.TransactionClient, code: string, organizationId: string, plan: SubscriptionPlan) {
+    const now = new Date();
+    const discount = await tx.subscriptionDiscountCode.findUnique({ where: { code } });
+    if (!discount || !discount.isActive || discount.validFrom > now || discount.validUntil <= now) {
+      throw new ConflictException('کد تخفیف معتبر یا فعال نیست.');
+    }
+    if (discount.applicablePlanId && discount.applicablePlanId !== plan.id) {
+      throw new ConflictException('این کد تخفیف برای پلن انتخابی قابل استفاده نیست.');
+    }
+    if (plan.priceRial < discount.minimumPurchaseRial) {
+      throw new ConflictException('مبلغ این پلن به حداقل خرید کد تخفیف نمی‌رسد.');
+    }
+    const [organizationUsage, totalUsage] = await Promise.all([
+      tx.subscriptionDiscountRedemption.count({
+        where: { discountCodeId: discount.id, organizationId, status: { in: ['RESERVED', 'REDEEMED'] } },
+      }),
+      discount.maxRedemptions === null ? Promise.resolve(0) : tx.subscriptionDiscountRedemption.count({
+        where: { discountCodeId: discount.id, status: { in: ['RESERVED', 'REDEEMED'] } },
+      }),
+    ]);
+    if (organizationUsage >= discount.perOrganizationLimit) throw new ConflictException('سقف استفاده این سازمان از کد تخفیف تکمیل شده است.');
+    if (discount.maxRedemptions !== null && totalUsage >= discount.maxRedemptions) throw new ConflictException('ظرفیت این کد تخفیف تکمیل شده است.');
+    try {
+      return { id: discount.id, code: discount.code, amountRial: calculateSubscriptionDiscount(plan.priceRial, discount) };
+    } catch (error: unknown) {
+      throw new ConflictException(error instanceof Error ? error.message : 'مقدار کد تخفیف معتبر نیست.');
+    }
+  }
+
   private async activateTrial(user: AuthenticatedUser, organizationId: string, plan: SubscriptionPlan, idempotencyKey: string) {
     return this.prisma.$transaction(async (tx) => {
       const existingRequest = await tx.subscription.findUnique({ where: { trialActivationKey: idempotencyKey } });
@@ -213,6 +297,7 @@ export class SubscriptionBillingService {
         expiresAt,
         graceEndsAt: expiresAt,
         priceRialSnapshot: 0n,
+        listPriceRialSnapshot: 0n,
         grantCreditSnapshot: plan.grantCredits,
         planVersionSnapshot: plan.version,
         isTrialSnapshot: true,

@@ -263,6 +263,17 @@ enum BillingInvoiceStatus {
   CANCELLED
 }
 
+enum SubscriptionDiscountType {
+  PERCENTAGE
+  FIXED_RIAL
+}
+
+enum DiscountRedemptionStatus {
+  RESERVED
+  REDEEMED
+  CANCELLED
+}
+
 enum CreditEntryType {
   GRANT
   RESERVE
@@ -458,6 +469,7 @@ model Organization {
   subscriptions            Subscription[]
   manualSubscriptionRenewals ManualSubscriptionRenewal[]
   billingInvoices            BillingInvoice[]
+  subscriptionDiscountRedemptions SubscriptionDiscountRedemption[]
   buyerSupplierReviews       SupplierReview[] @relation("BuyerSupplierReviews")
   receivedSupplierReviews    SupplierReview[] @relation("ReceivedSupplierReviews")
   paymentReceipts          PaymentReceipt[]
@@ -1197,6 +1209,7 @@ model SubscriptionPlan {
   createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
   subscriptions      Subscription[]
+  discountCodes      SubscriptionDiscountCode[]
 
   @@index([isActive, isPublic])
   @@map("subscription_plans")
@@ -1213,6 +1226,9 @@ model Subscription {
   autoRenewEnabled    Boolean                @default(false) @map("auto_renew_enabled")
   autoRenewConsentAt  DateTime?              @map("auto_renew_consent_at") @db.Timestamptz(3)
   priceRialSnapshot   BigInt                 @map("price_rial_snapshot")
+  listPriceRialSnapshot BigInt               @map("list_price_rial_snapshot")
+  discountRialSnapshot BigInt                @default(0) @map("discount_rial_snapshot")
+  discountCodeSnapshot String?               @map("discount_code_snapshot")
   grantCreditSnapshot BigInt                 @map("grant_credit_snapshot")
   planVersionSnapshot Int                    @map("plan_version_snapshot")
   isTrialSnapshot     Boolean                @default(false) @map("is_trial_snapshot")
@@ -1225,10 +1241,55 @@ model Subscription {
   paymentReceipt      PaymentReceipt?
   manualRenewal       ManualSubscriptionRenewal?
   billingInvoice      BillingInvoice?
+  discountRedemption  SubscriptionDiscountRedemption?
 
   @@index([organizationId, status])
   @@index([status, expiresAt])
   @@map("subscriptions")
+}
+
+model SubscriptionDiscountCode {
+  id                   String                   @id @default(cuid())
+  code                 String                   @unique
+  nameFa               String                   @map("name_fa")
+  descriptionFa        String?                  @map("description_fa")
+  type                 SubscriptionDiscountType
+  percentageBps        Int?                     @map("percentage_bps")
+  fixedAmountRial      BigInt?                  @map("fixed_amount_rial")
+  applicablePlanId     String?                  @map("applicable_plan_id")
+  minimumPurchaseRial  BigInt                   @default(0) @map("minimum_purchase_rial")
+  perOrganizationLimit Int                      @default(1) @map("per_organization_limit")
+  maxRedemptions       Int?                     @map("max_redemptions")
+  validFrom            DateTime                 @map("valid_from") @db.Timestamptz(3)
+  validUntil           DateTime                 @map("valid_until") @db.Timestamptz(3)
+  isActive             Boolean                  @default(true) @map("is_active")
+  createdAt            DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+  applicablePlan       SubscriptionPlan?        @relation(fields: [applicablePlanId], references: [id], onDelete: Restrict)
+  redemptions          SubscriptionDiscountRedemption[]
+
+  @@index([isActive, validFrom, validUntil])
+  @@index([applicablePlanId, isActive])
+  @@map("subscription_discount_codes")
+}
+
+model SubscriptionDiscountRedemption {
+  id                 String                     @id @default(cuid())
+  discountCodeId     String                     @map("discount_code_id")
+  organizationId     String                     @map("organization_id")
+  subscriptionId     String                     @unique @map("subscription_id")
+  status             DiscountRedemptionStatus   @default(RESERVED)
+  discountAmountRial BigInt                     @map("discount_amount_rial")
+  reservedAt         DateTime                   @default(now()) @map("reserved_at") @db.Timestamptz(3)
+  redeemedAt         DateTime?                  @map("redeemed_at") @db.Timestamptz(3)
+  cancelledAt        DateTime?                  @map("cancelled_at") @db.Timestamptz(3)
+  discountCode       SubscriptionDiscountCode   @relation(fields: [discountCodeId], references: [id], onDelete: Restrict)
+  organization       Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  subscription       Subscription               @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+
+  @@index([discountCodeId, status])
+  @@index([discountCodeId, organizationId, status])
+  @@map("subscription_discount_redemptions")
 }
 
 model ManualSubscriptionRenewal {

@@ -76,7 +76,14 @@ export class SubscriptionsService {
       where: { id: invoiceId },
       include: {
         organization: { select: { id: true, displayName: true, legalName: true, nationalId: true, province: true, city: true } },
-        subscription: { select: { startsAt: true, expiresAt: true, plan: { select: { code: true, nameFa: true, billingCycle: true } } } },
+        subscription: { select: {
+          startsAt: true,
+          expiresAt: true,
+          listPriceRialSnapshot: true,
+          discountRialSnapshot: true,
+          discountCodeSnapshot: true,
+          plan: { select: { code: true, nameFa: true, billingCycle: true } },
+        } },
         paymentIntent: { select: { provider: true, providerReference: true, verifiedAt: true } },
         manualRenewal: { select: { trackingNumber: true, paidAt: true } },
       },

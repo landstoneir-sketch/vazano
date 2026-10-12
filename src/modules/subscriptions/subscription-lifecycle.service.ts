@@ -36,11 +36,30 @@ export class SubscriptionLifecycleService {
   }
 
   private async markOverdueInvoices(now: Date): Promise<number> {
-    const result = await this.prisma.billingInvoice.updateMany({
+    const invoices = await this.prisma.billingInvoice.findMany({
       where: { status: 'ISSUED', dueAt: { lt: now } },
-      data: { status: 'OVERDUE' },
+      select: { id: true, subscriptionId: true },
+      take: 100,
     });
-    return result.count;
+    let updated = 0;
+    for (const invoice of invoices) {
+      const changed = await this.prisma.$transaction(async (tx) => {
+        const result = await tx.billingInvoice.updateMany({
+          where: { id: invoice.id, status: 'ISSUED' },
+          data: { status: 'OVERDUE' },
+        });
+        if (result.count !== 1) return false;
+        if (invoice.subscriptionId) {
+          await tx.subscriptionDiscountRedemption.updateMany({
+            where: { subscriptionId: invoice.subscriptionId, status: 'RESERVED' },
+            data: { status: 'CANCELLED', cancelledAt: now },
+          });
+        }
+        return true;
+      });
+      if (changed) updated += 1;
+    }
+    return updated;
   }
 
   private async processDueInAppReminders(now: Date): Promise<number> {

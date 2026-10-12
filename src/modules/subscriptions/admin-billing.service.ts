@@ -11,6 +11,8 @@ import { addBillingPeriod, buildRenewalReminderSchedule, SUBSCRIPTION_GRACE_PERI
 import { ResolvePaymentReconciliationDto } from './resolve-payment-reconciliation.dto';
 import { UpdateSubscriptionPlanDto } from './update-subscription-plan.dto';
 import { buildBillingInvoiceNumber } from './billing-invoice-policy';
+import { CreateSubscriptionDiscountDto } from './create-subscription-discount.dto';
+import { UpdateSubscriptionDiscountStatusDto } from './update-subscription-discount-status.dto';
 
 @Injectable()
 export class AdminBillingService {
@@ -22,7 +24,7 @@ export class AdminBillingService {
 
   async overview(user: AuthenticatedUser) {
     this.requireAnyPermission(user, ['billing.read', 'billing.manage']);
-    const [plans, subscriptions, payments, receipts, statusGroups, reminderGroups, reminders, suppliers, manualRenewals, invoices] = await Promise.all([
+    const [plans, subscriptions, payments, receipts, statusGroups, reminderGroups, reminders, suppliers, manualRenewals, invoices, discountCodes] = await Promise.all([
       this.prisma.subscriptionPlan.findMany({ orderBy: [{ isActive: 'desc' }, { priceRial: 'asc' }] }),
       this.prisma.subscription.findMany({
         include: {
@@ -80,6 +82,14 @@ export class AdminBillingService {
         orderBy: { issuedAt: 'desc' },
         take: 100,
       }),
+      this.prisma.subscriptionDiscountCode.findMany({
+        include: {
+          applicablePlan: { select: { id: true, code: true, nameFa: true } },
+          _count: { select: { redemptions: { where: { status: { in: ['RESERVED', 'REDEEMED'] } } } } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }),
     ]);
     const payerIds = [...new Set(payments.map((payment) => payment.payerOrganizationId).filter((id): id is string => Boolean(id)))];
     const payers = payerIds.length
@@ -98,7 +108,81 @@ export class AdminBillingService {
       suppliers,
       manualRenewals,
       invoices,
+      discountCodes,
     };
+  }
+
+  async createDiscount(user: AuthenticatedUser, input: CreateSubscriptionDiscountDto) {
+    this.requireAnyPermission(user, ['billing.manage']);
+    const code = input.code.trim().toUpperCase();
+    const validFrom = new Date(input.validFrom);
+    const validUntil = new Date(input.validUntil);
+    const minimumPurchaseRial = BigInt(input.minimumPurchaseRial);
+    const fixedAmountRial = input.fixedAmountRial === undefined ? null : BigInt(input.fixedAmountRial);
+    if (validUntil <= validFrom) throw new BadRequestException('زمان پایان اعتبار باید بعد از شروع اعتبار باشد.');
+    if (minimumPurchaseRial < 0n) throw new BadRequestException('حداقل مبلغ خرید نمی‌تواند منفی باشد.');
+    if (input.type === 'PERCENTAGE' && (input.percentageBps === undefined || fixedAmountRial !== null)) {
+      throw new BadRequestException('برای تخفیف درصدی فقط درصد تخفیف را وارد کنید.');
+    }
+    if (input.type === 'FIXED_RIAL' && (fixedAmountRial === null || fixedAmountRial <= 0n || input.percentageBps !== undefined)) {
+      throw new BadRequestException('برای تخفیف ثابت فقط مبلغ ریالی معتبر را وارد کنید.');
+    }
+    if (input.maxRedemptions !== undefined && input.maxRedemptions < input.perOrganizationLimit) {
+      throw new BadRequestException('سقف کل استفاده نمی‌تواند کمتر از سقف هر سازمان باشد.');
+    }
+    if (input.applicablePlanId) {
+      const plan = await this.prisma.subscriptionPlan.findUnique({ where: { id: input.applicablePlanId } });
+      if (!plan || plan.isTrial) throw new NotFoundException('پلن پولی انتخاب‌شده پیدا نشد.');
+    }
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const discount = await tx.subscriptionDiscountCode.create({ data: {
+          code,
+          nameFa: input.nameFa.trim(),
+          descriptionFa: input.descriptionFa?.trim() || null,
+          type: input.type,
+          percentageBps: input.type === 'PERCENTAGE' ? input.percentageBps : null,
+          fixedAmountRial: input.type === 'FIXED_RIAL' ? fixedAmountRial : null,
+          applicablePlanId: input.applicablePlanId || null,
+          minimumPurchaseRial,
+          perOrganizationLimit: input.perOrganizationLimit,
+          maxRedemptions: input.maxRedemptions ?? null,
+          validFrom,
+          validUntil,
+          isActive: input.isActive,
+        } });
+        await tx.auditLog.create({ data: {
+          actorUserId: user.id,
+          action: 'subscription_discount.create',
+          entityType: 'SubscriptionDiscountCode',
+          entityId: discount.id,
+          metadata: { code, type: input.type, applicablePlanId: input.applicablePlanId ?? null },
+        } });
+        return discount;
+      });
+    } catch (error: unknown) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('این کد تخفیف قبلاً ثبت شده است.');
+      }
+      throw error;
+    }
+  }
+
+  async updateDiscountStatus(user: AuthenticatedUser, discountId: string, input: UpdateSubscriptionDiscountStatusDto) {
+    this.requireAnyPermission(user, ['billing.manage']);
+    return this.prisma.$transaction(async (tx) => {
+      const discount = await tx.subscriptionDiscountCode.findUnique({ where: { id: discountId } });
+      if (!discount) throw new NotFoundException('کد تخفیف پیدا نشد.');
+      const updated = await tx.subscriptionDiscountCode.update({ where: { id: discount.id }, data: { isActive: input.isActive } });
+      await tx.auditLog.create({ data: {
+        actorUserId: user.id,
+        action: input.isActive ? 'subscription_discount.activate' : 'subscription_discount.deactivate',
+        entityType: 'SubscriptionDiscountCode',
+        entityId: discount.id,
+        metadata: { code: discount.code },
+      } });
+      return updated;
+    });
   }
 
   async createManualRenewal(user: AuthenticatedUser, input: CreateManualSubscriptionRenewalDto) {
@@ -139,6 +223,7 @@ export class AdminBillingService {
           expiresAt,
           graceEndsAt,
           priceRialSnapshot: amountRial,
+          listPriceRialSnapshot: amountRial,
           grantCreditSnapshot: plan.grantCredits,
           planVersionSnapshot: plan.version,
         } });

@@ -42,6 +42,6 @@ export class SubscriptionsController {
   @Post('organizations/:organizationId/checkout')
   @UseGuards(SessionGuard)
   checkout(@CurrentUser() user: AuthenticatedUser, @Param('organizationId') organizationId: string, @Body() input: StartSubscriptionCheckoutDto) {
-    return this.billing.startCheckout(user, organizationId, input.planId, input.idempotencyKey);
+    return this.billing.startCheckout(user, organizationId, input.planId, input.idempotencyKey, input.discountCode);
   }
 }
