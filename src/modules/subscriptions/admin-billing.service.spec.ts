@@ -91,3 +91,60 @@ describe('AdminBillingService renewal reminder retry', () => {
     } });
   });
 });
+
+describe('AdminBillingService manual subscription renewal', () => {
+  it('atomically activates a paid plan and records the operator and tracking number', async () => {
+    const organization = { id: 'organization-1', kind: 'SUPPLIER', status: 'ACTIVE' };
+    const plan = { id: 'plan-1', code: 'PRO', isActive: true, isTrial: false, durationIso: 'P1M', grantCredits: 20n, version: 3 };
+    const subscription = { id: 'subscription-1', organizationId: organization.id, planId: plan.id };
+    const manualRenewal = { id: 'renewal-1', subscriptionId: subscription.id, trackingNumber: 'BANK-123' };
+    let renewalInput: { data: { activatedByUserId: string; trackingNumber: string; amountRial: bigint } } | undefined;
+    let creditInput: { data: { reasonCode?: string | null } } | undefined;
+    let auditInput: { data: { action: string } } | undefined;
+    let outboxInput: { data: { eventType: string } } | undefined;
+    const tx = {
+      subscription: { findFirst: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue(subscription) },
+      manualSubscriptionRenewal: { create: jest.fn((input: { data: { activatedByUserId: string; trackingNumber: string; amountRial: bigint } }) => { renewalInput = input; return Promise.resolve(manualRenewal); }) },
+      creditWallet: { upsert: jest.fn().mockResolvedValue({ id: 'wallet-1' }) },
+      creditLedgerEntry: { create: jest.fn((input: { data: { reasonCode?: string | null } }) => { creditInput = input; return Promise.resolve({}); }) },
+      subscriptionReminder: { updateMany: jest.fn().mockResolvedValue({ count: 0 }), createMany: jest.fn().mockResolvedValue({ count: 10 }) },
+      auditLog: { create: jest.fn((input: { data: { action: string } }) => { auditInput = input; return Promise.resolve({}); }) },
+      outboxEvent: { create: jest.fn((input: { data: { eventType: string } }) => { outboxInput = input; return Promise.resolve({}); }) },
+    };
+    const prisma = {
+      manualSubscriptionRenewal: { findUnique: jest.fn().mockResolvedValue(null) },
+      organization: { findUnique: jest.fn().mockResolvedValue(organization) },
+      subscriptionPlan: { findUnique: jest.fn().mockResolvedValue(plan) },
+      $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
+    };
+    const service = new AdminBillingService(prisma as never, {} as never, {} as never);
+
+    await expect(service.createManualRenewal(financeUser, {
+      organizationId: organization.id,
+      planId: plan.id,
+      amountRial: '300000000',
+      trackingNumber: ' bank-123 ',
+      paidAt: new Date(Date.now() - 60_000).toISOString(),
+      note: 'واریز بانکی پس از بررسی سند پرداخت ثبت شد.',
+    })).resolves.toEqual({ manualRenewal, subscription });
+
+    expect(renewalInput?.data).toMatchObject({
+      activatedByUserId: financeUser.id,
+      trackingNumber: 'BANK-123',
+      amountRial: 300000000n,
+    });
+    expect(creditInput?.data.reasonCode).toBe('SUBSCRIPTION_MANUAL_RENEWAL');
+    expect(auditInput?.data.action).toBe('subscription.manual_renewal.create');
+    expect(outboxInput?.data.eventType).toBe('ir.vazano.subscription.manual_renewal_activated.v1');
+  });
+
+  it('rejects a reused tracking number before changing subscription state', async () => {
+    const prisma = { manualSubscriptionRenewal: { findUnique: jest.fn().mockResolvedValue({ id: 'existing' }) } };
+    const service = new AdminBillingService(prisma as never, {} as never, {} as never);
+
+    await expect(service.createManualRenewal(financeUser, {
+      organizationId: 'organization-1', planId: 'plan-1', amountRial: '1000', trackingNumber: 'BANK-123',
+      paidAt: new Date(Date.now() - 60_000).toISOString(), note: 'شماره پیگیری تکراری برای آزمون ثبت شد.',
+    })).rejects.toBeInstanceOf(ConflictException);
+  });
+});

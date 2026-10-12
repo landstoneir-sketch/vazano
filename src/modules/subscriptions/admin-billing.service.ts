@@ -6,6 +6,8 @@ import type { AuthenticatedUser } from '../auth/auth.types';
 import { resolvePaymentReconciliationStatus } from '../payments/payment-reconciliation-policy';
 import { PaymentsService } from '../payments/payments.service';
 import { CreateSubscriptionPlanDto } from './create-subscription-plan.dto';
+import { CreateManualSubscriptionRenewalDto } from './create-manual-subscription-renewal.dto';
+import { addBillingPeriod, buildRenewalReminderSchedule, SUBSCRIPTION_GRACE_PERIOD_DAYS } from './subscription-policies';
 import { ResolvePaymentReconciliationDto } from './resolve-payment-reconciliation.dto';
 import { UpdateSubscriptionPlanDto } from './update-subscription-plan.dto';
 
@@ -19,7 +21,7 @@ export class AdminBillingService {
 
   async overview(user: AuthenticatedUser) {
     this.requireAnyPermission(user, ['billing.read', 'billing.manage']);
-    const [plans, subscriptions, payments, receipts, statusGroups, reminderGroups, reminders] = await Promise.all([
+    const [plans, subscriptions, payments, receipts, statusGroups, reminderGroups, reminders, suppliers, manualRenewals] = await Promise.all([
       this.prisma.subscriptionPlan.findMany({ orderBy: [{ isActive: 'desc' }, { priceRial: 'asc' }] }),
       this.prisma.subscription.findMany({
         include: {
@@ -53,6 +55,20 @@ export class AdminBillingService {
         orderBy: { scheduledAt: 'desc' },
         take: 100,
       }),
+      this.prisma.organization.findMany({
+        where: { kind: 'SUPPLIER', status: 'ACTIVE' },
+        select: { id: true, displayName: true, legalName: true },
+        orderBy: { displayName: 'asc' },
+      }),
+      this.prisma.manualSubscriptionRenewal.findMany({
+        include: {
+          organization: { select: { id: true, displayName: true, legalName: true } },
+          subscription: { select: { startsAt: true, expiresAt: true, plan: { select: { code: true, nameFa: true } } } },
+          activatedBy: { select: { firstName: true, lastName: true, mobile: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }),
     ]);
     const payerIds = [...new Set(payments.map((payment) => payment.payerOrganizationId).filter((id): id is string => Boolean(id)))];
     const payers = payerIds.length
@@ -68,7 +84,107 @@ export class AdminBillingService {
       payments: payments.map((payment) => ({ ...payment, payerOrganization: payment.payerOrganizationId ? payerMap.get(payment.payerOrganizationId) ?? null : null })),
       receipts,
       reminders,
+      suppliers,
+      manualRenewals,
     };
+  }
+
+  async createManualRenewal(user: AuthenticatedUser, input: CreateManualSubscriptionRenewalDto) {
+    this.requireAnyPermission(user, ['billing.manage']);
+    const trackingNumber = input.trackingNumber.trim().toUpperCase();
+    const note = input.note.trim();
+    const amountRial = BigInt(input.amountRial);
+    const paidAt = new Date(input.paidAt);
+    if (amountRial <= 0n) throw new BadRequestException('مبلغ پرداخت دستی باید بیشتر از صفر باشد.');
+    if (paidAt.getTime() > Date.now() + 5 * 60 * 1000) throw new BadRequestException('زمان پرداخت نمی‌تواند در آینده باشد.');
+
+    const existing = await this.prisma.manualSubscriptionRenewal.findUnique({ where: { trackingNumber } });
+    if (existing) throw new ConflictException('این شماره پیگیری قبلاً برای تمدید دستی ثبت شده است.');
+    const [organization, plan] = await Promise.all([
+      this.prisma.organization.findUnique({ where: { id: input.organizationId } }),
+      this.prisma.subscriptionPlan.findUnique({ where: { id: input.planId } }),
+    ]);
+    if (!organization || organization.kind !== 'SUPPLIER' || organization.status !== 'ACTIVE') {
+      throw new NotFoundException('سازمان فروشنده فعال پیدا نشد.');
+    }
+    if (!plan || !plan.isActive || plan.isTrial) throw new NotFoundException('پلن پولی فعال پیدا نشد.');
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const activatedAt = new Date();
+        const current = await tx.subscription.findFirst({
+          where: { organizationId: organization.id, status: { in: ['ACTIVE', 'GRACE'] }, expiresAt: { gt: activatedAt } },
+          orderBy: { expiresAt: 'desc' },
+        });
+        const startsAt = current?.expiresAt ?? activatedAt;
+        const expiresAt = addBillingPeriod(startsAt, plan.durationIso);
+        const graceEndsAt = new Date(expiresAt.getTime() + SUBSCRIPTION_GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000);
+        const subscription = await tx.subscription.create({ data: {
+          organizationId: organization.id,
+          planId: plan.id,
+          status: 'ACTIVE',
+          startsAt,
+          expiresAt,
+          graceEndsAt,
+          priceRialSnapshot: amountRial,
+          grantCreditSnapshot: plan.grantCredits,
+          planVersionSnapshot: plan.version,
+        } });
+        const manualRenewal = await tx.manualSubscriptionRenewal.create({ data: {
+          organizationId: organization.id,
+          subscriptionId: subscription.id,
+          activatedByUserId: user.id,
+          trackingNumber,
+          amountRial,
+          paidAt,
+          note,
+        } });
+        const wallet = await tx.creditWallet.upsert({
+          where: { organizationId: organization.id },
+          create: { organizationId: organization.id, cachedBalanceCredits: plan.grantCredits },
+          update: { cachedBalanceCredits: { increment: plan.grantCredits } },
+        });
+        await tx.creditLedgerEntry.create({ data: {
+          walletId: wallet.id,
+          type: 'GRANT',
+          amountCredits: plan.grantCredits,
+          referenceType: 'Subscription',
+          referenceId: subscription.id,
+          idempotencyKey: `subscription:${subscription.id}:grant:v1`,
+          reasonCode: 'SUBSCRIPTION_MANUAL_RENEWAL',
+          metadata: { trackingNumber },
+        } });
+        await tx.subscriptionReminder.updateMany({
+          where: { subscription: { organizationId: organization.id }, status: 'PENDING' },
+          data: { status: 'CANCELLED', cancelledAt: activatedAt },
+        });
+        await tx.subscriptionReminder.createMany({
+          data: buildRenewalReminderSchedule(expiresAt).flatMap(({ offsetDays, scheduledAt }) =>
+            (['SMS', 'IN_APP'] as const).map((channel) => ({ subscriptionId: subscription.id, offsetDays, scheduledAt, channel }))),
+          skipDuplicates: true,
+        });
+        await tx.auditLog.create({ data: {
+          actorUserId: user.id,
+          organizationId: organization.id,
+          action: 'subscription.manual_renewal.create',
+          entityType: 'ManualSubscriptionRenewal',
+          entityId: manualRenewal.id,
+          metadata: { subscriptionId: subscription.id, planCode: plan.code, trackingNumber, amountRial: amountRial.toString(), paidAt: paidAt.toISOString(), note },
+        } });
+        await tx.outboxEvent.create({ data: {
+          aggregateType: 'Subscription',
+          aggregateId: subscription.id,
+          eventType: 'ir.vazano.subscription.manual_renewal_activated.v1',
+          payload: { subscriptionId: subscription.id, organizationId: organization.id, trackingNumber, expiresAt: expiresAt.toISOString() },
+        } });
+        return { manualRenewal, subscription };
+      });
+    } catch (error: unknown) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('این شماره پیگیری قبلاً برای تمدید دستی ثبت شده است.');
+      }
+      throw error;
+    }
   }
 
   async createPlan(user: AuthenticatedUser, input: CreateSubscriptionPlanDto) {
