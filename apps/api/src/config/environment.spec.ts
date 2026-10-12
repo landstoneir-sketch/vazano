@@ -30,4 +30,8 @@ describe('production environment validation', () => {
   it('rejects the mock payment provider in production', () => {
     expect(() => validateEnvironment({ ...productionEnvironment, PAYMENT_PROVIDER: 'mock' })).toThrow(/Mock payment provider/);
   });
+
+  it('requires every renewal template before subscription SMS is enabled', () => {
+    expect(() => validateEnvironment({ ...productionEnvironment, SUBSCRIPTION_SMS_ENABLED: 'true' })).toThrow(/SMSIR_SUBSCRIPTION_RENEWAL_14_TEMPLATE_ID/);
+  });
 });

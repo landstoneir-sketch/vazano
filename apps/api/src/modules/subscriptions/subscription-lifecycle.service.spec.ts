@@ -18,9 +18,10 @@ describe('SubscriptionLifecycleService', () => {
       },
       $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
     };
-    const service = new SubscriptionLifecycleService(prisma as never);
+    const smsReminders = { process: jest.fn().mockResolvedValue(1) };
+    const service = new SubscriptionLifecycleService(prisma as never, smsReminders as never);
 
-    await expect(service.process(new Date('2026-10-07T10:00:00.000Z'))).resolves.toEqual({ reminders: 1, enteredGrace: 1, expired: 1 });
+    await expect(service.process(new Date('2026-10-07T10:00:00.000Z'))).resolves.toEqual({ reminders: 1, smsReminders: 1, enteredGrace: 1, expired: 1 });
     expect(tx.outboxEvent.create).toHaveBeenCalledWith({
       data: {
         aggregateType: 'SubscriptionReminder',
@@ -42,9 +43,10 @@ describe('SubscriptionLifecycleService', () => {
       subscription: { findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
     };
-    const service = new SubscriptionLifecycleService(prisma as never);
+    const smsReminders = { process: jest.fn().mockResolvedValue(0) };
+    const service = new SubscriptionLifecycleService(prisma as never, smsReminders as never);
 
-    await expect(service.process()).resolves.toEqual({ reminders: 0, enteredGrace: 0, expired: 0 });
+    await expect(service.process()).resolves.toEqual({ reminders: 0, smsReminders: 0, enteredGrace: 0, expired: 0 });
     expect(tx.outboxEvent.create).not.toHaveBeenCalled();
   });
 });
