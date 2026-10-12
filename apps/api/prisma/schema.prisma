@@ -881,6 +881,7 @@ model SupplierProfile {
   organization         Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   categories           SupplierCategory[]
   serviceProvinceLinks SupplierServiceProvince[]
+  verificationDocuments Attachment[]
 
   @@index([verificationStatus, nationwideCoverage])
   @@map("supplier_profiles")
@@ -994,6 +995,7 @@ model Attachment {
   uploadedByUserId String            @map("uploaded_by_user_id")
   rfqId            String?           @map("rfq_id")
   quotationId      String?           @map("quotation_id")
+  supplierProfileId String?          @map("supplier_profile_id")
   purpose          AttachmentPurpose @default(GENERAL)
   status           AttachmentStatus  @default(PENDING_UPLOAD)
   bucket           String
@@ -1012,9 +1014,11 @@ model Attachment {
   uploadedBy       User              @relation("AttachmentUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
   rfq              Rfq?              @relation(fields: [rfqId], references: [id], onDelete: Cascade)
   quotation        Quotation?        @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  supplierProfile  SupplierProfile?  @relation(fields: [supplierProfileId], references: [id], onDelete: Cascade)
 
   @@index([rfqId, status, createdAt])
   @@index([quotationId, status, createdAt])
+  @@index([supplierProfileId, status, createdAt])
   @@index([organizationId, createdAt])
   @@index([status, createdAt])
   @@map("attachments")

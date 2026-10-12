@@ -47,6 +47,7 @@ async function cleanupTestData() {
   await prisma.securityEvent.deleteMany({
     where: { OR: [{ userId: TEST_USER_ID }, { resolvedByUserId: TEST_USER_ID }] },
   });
+  await prisma.attachment.deleteMany({ where: { uploadedByUserId: TEST_USER_ID } });
   if (rfqIds.length) {
     await prisma.contractRequest.deleteMany({ where: { rfqId: { in: rfqIds } } });
     await prisma.paymentReceipt.deleteMany({ where: { qualityControlRequestId: { in: qualityControlRequestIds } } });
@@ -145,9 +146,27 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   await page.getByRole('button', { name: 'ارسال برای بررسی' }).click();
   await expect(page.getByText('پروفایل برای بررسی وازانو ارسال شد.')).toBeVisible();
 
+  const submittedSupplierProfile = await prisma.supplierProfile.findUniqueOrThrow({ where: { organizationId: SUPPLIER_ORGANIZATION_ID } });
+  await prisma.attachment.create({ data: {
+    organizationId: SUPPLIER_ORGANIZATION_ID,
+    uploadedByUserId: TEST_USER_ID,
+    supplierProfileId: submittedSupplierProfile.id,
+    purpose: 'CERTIFICATE',
+    status: 'READY',
+    bucket: 'vazano-dev',
+    storageKey: `e2e/supplier-verification/${Date.now()}.pdf`,
+    originalName: 'مجوز-آزمایشی.pdf',
+    mimeType: 'application/pdf',
+    sizeBytes: 128,
+    uploadedAt: new Date(),
+    scannedAt: new Date(),
+    scanProvider: 'e2e-fixture',
+  } });
+
   await page.goto('/admin/suppliers');
   const supplierReviewCard = page.locator('article').filter({ hasText: 'سنگ نمونه وازانو' });
   await expect(supplierReviewCard).toContainText('پوشش: تهران');
+  await expect(supplierReviewCard).toContainText('مجوز-آزمایشی.pdf');
   await supplierReviewCard.getByRole('button', { name: 'تأیید و فعال‌سازی' }).click();
   await expect(page.getByText('فروشنده تأیید و فعال شد.')).toBeVisible();
 
