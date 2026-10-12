@@ -30,8 +30,16 @@ type PaymentReceipt = {
   subscription: null | { plan: { code: string; nameFa: string } };
   qualityControlRequest: null | { rfq: { code: string; title: string } };
 };
-type Overview = { summary: Record<string, number>; plans: Plan[]; subscriptions: Subscription[]; payments: Payment[]; receipts: PaymentReceipt[] };
-type Tab = 'plans' | 'subscriptions' | 'payments' | 'receipts';
+type SubscriptionReminder = {
+  id: string; offsetDays: number; channel: 'IN_APP' | 'SMS' | 'EMAIL'; status: 'PENDING' | 'SENT' | 'FAILED' | 'CANCELLED';
+  scheduledAt: string; sentAt: string | null; failureReason: string | null;
+  subscription: { organization: { displayName: string; legalName: string }; plan: { code: string; nameFa: string } };
+};
+type Overview = {
+  summary: Record<string, number>; reminderSummary: Record<string, number>; plans: Plan[]; subscriptions: Subscription[];
+  payments: Payment[]; receipts: PaymentReceipt[]; reminders: SubscriptionReminder[];
+};
+type Tab = 'plans' | 'subscriptions' | 'payments' | 'receipts' | 'reminders';
 type ReconciliationResult = { payment: { reconciliationStatus: Payment['reconciliationStatus'] }; provider: { success: boolean; code: number; referenceId: string | null } };
 
 type PlanDraft = {
@@ -148,11 +156,12 @@ export function BillingManager() {
   return <div className="stack">
     {error && <div className="message message-error">{error}</div>}{message && <div className="message message-success">{message}</div>}
     <div className="dashboard-grid">{statusCards.map(([status, label]) => <article className="card billing-summary-card" key={status}><span>{label}</span><strong>{(overview?.summary[status] ?? 0).toLocaleString('fa-IR')}</strong></article>)}</div>
-    <div className="tab-list" role="tablist" aria-label="بخش مالی"><button className={tab === 'plans' ? 'tab-active' : ''} type="button" onClick={() => setTab('plans')}>پلن‌ها</button><button className={tab === 'subscriptions' ? 'tab-active' : ''} type="button" onClick={() => setTab('subscriptions')}>اشتراک‌ها</button><button className={tab === 'payments' ? 'tab-active' : ''} type="button" onClick={() => setTab('payments')}>پرداخت‌ها</button><button className={tab === 'receipts' ? 'tab-active' : ''} type="button" onClick={() => setTab('receipts')}>رسیدها</button></div>
+    <div className="tab-list" role="tablist" aria-label="بخش مالی"><button className={tab === 'plans' ? 'tab-active' : ''} type="button" onClick={() => setTab('plans')}>پلن‌ها</button><button className={tab === 'subscriptions' ? 'tab-active' : ''} type="button" onClick={() => setTab('subscriptions')}>اشتراک‌ها</button><button className={tab === 'payments' ? 'tab-active' : ''} type="button" onClick={() => setTab('payments')}>پرداخت‌ها</button><button className={tab === 'receipts' ? 'tab-active' : ''} type="button" onClick={() => setTab('receipts')}>رسیدها</button><button className={tab === 'reminders' ? 'tab-active' : ''} type="button" onClick={() => setTab('reminders')}>اخطارهای تمدید</button></div>
     {tab === 'plans' && overview && <section className="card stack"><div className="admin-card-title"><div><h2>مدیریت پلن‌ها</h2><p>قیمت را به تومان وارد کنید؛ مبلغ در دیتابیس با واحد ریال و به‌صورت عدد صحیح ذخیره می‌شود.</p></div><button className="button button-secondary" type="button" onClick={() => { setDraft(emptyPlan); setError(''); setMessage(''); }}>پلن جدید</button></div><div className="content-item-list">{overview.plans.map((plan) => <button className={draft.id === plan.id ? 'content-item-active' : ''} type="button" key={plan.id} onClick={() => { setDraft(fromPlan(plan)); setError(''); setMessage(''); }}><strong>{plan.nameFa}</strong><span>{formatToman(plan.priceRial)} · {plan.isActive ? 'فعال' : 'غیرفعال'}</span></button>)}</div><PlanForm draft={draft} setDraft={setDraft} busy={busy} onSubmit={savePlan} /></section>}
     {tab === 'subscriptions' && overview && <SubscriptionList items={overview.subscriptions} />}
     {tab === 'payments' && overview && <PaymentList items={overview.payments} reconcilingId={reconcilingPaymentId} resolvingId={resolvingPaymentId} onReconcile={reconcilePayment} onResolve={resolvePayment} />}
     {tab === 'receipts' && overview && <ReceiptList items={overview.receipts} />}
+    {tab === 'reminders' && overview && <ReminderList items={overview.reminders} summary={overview.reminderSummary} />}
   </div>;
 }
 
@@ -194,8 +203,20 @@ function ReceiptList({ items }: { items: PaymentReceipt[] }) {
   return <section className="stack"><h2>رسیدهای قطعی پرداخت</h2>{items.length === 0 && <div className="card">هنوز رسید پرداختی صادر نشده است.</div>}{items.map((item) => <article className="card admin-card-title" key={item.id}><div><div className="eyebrow">{item.receiptNumber}</div><h3>{item.organization.displayName || item.organization.legalName}</h3><p>{item.subscription?.plan.nameFa ?? (item.qualityControlRequest ? `کنترل کیفیت ${item.qualityControlRequest.rfq.code}` : 'خدمت وازانو')} · {formatToman(item.amountRial)} · بدون مالیات</p></div><div><span className="status-badge status-active">پرداخت‌شده</span><p>{new Date(item.paidAt).toLocaleString('fa-IR')}</p>{item.providerReference && <p>پیگیری: {item.providerReference}</p>}<Link className="button button-secondary" href={`/dashboard/receipts/${item.id}` as Route}>مشاهده و چاپ</Link></div></article>)}</section>;
 }
 
+function ReminderList({ items, summary }: { items: SubscriptionReminder[]; summary: Record<string, number> }) {
+  const cards = [
+    ['SMS:PENDING', 'پیامک در انتظار'],
+    ['SMS:SENT', 'پیامک ارسال‌شده'],
+    ['SMS:FAILED', 'پیامک ناموفق'],
+    ['IN_APP:SENT', 'اعلان داخل پنل'],
+  ] as const;
+  return <section className="stack"><div><h2>اخطارهای تمدید اشتراک</h2><p className="muted">وضعیت اجرای سیاست ۱۴، ۷ و ۳ روز پیش از پایان، روز انقضا و پایان مهلت تنفس.</p></div><div className="dashboard-grid">{cards.map(([key, label]) => <article className="card billing-summary-card" key={key}><span>{label}</span><strong>{(summary[key] ?? 0).toLocaleString('fa-IR')}</strong></article>)}</div>{items.length === 0 && <div className="card">هنوز اخطار تمدیدی ایجاد نشده است.</div>}{items.map((item) => <article className="card admin-card-title" key={item.id}><div><div className="eyebrow">{item.channel === 'SMS' ? 'پیامک' : item.channel === 'IN_APP' ? 'اعلان داخل پنل' : 'ایمیل'} · {reminderOffsetLabel(item.offsetDays)}</div><h3>{item.subscription.organization.displayName || item.subscription.organization.legalName}</h3><p>{item.subscription.plan.nameFa} · زمان برنامه‌ریزی: {new Date(item.scheduledAt).toLocaleString('fa-IR')}</p>{item.failureReason && <p className="message message-error">علت ناموفق: {item.failureReason}</p>}</div><div><span className={`status-badge ${statusClass(item.status)}`}>{reminderStatusLabel(item.status)}</span>{item.sentAt && <p>ارسال: {new Date(item.sentAt).toLocaleString('fa-IR')}</p>}</div></article>)}</section>;
+}
+
 function statusClass(status: string): string { return ['ACTIVE', 'SUCCEEDED', 'VERIFIED'].includes(status) ? 'status-active' : ['FAILED', 'SUSPENDED', 'EXPIRED'].includes(status) ? 'status-suspended' : 'severity-medium'; }
 function subscriptionStatusLabel(status: string): string { return ({ DRAFT: 'پیش‌نویس', ACTIVE: 'فعال', GRACE: 'مهلت تنفس', EXPIRED: 'منقضی', SUSPENDED: 'تعلیق‌شده', CANCELLED: 'لغوشده' } as Record<string, string>)[status] ?? status; }
 function paymentStatusLabel(status: string): string { return ({ CREATED: 'ایجادشده', REDIRECT_PENDING: 'در انتظار بازگشت از درگاه', VERIFY_PENDING: 'در حال تأیید', SUCCEEDED: 'موفق', FAILED: 'ناموفق', CANCELLED: 'لغوشده' } as Record<string, string>)[status] ?? status; }
 function reconciliationStatusLabel(status: Payment['reconciliationStatus']): string { return ({ NOT_CHECKED: 'بررسی‌نشده', MATCHED: 'منطبق', ACTION_REQUIRED: 'نیازمند اقدام', PROVIDER_UNCONFIRMED: 'تأییدنشده در درگاه' } as const)[status]; }
 function resolutionLabel(resolution: PaymentResolution | null): string { return resolution ? ({ CUSTOMER_RETRY_REQUIRED: 'پرداخت مجدد مشتری', PROVIDER_SUPPORT_REQUIRED: 'پیگیری با درگاه', REFUND_REVIEW_REQUIRED: 'بررسی استرداد', NO_FINANCIAL_ACTION: 'بدون اقدام مالی' } as const)[resolution] : 'ثبت‌نشده'; }
+function reminderStatusLabel(status: SubscriptionReminder['status']): string { return ({ PENDING: 'در انتظار', SENT: 'ارسال‌شده', FAILED: 'ناموفق', CANCELLED: 'لغوشده' } as const)[status]; }
+function reminderOffsetLabel(offsetDays: number): string { return offsetDays < 0 ? `${Math.abs(offsetDays).toLocaleString('fa-IR')} روز پیش از انقضا` : offsetDays === 0 ? 'روز انقضا' : `${offsetDays.toLocaleString('fa-IR')} روز پس از انقضا`; }
