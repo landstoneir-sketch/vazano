@@ -21,10 +21,11 @@ RUN npm run prisma:generate && npm run build
 FROM builder AS production-dependencies
 RUN npm prune --omit=dev
 
-FROM builder AS migration-runner
+FROM dependencies AS migration-runner
 WORKDIR /app
 ENV NODE_ENV=production
-RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 vazano && chown -R vazano:nodejs /app
+RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 vazano
+COPY --chown=vazano:nodejs apps/api/prisma ./apps/api/prisma
 USER vazano
 CMD ["npm", "run", "prisma:deploy"]
 

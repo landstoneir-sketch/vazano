@@ -71,6 +71,14 @@ jobs:
       - name: Build migration runtime image
         run: docker build --target migration-runner --tag vazano-migration:${{ github.sha }} .
 
+      - name: Verify runtime security defaults
+        run: |
+          test "$(docker image inspect vazano-web:${{ github.sha }} --format '{{.Config.User}}')" = "nextjs"
+          test "$(docker image inspect vazano-api:${{ github.sha }} --format '{{.Config.User}}')" = "vazano"
+          test "$(docker image inspect vazano-migration:${{ github.sha }} --format '{{.Config.User}}')" = "vazano"
+          test "$(docker image inspect vazano-web:${{ github.sha }} --format '{{json .Config.Healthcheck}}')" != "null"
+          test "$(docker image inspect vazano-api:${{ github.sha }} --format '{{json .Config.Healthcheck}}')" != "null"
+
   e2e:
     needs: quality
     runs-on: ubuntu-latest
