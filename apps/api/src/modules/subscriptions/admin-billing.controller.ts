@@ -40,4 +40,9 @@ export class AdminBillingController {
   ) {
     return this.billing.resolvePaymentReconciliation(user, paymentId, input);
   }
+
+  @Post('reminders/:reminderId/retry')
+  retryReminder(@CurrentUser() user: AuthenticatedUser, @Param('reminderId') reminderId: string) {
+    return this.billing.retryReminder(user, reminderId);
+  }
 }

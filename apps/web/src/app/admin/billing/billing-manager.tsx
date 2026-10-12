@@ -81,6 +81,7 @@ export function BillingManager() {
   const [busy, setBusy] = useState(false);
   const [reconcilingPaymentId, setReconcilingPaymentId] = useState('');
   const [resolvingPaymentId, setResolvingPaymentId] = useState('');
+  const [retryingReminderId, setRetryingReminderId] = useState('');
 
   const load = useCallback(async () => {
     setError('');
@@ -151,6 +152,16 @@ export function BillingManager() {
     finally { setResolvingPaymentId(''); }
   }
 
+  async function retryReminder(reminder: SubscriptionReminder) {
+    setRetryingReminderId(reminder.id); setError(''); setMessage('');
+    try {
+      await apiRequest(`/admin/billing/reminders/${reminder.id}/retry`, { method: 'POST' });
+      setMessage('پیامک ناموفق دوباره در صف قرار گرفت و در ساعت مجاز پردازش می‌شود.');
+      await load();
+    } catch (reason: unknown) { setError(reason instanceof Error ? reason.message : 'قرار دادن مجدد پیامک در صف انجام نشد.'); }
+    finally { setRetryingReminderId(''); }
+  }
+
   if (!overview && !error) return <div className="card">در حال دریافت اطلاعات اشتراک و پرداخت…</div>;
 
   return <div className="stack">
@@ -161,7 +172,7 @@ export function BillingManager() {
     {tab === 'subscriptions' && overview && <SubscriptionList items={overview.subscriptions} />}
     {tab === 'payments' && overview && <PaymentList items={overview.payments} reconcilingId={reconcilingPaymentId} resolvingId={resolvingPaymentId} onReconcile={reconcilePayment} onResolve={resolvePayment} />}
     {tab === 'receipts' && overview && <ReceiptList items={overview.receipts} />}
-    {tab === 'reminders' && overview && <ReminderList items={overview.reminders} summary={overview.reminderSummary} />}
+    {tab === 'reminders' && overview && <ReminderList items={overview.reminders} summary={overview.reminderSummary} retryingId={retryingReminderId} onRetry={retryReminder} />}
   </div>;
 }
 
@@ -203,14 +214,14 @@ function ReceiptList({ items }: { items: PaymentReceipt[] }) {
   return <section className="stack"><h2>رسیدهای قطعی پرداخت</h2>{items.length === 0 && <div className="card">هنوز رسید پرداختی صادر نشده است.</div>}{items.map((item) => <article className="card admin-card-title" key={item.id}><div><div className="eyebrow">{item.receiptNumber}</div><h3>{item.organization.displayName || item.organization.legalName}</h3><p>{item.subscription?.plan.nameFa ?? (item.qualityControlRequest ? `کنترل کیفیت ${item.qualityControlRequest.rfq.code}` : 'خدمت وازانو')} · {formatToman(item.amountRial)} · بدون مالیات</p></div><div><span className="status-badge status-active">پرداخت‌شده</span><p>{new Date(item.paidAt).toLocaleString('fa-IR')}</p>{item.providerReference && <p>پیگیری: {item.providerReference}</p>}<Link className="button button-secondary" href={`/dashboard/receipts/${item.id}` as Route}>مشاهده و چاپ</Link></div></article>)}</section>;
 }
 
-function ReminderList({ items, summary }: { items: SubscriptionReminder[]; summary: Record<string, number> }) {
+function ReminderList({ items, summary, retryingId, onRetry }: { items: SubscriptionReminder[]; summary: Record<string, number>; retryingId: string; onRetry: (reminder: SubscriptionReminder) => Promise<void> }) {
   const cards = [
     ['SMS:PENDING', 'پیامک در انتظار'],
     ['SMS:SENT', 'پیامک ارسال‌شده'],
     ['SMS:FAILED', 'پیامک ناموفق'],
     ['IN_APP:SENT', 'اعلان داخل پنل'],
   ] as const;
-  return <section className="stack"><div><h2>اخطارهای تمدید اشتراک</h2><p className="muted">وضعیت اجرای سیاست ۱۴، ۷ و ۳ روز پیش از پایان، روز انقضا و پایان مهلت تنفس.</p></div><div className="dashboard-grid">{cards.map(([key, label]) => <article className="card billing-summary-card" key={key}><span>{label}</span><strong>{(summary[key] ?? 0).toLocaleString('fa-IR')}</strong></article>)}</div>{items.length === 0 && <div className="card">هنوز اخطار تمدیدی ایجاد نشده است.</div>}{items.map((item) => <article className="card admin-card-title" key={item.id}><div><div className="eyebrow">{item.channel === 'SMS' ? 'پیامک' : item.channel === 'IN_APP' ? 'اعلان داخل پنل' : 'ایمیل'} · {reminderOffsetLabel(item.offsetDays)}</div><h3>{item.subscription.organization.displayName || item.subscription.organization.legalName}</h3><p>{item.subscription.plan.nameFa} · زمان برنامه‌ریزی: {new Date(item.scheduledAt).toLocaleString('fa-IR')}</p>{item.failureReason && <p className="message message-error">علت ناموفق: {item.failureReason}</p>}</div><div><span className={`status-badge ${statusClass(item.status)}`}>{reminderStatusLabel(item.status)}</span>{item.sentAt && <p>ارسال: {new Date(item.sentAt).toLocaleString('fa-IR')}</p>}</div></article>)}</section>;
+  return <section className="stack"><div><h2>اخطارهای تمدید اشتراک</h2><p className="muted">وضعیت اجرای سیاست ۱۴، ۷ و ۳ روز پیش از پایان، روز انقضا و پایان مهلت تنفس.</p></div><div className="dashboard-grid">{cards.map(([key, label]) => <article className="card billing-summary-card" key={key}><span>{label}</span><strong>{(summary[key] ?? 0).toLocaleString('fa-IR')}</strong></article>)}</div>{items.length === 0 && <div className="card">هنوز اخطار تمدیدی ایجاد نشده است.</div>}{items.map((item) => <article className="card admin-card-title" key={item.id}><div><div className="eyebrow">{item.channel === 'SMS' ? 'پیامک' : item.channel === 'IN_APP' ? 'اعلان داخل پنل' : 'ایمیل'} · {reminderOffsetLabel(item.offsetDays)}</div><h3>{item.subscription.organization.displayName || item.subscription.organization.legalName}</h3><p>{item.subscription.plan.nameFa} · زمان برنامه‌ریزی: {new Date(item.scheduledAt).toLocaleString('fa-IR')}</p>{item.failureReason && <p className="message message-error">علت ناموفق: {item.failureReason}</p>}</div><div><span className={`status-badge ${statusClass(item.status)}`}>{reminderStatusLabel(item.status)}</span>{item.sentAt && <p>ارسال: {new Date(item.sentAt).toLocaleString('fa-IR')}</p>}{item.channel === 'SMS' && item.status === 'FAILED' && <button className="button button-secondary" type="button" disabled={Boolean(retryingId)} onClick={() => void onRetry(item)}>{retryingId === item.id ? 'در حال ثبت…' : 'ارسال مجدد در ساعت مجاز'}</button>}</div></article>)}</section>;
 }
 
 function statusClass(status: string): string { return ['ACTIVE', 'SUCCEEDED', 'VERIFIED'].includes(status) ? 'status-active' : ['FAILED', 'SUSPENDED', 'EXPIRED'].includes(status) ? 'status-suspended' : 'severity-medium'; }
