@@ -5,6 +5,7 @@ import { SessionGuard } from '../auth/session.guard';
 import { SubscriptionsService } from './subscriptions.service';
 import { SubscriptionBillingService } from './subscription-billing.service';
 import { StartSubscriptionCheckoutDto } from './start-subscription-checkout.dto';
+import { PreviewSubscriptionDiscountDto } from './preview-subscription-discount.dto';
 
 @Controller('subscriptions')
 export class SubscriptionsController {
@@ -43,5 +44,11 @@ export class SubscriptionsController {
   @UseGuards(SessionGuard)
   checkout(@CurrentUser() user: AuthenticatedUser, @Param('organizationId') organizationId: string, @Body() input: StartSubscriptionCheckoutDto) {
     return this.billing.startCheckout(user, organizationId, input.planId, input.idempotencyKey, input.discountCode);
+  }
+
+  @Post('organizations/:organizationId/discount-preview')
+  @UseGuards(SessionGuard)
+  previewDiscount(@CurrentUser() user: AuthenticatedUser, @Param('organizationId') organizationId: string, @Body() input: PreviewSubscriptionDiscountDto) {
+    return this.billing.previewDiscount(user, organizationId, input.planId, input.discountCode);
   }
 }
