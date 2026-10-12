@@ -17,6 +17,25 @@ export class SubscriptionBillingService {
     private readonly config: ConfigService,
   ) {}
 
+  async previewDiscount(user: AuthenticatedUser, organizationId: string, planId: string, discountCode: string) {
+    const membership = user.memberships.find((item) => item.organizationId === organizationId);
+    const canManage = membership?.role === 'SUPPLIER_OWNER' || user.permissions.includes('subscription.manage');
+    if (!canManage) throw new ForbiddenException('مجوز خرید اشتراک برای این سازمان را ندارید.');
+    const [organization, plan] = await Promise.all([
+      this.prisma.organization.findUnique({ where: { id: organizationId } }),
+      this.prisma.subscriptionPlan.findFirst({ where: { id: planId, isActive: true, isPublic: true } }),
+    ]);
+    if (!organization || organization.kind !== 'SUPPLIER' || organization.status !== 'ACTIVE') throw new NotFoundException('سازمان فروشنده فعال پیدا نشد.');
+    if (!plan || plan.isTrial) throw new NotFoundException('پلن پولی معتبر پیدا نشد.');
+    const discount = await this.prisma.$transaction((tx) => this.resolveDiscount(tx, discountCode.trim().toUpperCase(), organizationId, plan));
+    return {
+      code: discount.code,
+      listPriceRial: plan.priceRial,
+      discountRial: discount.amountRial,
+      payableRial: plan.priceRial - discount.amountRial,
+    };
+  }
+
   async startCheckout(user: AuthenticatedUser, organizationId: string, planId: string, idempotencyKey: string, discountCode?: string) {
     const membership = user.memberships.find((item) => item.organizationId === organizationId);
     const canManage = membership?.role === 'SUPPLIER_OWNER' || user.permissions.includes('subscription.manage');

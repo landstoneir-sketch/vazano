@@ -12,6 +12,7 @@ This module owns seller plan purchase, payment activation, credits, renewal sche
 - Trial plans have a configurable 1–90 day duration, cost zero, no grace period, and can be activated only once per supplier organization. Trial reminders run at -7, -3, -1, and 0 days with dedicated provider templates.
 - `/v1/admin/billing/overview` gives finance users a unified view of plans, recent subscriptions, payments, and lifecycle counts.
 - Finance users can create plan-scoped or general subscription discount codes with validity windows, total and per-organization limits. Checkout calculates the payable amount only on the backend and reserves redemption until payment is verified.
+- Supplier owners can preview an eligible discount before checkout; preview never reserves capacity and checkout always revalidates the code atomically.
 - Plan creation and editing require `billing.manage`; historical subscriptions keep price, credit, and plan-version snapshots.
 - Stable plan code, billing cycle, and duration are immutable after creation. A materially different commercial offer must be created as a new plan.
 - Supplier owners start an idempotent checkout from `/supplier/subscription`; provider SDK details remain behind the payment adapter.
