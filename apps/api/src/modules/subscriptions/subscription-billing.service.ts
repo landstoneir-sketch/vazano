@@ -1,9 +1,10 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { SubscriptionPlan } from '@prisma/client';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { PaymentsService } from '../payments/payments.service';
 import { PrismaService } from '../../shared/prisma/prisma.service';
-import { addBillingPeriod, buildRenewalReminderSchedule, SUBSCRIPTION_GRACE_PERIOD_DAYS } from './subscription-policies';
+import { addBillingPeriod, buildRenewalReminderSchedule, buildTrialReminderSchedule, SUBSCRIPTION_GRACE_PERIOD_DAYS } from './subscription-policies';
 import { buildPaymentReceiptSnapshot } from './payment-receipt-policy';
 
 @Injectable()
@@ -25,8 +26,19 @@ export class SubscriptionBillingService {
     if (!organization || organization.kind !== 'SUPPLIER') throw new NotFoundException('سازمان فروشنده پیدا نشد.');
     if (organization.status !== 'ACTIVE') throw new ConflictException('خرید اشتراک پس از تأیید فروشنده فعال می‌شود.');
     if (!plan) throw new NotFoundException('پلن اشتراک معتبر نیست.');
+    const [existingIntent, existingTrialRequest] = await Promise.all([
+      this.prisma.paymentIntent.findUnique({ where: { idempotencyKey } }),
+      this.prisma.subscription.findUnique({ where: { trialActivationKey: idempotencyKey } }),
+    ]);
+    if (plan.isTrial) {
+      if (existingIntent) throw new ConflictException('کلید تکرارپذیری برای یک پرداخت استفاده شده است.');
+      if (existingTrialRequest && (existingTrialRequest.organizationId !== organizationId || existingTrialRequest.planId !== plan.id || !existingTrialRequest.isTrialSnapshot)) {
+        throw new ConflictException('کلید تکرارپذیری برای درخواست دیگری استفاده شده است.');
+      }
+      return this.activateTrial(user, organizationId, plan, idempotencyKey);
+    }
+    if (existingTrialRequest) throw new ConflictException('کلید تکرارپذیری برای یک دوره آزمایشی استفاده شده است.');
 
-    const existingIntent = await this.prisma.paymentIntent.findUnique({ where: { idempotencyKey } });
     if (existingIntent && (existingIntent.purpose !== 'SUBSCRIPTION' || existingIntent.payerOrganizationId !== organizationId || existingIntent.amountRial !== plan.priceRial)) {
       throw new ConflictException('کلید تکرارپذیری برای درخواست دیگری استفاده شده است.');
     }
@@ -121,5 +133,89 @@ export class SubscriptionBillingService {
 
   private publicApiUrl(): string {
     return (this.config.get<string>('PUBLIC_API_URL') ?? 'http://localhost:3001').replace(/\/$/, '');
+  }
+
+  private async activateTrial(user: AuthenticatedUser, organizationId: string, plan: SubscriptionPlan, idempotencyKey: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const existingRequest = await tx.subscription.findUnique({ where: { trialActivationKey: idempotencyKey } });
+      if (existingRequest) {
+        if (existingRequest.organizationId !== organizationId || existingRequest.planId !== plan.id || !existingRequest.isTrialSnapshot) {
+          throw new ConflictException('کلید تکرارپذیری برای درخواست دیگری استفاده شده است.');
+        }
+        return { trialActivated: true as const, subscriptionId: existingRequest.id, startsAt: existingRequest.startsAt, expiresAt: existingRequest.expiresAt };
+      }
+
+      const current = await tx.subscription.findFirst({
+        where: { organizationId, status: { in: ['ACTIVE', 'GRACE'] }, expiresAt: { gt: new Date() } },
+        select: { id: true },
+      });
+      if (current) throw new ConflictException('برای حساب دارای اشتراک فعال، دوره آزمایشی قابل استفاده نیست.');
+
+      const activatedAt = new Date();
+      const claim = await tx.organization.updateMany({
+        where: { id: organizationId, subscriptionTrialRedeemedAt: null },
+        data: { subscriptionTrialRedeemedAt: activatedAt },
+      });
+      if (claim.count !== 1) {
+        const completed = await tx.subscription.findUnique({ where: { trialActivationKey: idempotencyKey } });
+        if (completed?.organizationId === organizationId && completed.planId === plan.id && completed.isTrialSnapshot) {
+          return { trialActivated: true as const, subscriptionId: completed.id, startsAt: completed.startsAt, expiresAt: completed.expiresAt };
+        }
+        throw new ConflictException('دوره آزمایشی این حساب قبلاً استفاده شده است.');
+      }
+
+      const expiresAt = addBillingPeriod(activatedAt, plan.durationIso);
+      const subscription = await tx.subscription.create({ data: {
+        organizationId,
+        planId: plan.id,
+        status: 'ACTIVE',
+        startsAt: activatedAt,
+        expiresAt,
+        graceEndsAt: expiresAt,
+        priceRialSnapshot: 0n,
+        grantCreditSnapshot: plan.grantCredits,
+        planVersionSnapshot: plan.version,
+        isTrialSnapshot: true,
+        trialActivationKey: idempotencyKey,
+      } });
+      const wallet = await tx.creditWallet.upsert({
+        where: { organizationId },
+        create: { organizationId, cachedBalanceCredits: plan.grantCredits },
+        update: { cachedBalanceCredits: { increment: plan.grantCredits } },
+      });
+      await tx.creditLedgerEntry.create({ data: {
+        walletId: wallet.id,
+        type: 'GRANT',
+        amountCredits: plan.grantCredits,
+        referenceType: 'Subscription',
+        referenceId: subscription.id,
+        idempotencyKey: `subscription:${subscription.id}:grant:v1`,
+        reasonCode: 'SUBSCRIPTION_TRIAL_ACTIVATED',
+      } });
+      await tx.subscriptionReminder.updateMany({
+        where: { subscription: { organizationId }, status: 'PENDING' },
+        data: { status: 'CANCELLED', cancelledAt: activatedAt },
+      });
+      await tx.subscriptionReminder.createMany({
+        data: buildTrialReminderSchedule(expiresAt).flatMap(({ offsetDays, scheduledAt }) =>
+          (['SMS', 'IN_APP'] as const).map((channel) => ({ subscriptionId: subscription.id, offsetDays, scheduledAt, channel }))),
+        skipDuplicates: true,
+      });
+      await tx.auditLog.create({ data: {
+        actorUserId: user.id,
+        organizationId,
+        action: 'subscription.trial.activate',
+        entityType: 'Subscription',
+        entityId: subscription.id,
+        metadata: { planCode: plan.code, durationIso: plan.durationIso },
+      } });
+      await tx.outboxEvent.create({ data: {
+        aggregateType: 'Subscription',
+        aggregateId: subscription.id,
+        eventType: 'ir.vazano.subscription.trial_activated.v1',
+        payload: { subscriptionId: subscription.id, organizationId, expiresAt: expiresAt.toISOString() },
+      } });
+      return { trialActivated: true as const, subscriptionId: subscription.id, startsAt: activatedAt, expiresAt };
+    });
   }
 }

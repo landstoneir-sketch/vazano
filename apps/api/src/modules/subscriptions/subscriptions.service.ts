@@ -22,6 +22,7 @@ export class SubscriptionsService {
         dailyProposalLimit: true,
         maxProposalLimit: true,
         taxIncluded: true,
+        isTrial: true,
         entitlements: true,
         version: true,
       },

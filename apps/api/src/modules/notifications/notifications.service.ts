@@ -23,6 +23,10 @@ const SUPPORTED_EVENT_TYPES = [
   'ir.vazano.subscription.renewal.3_days_before.v1',
   'ir.vazano.subscription.renewal.expired.v1',
   'ir.vazano.subscription.renewal.grace_ended.v1',
+  'ir.vazano.subscription.trial.7_days_before.v1',
+  'ir.vazano.subscription.trial.3_days_before.v1',
+  'ir.vazano.subscription.trial.1_day_before.v1',
+  'ir.vazano.subscription.trial.expired.v1',
   'ir.vazano.payment.retry_requested.v1',
 ] as const;
 
@@ -474,7 +478,11 @@ export class NotificationsService {
       case 'ir.vazano.subscription.renewal.7_days_before.v1':
       case 'ir.vazano.subscription.renewal.3_days_before.v1':
       case 'ir.vazano.subscription.renewal.expired.v1':
-      case 'ir.vazano.subscription.renewal.grace_ended.v1': {
+      case 'ir.vazano.subscription.renewal.grace_ended.v1':
+      case 'ir.vazano.subscription.trial.7_days_before.v1':
+      case 'ir.vazano.subscription.trial.3_days_before.v1':
+      case 'ir.vazano.subscription.trial.1_day_before.v1':
+      case 'ir.vazano.subscription.trial.expired.v1': {
         const reminder = await tx.subscriptionReminder.findUnique({
           where: { id: event.aggregateId },
           select: {

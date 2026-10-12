@@ -9,12 +9,12 @@ describe('SubscriptionLifecycleService', () => {
     };
     const prisma = {
       subscriptionReminder: {
-        findMany: jest.fn().mockResolvedValue([{ id: 'reminder-1', subscriptionId: 'subscription-1', offsetDays: -7 }]),
+        findMany: jest.fn().mockResolvedValue([{ id: 'reminder-1', subscriptionId: 'subscription-1', offsetDays: -7, subscription: { isTrialSnapshot: false } }]),
       },
       subscription: {
         findMany: jest.fn()
           .mockResolvedValueOnce([{ id: 'subscription-2', organizationId: 'supplier-1' }])
-          .mockResolvedValueOnce([{ id: 'subscription-3', organizationId: 'supplier-2' }]),
+          .mockResolvedValueOnce([{ id: 'subscription-3', organizationId: 'supplier-2', status: 'GRACE' }]),
       },
       $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
     };
@@ -39,7 +39,7 @@ describe('SubscriptionLifecycleService', () => {
       outboxEvent: { create: jest.fn() },
     };
     const prisma = {
-      subscriptionReminder: { findMany: jest.fn().mockResolvedValue([{ id: 'reminder-1', subscriptionId: 'subscription-1', offsetDays: -3 }]) },
+      subscriptionReminder: { findMany: jest.fn().mockResolvedValue([{ id: 'reminder-1', subscriptionId: 'subscription-1', offsetDays: -3, subscription: { isTrialSnapshot: false } }]) },
       subscription: { findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
     };

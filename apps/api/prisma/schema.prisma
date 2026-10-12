@@ -428,6 +428,7 @@ model Organization {
   province                 String?
   city                     String?
   status                   OrganizationStatus   @default(PENDING)
+  subscriptionTrialRedeemedAt DateTime?         @map("subscription_trial_redeemed_at") @db.Timestamptz(3)
   createdAt                DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
   members                  OrganizationMember[]
@@ -1134,6 +1135,7 @@ model SubscriptionPlan {
   dailyProposalLimit Int            @default(2) @map("daily_proposal_limit")
   maxProposalLimit   Int            @default(6) @map("max_proposal_limit")
   taxIncluded        Boolean        @default(false) @map("tax_included")
+  isTrial            Boolean        @default(false) @map("is_trial")
   isPublic           Boolean        @default(true) @map("is_public")
   isActive           Boolean        @default(true) @map("is_active")
   version            Int            @default(1)
@@ -1159,6 +1161,8 @@ model Subscription {
   priceRialSnapshot   BigInt                 @map("price_rial_snapshot")
   grantCreditSnapshot BigInt                 @map("grant_credit_snapshot")
   planVersionSnapshot Int                    @map("plan_version_snapshot")
+  isTrialSnapshot     Boolean                @default(false) @map("is_trial_snapshot")
+  trialActivationKey  String?                @unique @map("trial_activation_key")
   createdAt           DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
   organization        Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)

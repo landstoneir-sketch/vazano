@@ -11,6 +11,13 @@ const SMS_TEMPLATE_BY_OFFSET: Readonly<Record<number, SmsTemplateCode>> = {
   [7]: 'SUBSCRIPTION_GRACE_ENDED',
 };
 
+const TRIAL_SMS_TEMPLATE_BY_OFFSET: Readonly<Record<number, SmsTemplateCode>> = {
+  [-7]: 'SUBSCRIPTION_TRIAL_7_DAYS',
+  [-3]: 'SUBSCRIPTION_TRIAL_3_DAYS',
+  [-1]: 'SUBSCRIPTION_TRIAL_1_DAY',
+  [0]: 'SUBSCRIPTION_TRIAL_ENDED',
+};
+
 @Injectable()
 export class SubscriptionSmsReminderService {
   constructor(
@@ -39,6 +46,7 @@ export class SubscriptionSmsReminderService {
             expiresAt: true,
             graceEndsAt: true,
             priceRialSnapshot: true,
+            isTrialSnapshot: true,
             organization: {
               select: {
                 members: {
@@ -61,7 +69,7 @@ export class SubscriptionSmsReminderService {
     for (const reminder of reminders) {
       if (processedSubscriptions.has(reminder.subscriptionId)) continue;
       processedSubscriptions.add(reminder.subscriptionId);
-      const templateCode = SMS_TEMPLATE_BY_OFFSET[reminder.offsetDays];
+      const templateCode = (reminder.subscription.isTrialSnapshot ? TRIAL_SMS_TEMPLATE_BY_OFFSET : SMS_TEMPLATE_BY_OFFSET)[reminder.offsetDays];
       const mobile = reminder.subscription.organization.members[0]?.user.mobile;
       if (!templateCode || !mobile) {
         await this.failReminder(reminder.id, templateCode ? 'RECIPIENT_NOT_FOUND' : 'TEMPLATE_NOT_SUPPORTED');
@@ -125,6 +133,9 @@ export class SubscriptionSmsReminderService {
     }
     if (templateCode === 'SUBSCRIPTION_RENEWAL_7_DAYS') return [{ name: 'Date', value: expiryDate }, { name: 'Link', value: link }];
     if (templateCode === 'SUBSCRIPTION_EXPIRED') return [{ name: 'Date', value: this.formatDate(subscription.graceEndsAt) }, { name: 'Link', value: link }];
+    if (['SUBSCRIPTION_TRIAL_7_DAYS', 'SUBSCRIPTION_TRIAL_3_DAYS', 'SUBSCRIPTION_TRIAL_1_DAY'].includes(templateCode)) {
+      return [{ name: 'Date', value: expiryDate }, { name: 'Link', value: link }];
+    }
     return [{ name: 'Link', value: link }];
   }
 
