@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import type { AuthenticatedUser } from './auth.types';
@@ -24,6 +24,23 @@ export class AuthController {
 
   @Get('me') @UseGuards(SessionGuard)
   me(@CurrentUser() user: AuthenticatedUser) { return user; }
+
+  @Get('sessions') @UseGuards(SessionGuard)
+  listSessions(@CurrentUser() user: AuthenticatedUser, @Req() request: AuthenticatedRequest) {
+    return this.auth.listSessions(user.id, request.sessionToken);
+  }
+
+  @Delete('sessions/:sessionId') @UseGuards(SessionGuard)
+  async revokeSession(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('sessionId') sessionId: string,
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.auth.revokeSession(user.id, sessionId, request.sessionToken);
+    if (result.isCurrent) response.clearCookie('vazano_session', { path: '/' });
+    return result;
+  }
 
   @Post('logout') @HttpCode(204) @UseGuards(SessionGuard)
   async logout(@Req() request: AuthenticatedRequest, @Res({ passthrough: true }) response: Response): Promise<void> {

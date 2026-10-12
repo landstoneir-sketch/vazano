@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { HttpException, HttpStatus, Inject, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OtpPurpose } from '@prisma/client';
 import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
@@ -105,6 +105,37 @@ export class AuthService {
   async logout(rawToken: string | undefined): Promise<void> {
     if (!rawToken) return;
     await this.prisma.session.updateMany({ where: { tokenHash: this.hashToken(rawToken), revokedAt: null }, data: { revokedAt: new Date() } });
+  }
+
+  async listSessions(userId: string, rawToken: string) {
+    const currentTokenHash = this.hashToken(rawToken);
+    const sessions = await this.prisma.session.findMany({
+      where: { userId, revokedAt: null, expiresAt: { gt: new Date() } },
+      select: { id: true, tokenHash: true, expiresAt: true, lastSeenAt: true, ipAddress: true, userAgent: true, createdAt: true },
+      orderBy: { lastSeenAt: 'desc' },
+    });
+    return sessions.map(({ tokenHash, ...session }) => ({ ...session, isCurrent: tokenHash === currentTokenHash }));
+  }
+
+  async revokeSession(userId: string, sessionId: string, rawToken: string) {
+    const session = await this.prisma.session.findFirst({
+      where: { id: sessionId, userId, revokedAt: null },
+      select: { id: true, tokenHash: true },
+    });
+    if (!session) throw new NotFoundException('نشست فعال پیدا نشد.');
+    const isCurrent = session.tokenHash === this.hashToken(rawToken);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.session.update({ where: { id: session.id }, data: { revokedAt: new Date() } });
+      await tx.auditLog.create({ data: {
+        actorUserId: userId, action: 'auth.session.revoke', entityType: 'Session', entityId: session.id,
+        metadata: { isCurrent },
+      } });
+      await tx.securityEvent.create({ data: {
+        eventType: 'auth.session.revoked_by_user', severity: 'INFO', outcome: 'SUCCESS', userId,
+        metadata: { sessionId: session.id, isCurrent },
+      } });
+    });
+    return { sessionId: session.id, revoked: true, isCurrent };
   }
 
   hashToken(token: string): string { return createHash('sha256').update(token).digest('hex'); }
