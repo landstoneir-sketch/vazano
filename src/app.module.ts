@@ -22,6 +22,7 @@ import { LocationsModule } from './modules/locations/locations.module';
 import { QualityControlModule } from './modules/quality-control/quality-control.module';
 import { ContractsModule } from './modules/contracts/contracts.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { ReviewsModule } from './modules/reviews/reviews.module';
 import { validateEnvironment } from './config/environment';
 
 @Module({
@@ -48,6 +49,7 @@ import { validateEnvironment } from './config/environment';
     QualityControlModule,
     ContractsModule,
     ReportsModule,
+    ReviewsModule,
   ],
   controllers: [HealthController],
 })
