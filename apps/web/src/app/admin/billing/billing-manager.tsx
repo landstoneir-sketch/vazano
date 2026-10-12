@@ -9,7 +9,7 @@ type BillingCycle = 'P1M' | 'P3M' | 'P6M' | 'P1Y' | 'CUSTOM';
 type Plan = {
   id: string; code: string; nameFa: string; descriptionFa: string | null; billingCycle: BillingCycle; durationIso: string;
   priceRial: string; grantCredits: string; dailyProposalLimit: number; maxProposalLimit: number; taxIncluded: boolean;
-  isPublic: boolean; isActive: boolean; version: number; entitlements: unknown;
+  isTrial: boolean; isPublic: boolean; isActive: boolean; version: number; entitlements: unknown;
 };
 type Subscription = {
   id: string; status: string; startsAt: string | null; expiresAt: string | null; graceEndsAt: string | null;
@@ -47,11 +47,13 @@ type PlanDraft = {
   id?: string; code: string; nameFa: string; descriptionFa: string; billingCycle: BillingCycle; durationIso: string;
   priceToman: string; grantCredits: string; dailyProposalLimit: number; maxProposalLimit: number; taxIncluded: boolean;
   isPublic: boolean; isActive: boolean; canViewMatchedRfqs: boolean; version?: number; entitlements: Record<string, unknown>;
+  isTrial: boolean; trialDurationDays: number;
 };
 
 const emptyPlan: PlanDraft = {
   code: '', nameFa: '', descriptionFa: '', billingCycle: 'P1M', durationIso: 'P1M', priceToman: '', grantCredits: '0',
   dailyProposalLimit: 2, maxProposalLimit: 6, taxIncluded: false, isPublic: true, isActive: true, canViewMatchedRfqs: true, entitlements: {},
+  isTrial: false, trialDurationDays: 14,
 };
 
 function asObject(value: unknown): Record<string, unknown> {
@@ -65,7 +67,8 @@ function fromPlan(plan: Plan): PlanDraft {
     durationIso: plan.durationIso, priceToman: (BigInt(plan.priceRial) / BigInt(10)).toString(), grantCredits: plan.grantCredits,
     dailyProposalLimit: plan.dailyProposalLimit, maxProposalLimit: plan.maxProposalLimit, taxIncluded: plan.taxIncluded,
     isPublic: plan.isPublic, isActive: plan.isActive, canViewMatchedRfqs: entitlements.canViewMatchedRfqs !== false,
-    version: plan.version, entitlements,
+    version: plan.version, entitlements, isTrial: plan.isTrial,
+    trialDurationDays: Number(plan.durationIso.match(/^P(\d+)D$/)?.[1] ?? 14),
   };
 }
 
@@ -105,7 +108,7 @@ export function BillingManager() {
   async function savePlan(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError(''); setMessage('');
     try {
-      const priceToman = BigInt(draft.priceToman || '0');
+      const priceToman = draft.isTrial ? BigInt(0) : BigInt(draft.priceToman || '0');
       const entitlements = {
         ...draft.entitlements,
         canViewMatchedRfqs: draft.canViewMatchedRfqs,
@@ -122,7 +125,9 @@ export function BillingManager() {
         setMessage('پلن اشتراک به‌روزرسانی شد. تغییر قیمت فقط برای خریدهای بعدی اعمال می‌شود.');
       } else {
         await apiRequest('/admin/billing/plans', { method: 'POST', body: JSON.stringify({
-          ...editable, code: draft.code, billingCycle: draft.billingCycle, durationIso: draft.durationIso,
+          ...editable, code: draft.code, isTrial: draft.isTrial,
+          billingCycle: draft.isTrial ? 'CUSTOM' : draft.billingCycle,
+          durationIso: draft.isTrial ? `P${draft.trialDurationDays}D` : draft.durationIso,
         }) });
         setMessage('پلن اشتراک جدید ایجاد شد.');
       }
@@ -169,7 +174,7 @@ export function BillingManager() {
     {error && <div className="message message-error">{error}</div>}{message && <div className="message message-success">{message}</div>}
     <div className="dashboard-grid">{statusCards.map(([status, label]) => <article className="card billing-summary-card" key={status}><span>{label}</span><strong>{(overview?.summary[status] ?? 0).toLocaleString('fa-IR')}</strong></article>)}</div>
     <div className="tab-list" role="tablist" aria-label="بخش مالی"><button className={tab === 'plans' ? 'tab-active' : ''} type="button" onClick={() => setTab('plans')}>پلن‌ها</button><button className={tab === 'subscriptions' ? 'tab-active' : ''} type="button" onClick={() => setTab('subscriptions')}>اشتراک‌ها</button><button className={tab === 'payments' ? 'tab-active' : ''} type="button" onClick={() => setTab('payments')}>پرداخت‌ها</button><button className={tab === 'receipts' ? 'tab-active' : ''} type="button" onClick={() => setTab('receipts')}>رسیدها</button><button className={tab === 'reminders' ? 'tab-active' : ''} type="button" onClick={() => setTab('reminders')}>اخطارهای تمدید</button></div>
-    {tab === 'plans' && overview && <section className="card stack"><div className="admin-card-title"><div><h2>مدیریت پلن‌ها</h2><p>قیمت را به تومان وارد کنید؛ مبلغ در دیتابیس با واحد ریال و به‌صورت عدد صحیح ذخیره می‌شود.</p></div><button className="button button-secondary" type="button" onClick={() => { setDraft(emptyPlan); setError(''); setMessage(''); }}>پلن جدید</button></div><div className="content-item-list">{overview.plans.map((plan) => <button className={draft.id === plan.id ? 'content-item-active' : ''} type="button" key={plan.id} onClick={() => { setDraft(fromPlan(plan)); setError(''); setMessage(''); }}><strong>{plan.nameFa}</strong><span>{formatToman(plan.priceRial)} · {plan.isActive ? 'فعال' : 'غیرفعال'}</span></button>)}</div><PlanForm draft={draft} setDraft={setDraft} busy={busy} onSubmit={savePlan} /></section>}
+    {tab === 'plans' && overview && <section className="card stack"><div className="admin-card-title"><div><h2>مدیریت پلن‌ها</h2><p>قیمت را به تومان وارد کنید؛ مبلغ در دیتابیس با واحد ریال و به‌صورت عدد صحیح ذخیره می‌شود.</p></div><button className="button button-secondary" type="button" onClick={() => { setDraft(emptyPlan); setError(''); setMessage(''); }}>پلن جدید</button></div><div className="content-item-list">{overview.plans.map((plan) => <button className={draft.id === plan.id ? 'content-item-active' : ''} type="button" key={plan.id} onClick={() => { setDraft(fromPlan(plan)); setError(''); setMessage(''); }}><strong>{plan.nameFa}</strong><span>{plan.isTrial ? 'آزمایشی رایگان' : formatToman(plan.priceRial)} · {plan.isActive ? 'فعال' : 'غیرفعال'}</span></button>)}</div><PlanForm draft={draft} setDraft={setDraft} busy={busy} onSubmit={savePlan} /></section>}
     {tab === 'subscriptions' && overview && <SubscriptionList items={overview.subscriptions} />}
     {tab === 'payments' && overview && <PaymentList items={overview.payments} reconcilingId={reconcilingPaymentId} resolvingId={resolvingPaymentId} onReconcile={reconcilePayment} onResolve={resolvePayment} />}
     {tab === 'receipts' && overview && <ReceiptList items={overview.receipts} />}
@@ -186,12 +191,13 @@ function PlanForm({ draft, setDraft, busy, onSubmit }: { draft: PlanDraft; setDr
     <label className="form-field"><span>نام پلن</span><input dir="rtl" value={draft.nameFa} onChange={(event) => setDraft({ ...draft, nameFa: event.target.value })} required /></label>
     <label className="form-field"><span>کد پایدار</span><input value={draft.code} disabled={Boolean(draft.id)} pattern="[A-Z0-9]+(?:_[A-Z0-9]+)*" onChange={(event) => setDraft({ ...draft, code: event.target.value.toUpperCase() })} required /></label>
     <label className="form-field full"><span>توضیح پلن</span><textarea rows={3} dir="rtl" value={draft.descriptionFa} onChange={(event) => setDraft({ ...draft, descriptionFa: event.target.value })} /></label>
-    <label className="form-field"><span>دوره صورتحساب</span><select value={draft.billingCycle} disabled={Boolean(draft.id)} onChange={(event) => applyCycle(event.target.value as BillingCycle)}><option value="P1M">یک‌ماهه</option><option value="P3M">سه‌ماهه</option><option value="P6M">شش‌ماهه</option><option value="P1Y">سالانه</option></select></label>
-    <label className="form-field"><span>مبلغ (تومان)</span><input type="number" min="1" value={draft.priceToman} onChange={(event) => setDraft({ ...draft, priceToman: event.target.value })} required /></label>
+    <label className="check-field full"><input type="checkbox" checked={draft.isTrial} disabled={Boolean(draft.id)} onChange={(event) => setDraft({ ...draft, isTrial: event.target.checked, billingCycle: event.target.checked ? 'CUSTOM' : 'P1M', durationIso: event.target.checked ? 'P14D' : 'P1M', priceToman: event.target.checked ? '0' : '', taxIncluded: false })} /><span>پلن آزمایشی رایگان؛ هر سازمان فقط یک‌بار</span></label>
+    {draft.isTrial ? <label className="form-field"><span>مدت دوره آزمایشی (روز)</span><input type="number" min="1" max="90" value={draft.trialDurationDays} disabled={Boolean(draft.id)} onChange={(event) => setDraft({ ...draft, trialDurationDays: Number(event.target.value) })} required /></label> : <label className="form-field"><span>دوره صورتحساب</span><select value={draft.billingCycle} disabled={Boolean(draft.id)} onChange={(event) => applyCycle(event.target.value as BillingCycle)}><option value="P1M">یک‌ماهه</option><option value="P3M">سه‌ماهه</option><option value="P6M">شش‌ماهه</option><option value="P1Y">سالانه</option></select></label>}
+    <label className="form-field"><span>مبلغ (تومان)</span><input type="number" min={draft.isTrial ? '0' : '1'} value={draft.isTrial ? '0' : draft.priceToman} disabled={draft.isTrial} onChange={(event) => setDraft({ ...draft, priceToman: event.target.value })} required /></label>
     <label className="form-field"><span>اعتبار قابل مصرف</span><input type="number" min="0" value={draft.grantCredits} onChange={(event) => setDraft({ ...draft, grantCredits: event.target.value })} required /></label>
     <label className="form-field"><span>سقف پایه پیشنهاد روزانه</span><input type="number" min="0" value={draft.dailyProposalLimit} onChange={(event) => setDraft({ ...draft, dailyProposalLimit: Number(event.target.value) })} required /></label>
     <label className="form-field"><span>حداکثر سقف در کمبود عرضه</span><input type="number" min="0" value={draft.maxProposalLimit} onChange={(event) => setDraft({ ...draft, maxProposalLimit: Number(event.target.value) })} required /></label>
-    <div className="full check-grid"><label className="check-field"><input type="checkbox" checked={draft.isActive} onChange={(event) => setDraft({ ...draft, isActive: event.target.checked })} /><span>قابل خرید باشد</span></label><label className="check-field"><input type="checkbox" checked={draft.isPublic} onChange={(event) => setDraft({ ...draft, isPublic: event.target.checked })} /><span>در صفحه عمومی نمایش داده شود</span></label><label className="check-field"><input type="checkbox" checked={draft.canViewMatchedRfqs} onChange={(event) => setDraft({ ...draft, canViewMatchedRfqs: event.target.checked })} /><span>مشاهده استعلام‌های مرتبط</span></label><label className="check-field"><input type="checkbox" checked={draft.taxIncluded} onChange={(event) => setDraft({ ...draft, taxIncluded: event.target.checked })} /><span>مبلغ شامل مالیات است</span></label></div>
+    <div className="full check-grid"><label className="check-field"><input type="checkbox" checked={draft.isActive} onChange={(event) => setDraft({ ...draft, isActive: event.target.checked })} /><span>قابل خرید باشد</span></label><label className="check-field"><input type="checkbox" checked={draft.isPublic} onChange={(event) => setDraft({ ...draft, isPublic: event.target.checked })} /><span>در صفحه عمومی نمایش داده شود</span></label><label className="check-field"><input type="checkbox" checked={draft.canViewMatchedRfqs} onChange={(event) => setDraft({ ...draft, canViewMatchedRfqs: event.target.checked })} /><span>مشاهده استعلام‌های مرتبط</span></label><label className="check-field"><input type="checkbox" checked={draft.taxIncluded} disabled={draft.isTrial} onChange={(event) => setDraft({ ...draft, taxIncluded: event.target.checked })} /><span>مبلغ شامل مالیات است</span></label></div>
     <button className="button button-primary" disabled={busy}>{busy ? 'در حال ذخیره…' : draft.id ? 'ذخیره تغییرات پلن' : 'ایجاد پلن'}</button>
   </form>;
 }
@@ -222,7 +228,7 @@ function ReminderList({ items, summary, delivery, retryingId, onRetry }: { items
     ['SMS:FAILED', 'پیامک ناموفق'],
     ['IN_APP:SENT', 'اعلان داخل پنل'],
   ] as const;
-  return <section className="stack"><div><h2>اخطارهای تمدید اشتراک</h2><p className="muted">وضعیت اجرای سیاست ۱۴، ۷ و ۳ روز پیش از پایان، روز انقضا و پایان مهلت تنفس.</p></div><div className={`message ${delivery.liveReady ? 'message-success' : 'message-error'}`}>{delivery.liveReady ? `ارسال واقعی پیامک فعال است؛ بازه ارسال ${delivery.deliveryWindow}.` : !delivery.enabled ? 'ارسال پیامک تمدید غیرفعال است؛ اعلان‌های داخل پنل همچنان اجرا می‌شوند.' : delivery.provider !== 'SMSIR' ? 'ارسال پیامک در حالت آزمایشی است و پیام واقعی ارسال نمی‌شود.' : 'برای فعال‌شدن ارسال واقعی، هر پنج شناسه قالب تمدید SMS.ir را تکمیل کنید.'}</div><div className="dashboard-grid">{cards.map(([key, label]) => <article className="card billing-summary-card" key={key}><span>{label}</span><strong>{(summary[key] ?? 0).toLocaleString('fa-IR')}</strong></article>)}</div>{items.length === 0 && <div className="card">هنوز اخطار تمدیدی ایجاد نشده است.</div>}{items.map((item) => <article className="card admin-card-title" key={item.id}><div><div className="eyebrow">{item.channel === 'SMS' ? 'پیامک' : item.channel === 'IN_APP' ? 'اعلان داخل پنل' : 'ایمیل'} · {reminderOffsetLabel(item.offsetDays)}</div><h3>{item.subscription.organization.displayName || item.subscription.organization.legalName}</h3><p>{item.subscription.plan.nameFa} · زمان برنامه‌ریزی: {new Date(item.scheduledAt).toLocaleString('fa-IR')}</p>{item.failureReason && <p className="message message-error">علت ناموفق: {item.failureReason}</p>}</div><div><span className={`status-badge ${statusClass(item.status)}`}>{reminderStatusLabel(item.status)}</span>{item.sentAt && <p>ارسال: {new Date(item.sentAt).toLocaleString('fa-IR')}</p>}{item.channel === 'SMS' && item.status === 'FAILED' && <button className="button button-secondary" type="button" disabled={Boolean(retryingId)} onClick={() => void onRetry(item)}>{retryingId === item.id ? 'در حال ثبت…' : 'ارسال مجدد در ساعت مجاز'}</button>}</div></article>)}</section>;
+  return <section className="stack"><div><h2>اخطارهای تمدید اشتراک</h2><p className="muted">وضعیت اجرای سیاست تمدید پلن‌های پولی و پایان دوره‌های آزمایشی.</p></div><div className={`message ${delivery.liveReady ? 'message-success' : 'message-error'}`}>{delivery.liveReady ? `ارسال واقعی پیامک فعال است؛ بازه ارسال ${delivery.deliveryWindow}.` : !delivery.enabled ? 'ارسال پیامک تمدید غیرفعال است؛ اعلان‌های داخل پنل همچنان اجرا می‌شوند.' : delivery.provider !== 'SMSIR' ? 'ارسال پیامک در حالت آزمایشی است و پیام واقعی ارسال نمی‌شود.' : 'برای فعال‌شدن ارسال واقعی، همه شناسه‌های قالب تمدید و دوره آزمایشی SMS.ir را تکمیل کنید.'}</div><div className="dashboard-grid">{cards.map(([key, label]) => <article className="card billing-summary-card" key={key}><span>{label}</span><strong>{(summary[key] ?? 0).toLocaleString('fa-IR')}</strong></article>)}</div>{items.length === 0 && <div className="card">هنوز اخطار تمدیدی ایجاد نشده است.</div>}{items.map((item) => <article className="card admin-card-title" key={item.id}><div><div className="eyebrow">{item.channel === 'SMS' ? 'پیامک' : item.channel === 'IN_APP' ? 'اعلان داخل پنل' : 'ایمیل'} · {reminderOffsetLabel(item.offsetDays)}</div><h3>{item.subscription.organization.displayName || item.subscription.organization.legalName}</h3><p>{item.subscription.plan.nameFa} · زمان برنامه‌ریزی: {new Date(item.scheduledAt).toLocaleString('fa-IR')}</p>{item.failureReason && <p className="message message-error">علت ناموفق: {item.failureReason}</p>}</div><div><span className={`status-badge ${statusClass(item.status)}`}>{reminderStatusLabel(item.status)}</span>{item.sentAt && <p>ارسال: {new Date(item.sentAt).toLocaleString('fa-IR')}</p>}{item.channel === 'SMS' && item.status === 'FAILED' && <button className="button button-secondary" type="button" disabled={Boolean(retryingId)} onClick={() => void onRetry(item)}>{retryingId === item.id ? 'در حال ثبت…' : 'ارسال مجدد در ساعت مجاز'}</button>}</div></article>)}</section>;
 }
 
 function statusClass(status: string): string { return ['ACTIVE', 'SUCCEEDED', 'VERIFIED'].includes(status) ? 'status-active' : ['FAILED', 'SUSPENDED', 'EXPIRED'].includes(status) ? 'status-suspended' : 'severity-medium'; }
