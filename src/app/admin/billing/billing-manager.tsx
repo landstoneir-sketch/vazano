@@ -35,12 +35,20 @@ type SubscriptionReminder = {
   scheduledAt: string; sentAt: string | null; failureReason: string | null;
   subscription: { organization: { displayName: string; legalName: string }; plan: { code: string; nameFa: string } };
 };
+type SupplierOption = { id: string; displayName: string; legalName: string };
+type ManualRenewal = {
+  id: string; trackingNumber: string; amountRial: string; paidAt: string; note: string; createdAt: string;
+  organization: SupplierOption;
+  subscription: { startsAt: string; expiresAt: string; plan: { code: string; nameFa: string } };
+  activatedBy: { firstName: string | null; lastName: string | null; mobile: string };
+};
 type Overview = {
   summary: Record<string, number>; reminderSummary: Record<string, number>; plans: Plan[]; subscriptions: Subscription[];
   payments: Payment[]; receipts: PaymentReceipt[]; reminders: SubscriptionReminder[];
   reminderDelivery: { enabled: boolean; provider: 'SMSIR' | 'DEBUG'; templatesConfigured: boolean; liveReady: boolean; deliveryWindow: string };
+  suppliers: SupplierOption[]; manualRenewals: ManualRenewal[];
 };
-type Tab = 'plans' | 'subscriptions' | 'payments' | 'receipts' | 'reminders';
+type Tab = 'plans' | 'subscriptions' | 'manual-renewals' | 'payments' | 'receipts' | 'reminders';
 type ReconciliationResult = { payment: { reconciliationStatus: Payment['reconciliationStatus'] }; provider: { success: boolean; code: number; referenceId: string | null } };
 
 type PlanDraft = {
@@ -55,6 +63,12 @@ const emptyPlan: PlanDraft = {
   dailyProposalLimit: 2, maxProposalLimit: 6, taxIncluded: false, isPublic: true, isActive: true, canViewMatchedRfqs: true, entitlements: {},
   isTrial: false, trialDurationDays: 14,
 };
+
+function currentLocalDateTime(): string {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60_000;
+  return new Date(now.getTime() - offset).toISOString().slice(0, 16);
+}
 
 function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -86,6 +100,7 @@ export function BillingManager() {
   const [reconcilingPaymentId, setReconcilingPaymentId] = useState('');
   const [resolvingPaymentId, setResolvingPaymentId] = useState('');
   const [retryingReminderId, setRetryingReminderId] = useState('');
+  const [manualRenewal, setManualRenewal] = useState({ organizationId: '', planId: '', amountToman: '', trackingNumber: '', paidAt: currentLocalDateTime(), note: '' });
 
   const load = useCallback(async () => {
     setError('');
@@ -168,18 +183,51 @@ export function BillingManager() {
     finally { setRetryingReminderId(''); }
   }
 
+  async function createManualRenewal(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError(''); setMessage('');
+    try {
+      await apiRequest('/admin/billing/manual-renewals', { method: 'POST', body: JSON.stringify({
+        organizationId: manualRenewal.organizationId,
+        planId: manualRenewal.planId,
+        amountRial: (BigInt(manualRenewal.amountToman || '0') * BigInt(10)).toString(),
+        trackingNumber: manualRenewal.trackingNumber,
+        paidAt: new Date(manualRenewal.paidAt).toISOString(),
+        note: manualRenewal.note,
+      }) });
+      setMessage('تمدید دستی ثبت و اشتراک فعال شد. اعتبار، اخطارهای تمدید و سابقه حساب نیز به‌روزرسانی شدند.');
+      setManualRenewal({ organizationId: '', planId: '', amountToman: '', trackingNumber: '', paidAt: currentLocalDateTime(), note: '' });
+      await load();
+    } catch (reason: unknown) { setError(reason instanceof Error ? reason.message : 'ثبت تمدید دستی انجام نشد.'); }
+    finally { setBusy(false); }
+  }
+
   if (!overview && !error) return <div className="card">در حال دریافت اطلاعات اشتراک و پرداخت…</div>;
 
   return <div className="stack">
     {error && <div className="message message-error">{error}</div>}{message && <div className="message message-success">{message}</div>}
     <div className="dashboard-grid">{statusCards.map(([status, label]) => <article className="card billing-summary-card" key={status}><span>{label}</span><strong>{(overview?.summary[status] ?? 0).toLocaleString('fa-IR')}</strong></article>)}</div>
-    <div className="tab-list" role="tablist" aria-label="بخش مالی"><button className={tab === 'plans' ? 'tab-active' : ''} type="button" onClick={() => setTab('plans')}>پلن‌ها</button><button className={tab === 'subscriptions' ? 'tab-active' : ''} type="button" onClick={() => setTab('subscriptions')}>اشتراک‌ها</button><button className={tab === 'payments' ? 'tab-active' : ''} type="button" onClick={() => setTab('payments')}>پرداخت‌ها</button><button className={tab === 'receipts' ? 'tab-active' : ''} type="button" onClick={() => setTab('receipts')}>رسیدها</button><button className={tab === 'reminders' ? 'tab-active' : ''} type="button" onClick={() => setTab('reminders')}>اخطارهای تمدید</button></div>
+    <div className="tab-list" role="tablist" aria-label="بخش مالی"><button className={tab === 'plans' ? 'tab-active' : ''} type="button" onClick={() => setTab('plans')}>پلن‌ها</button><button className={tab === 'subscriptions' ? 'tab-active' : ''} type="button" onClick={() => setTab('subscriptions')}>اشتراک‌ها</button><button className={tab === 'manual-renewals' ? 'tab-active' : ''} type="button" onClick={() => setTab('manual-renewals')}>تمدید دستی</button><button className={tab === 'payments' ? 'tab-active' : ''} type="button" onClick={() => setTab('payments')}>پرداخت‌ها</button><button className={tab === 'receipts' ? 'tab-active' : ''} type="button" onClick={() => setTab('receipts')}>رسیدها</button><button className={tab === 'reminders' ? 'tab-active' : ''} type="button" onClick={() => setTab('reminders')}>اخطارهای تمدید</button></div>
     {tab === 'plans' && overview && <section className="card stack"><div className="admin-card-title"><div><h2>مدیریت پلن‌ها</h2><p>قیمت را به تومان وارد کنید؛ مبلغ در دیتابیس با واحد ریال و به‌صورت عدد صحیح ذخیره می‌شود.</p></div><button className="button button-secondary" type="button" onClick={() => { setDraft(emptyPlan); setError(''); setMessage(''); }}>پلن جدید</button></div><div className="content-item-list">{overview.plans.map((plan) => <button className={draft.id === plan.id ? 'content-item-active' : ''} type="button" key={plan.id} onClick={() => { setDraft(fromPlan(plan)); setError(''); setMessage(''); }}><strong>{plan.nameFa}</strong><span>{plan.isTrial ? 'آزمایشی رایگان' : formatToman(plan.priceRial)} · {plan.isActive ? 'فعال' : 'غیرفعال'}</span></button>)}</div><PlanForm draft={draft} setDraft={setDraft} busy={busy} onSubmit={savePlan} /></section>}
     {tab === 'subscriptions' && overview && <SubscriptionList items={overview.subscriptions} />}
+    {tab === 'manual-renewals' && overview && <ManualRenewalManager suppliers={overview.suppliers} plans={overview.plans} items={overview.manualRenewals} draft={manualRenewal} setDraft={setManualRenewal} busy={busy} onSubmit={createManualRenewal} />}
     {tab === 'payments' && overview && <PaymentList items={overview.payments} reconcilingId={reconcilingPaymentId} resolvingId={resolvingPaymentId} onReconcile={reconcilePayment} onResolve={resolvePayment} />}
     {tab === 'receipts' && overview && <ReceiptList items={overview.receipts} />}
     {tab === 'reminders' && overview && <ReminderList items={overview.reminders} summary={overview.reminderSummary} delivery={overview.reminderDelivery} retryingId={retryingReminderId} onRetry={retryReminder} />}
   </div>;
+}
+
+function ManualRenewalManager({ suppliers, plans, items, draft, setDraft, busy, onSubmit }: {
+  suppliers: SupplierOption[]; plans: Plan[]; items: ManualRenewal[];
+  draft: { organizationId: string; planId: string; amountToman: string; trackingNumber: string; paidAt: string; note: string };
+  setDraft: (value: { organizationId: string; planId: string; amountToman: string; trackingNumber: string; paidAt: string; note: string }) => void;
+  busy: boolean; onSubmit: (event: FormEvent) => Promise<void>;
+}) {
+  const paidPlans = plans.filter((plan) => plan.isActive && !plan.isTrial);
+  function selectPlan(planId: string) {
+    const plan = paidPlans.find((item) => item.id === planId);
+    setDraft({ ...draft, planId, amountToman: plan ? (BigInt(plan.priceRial) / BigInt(10)).toString() : '' });
+  }
+  return <section className="stack"><form className="card form-grid" onSubmit={(event) => void onSubmit(event)}><div className="full"><h2>ثبت تمدید دستی</h2><p className="muted">فقط پس از مشاهده سند پرداخت ثبت کنید. این عملیات بلافاصله اشتراک و اعتبار فروشنده را فعال می‌کند و قابل حذف نیست.</p></div><label className="form-field"><span>سازمان فروشنده</span><select value={draft.organizationId} onChange={(event) => setDraft({ ...draft, organizationId: event.target.value })} required><option value="">انتخاب کنید</option>{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.displayName || supplier.legalName}</option>)}</select></label><label className="form-field"><span>پلن پولی</span><select value={draft.planId} onChange={(event) => selectPlan(event.target.value)} required><option value="">انتخاب کنید</option>{paidPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.nameFa} — {formatToman(plan.priceRial)}</option>)}</select></label><label className="form-field"><span>مبلغ پرداخت‌شده (تومان)</span><input type="number" min="1" value={draft.amountToman} onChange={(event) => setDraft({ ...draft, amountToman: event.target.value })} required /></label><label className="form-field"><span>شماره پیگیری یکتا</span><input dir="ltr" minLength={3} maxLength={100} pattern="[A-Za-z0-9_\-/]+" value={draft.trackingNumber} onChange={(event) => setDraft({ ...draft, trackingNumber: event.target.value })} required /></label><label className="form-field"><span>زمان پرداخت</span><input type="datetime-local" max={currentLocalDateTime()} value={draft.paidAt} onChange={(event) => setDraft({ ...draft, paidAt: event.target.value })} required /></label><label className="form-field full"><span>توضیح و مستند ثبت</span><textarea minLength={10} maxLength={1000} rows={3} value={draft.note} onChange={(event) => setDraft({ ...draft, note: event.target.value })} required /></label><button className="button button-primary" disabled={busy}>{busy ? 'در حال ثبت…' : 'ثبت قطعی و فعال‌سازی اشتراک'}</button></form><div><h2>سوابق تمدید دستی</h2><p className="muted">شماره پیگیری تکراری پذیرفته نمی‌شود و تمام عملیات در گزارش حسابرسی ثبت شده‌اند.</p></div>{items.length === 0 && <div className="card">هنوز تمدید دستی ثبت نشده است.</div>}{items.map((item) => <article className="card admin-card-title" key={item.id}><div><div className="eyebrow">پیگیری {item.trackingNumber}</div><h3>{item.organization.displayName || item.organization.legalName}</h3><p>{item.subscription.plan.nameFa} · {formatToman(item.amountRial)} · پرداخت {new Date(item.paidAt).toLocaleString('fa-IR')}</p><p className="muted">{item.note}</p></div><div><span className="status-badge status-active">فعال‌شده</span><p>پایان: {new Date(item.subscription.expiresAt).toLocaleDateString('fa-IR')}</p><p>اپراتور: {[item.activatedBy.firstName, item.activatedBy.lastName].filter(Boolean).join(' ') || item.activatedBy.mobile}</p></div></article>)}</section>;
 }
 
 function PlanForm({ draft, setDraft, busy, onSubmit }: { draft: PlanDraft; setDraft: (value: PlanDraft) => void; busy: boolean; onSubmit: (event: FormEvent) => Promise<void> }) {
