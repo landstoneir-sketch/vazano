@@ -61,6 +61,50 @@ export class AttachmentsService {
     };
   }
 
+  async createSupplierUploadIntent(user: AuthenticatedUser, organizationId: string, input: CreateUploadIntentDto) {
+    if (!this.canManageSupplierOrganization(user, organizationId)) throw new NotFoundException('پروفایل فروشنده پیدا نشد.');
+    if (input.purpose !== 'CERTIFICATE') throw new BadRequestException('مدارک احراز فروشنده باید با نوع گواهی ثبت شوند.');
+    const profile = await this.prisma.supplierProfile.findUnique({ where: { organizationId } });
+    if (!profile) throw new NotFoundException('ابتدا اطلاعات پروفایل فروشنده را ثبت کنید.');
+    if (['VERIFIED', 'SUSPENDED'].includes(profile.verificationStatus)) {
+      throw new ConflictException('افزودن مدرک در وضعیت فعلی پروفایل مجاز نیست.');
+    }
+
+    const maxSizeBytes = this.config.get<number>('ATTACHMENT_MAX_SIZE_BYTES', DEFAULT_MAX_ATTACHMENT_SIZE_BYTES);
+    if (input.sizeBytes > maxSizeBytes) throw new BadRequestException(`حداکثر حجم هر فایل ${Math.floor(maxSizeBytes / 1024 / 1024)} مگابایت است.`);
+    const extension = normalizedAttachmentExtension(input.fileName, input.mimeType);
+    if (!extension) throw new BadRequestException('نوع یا پسوند این فایل مجاز نیست.');
+
+    const attachment = await this.prisma.attachment.create({
+      data: {
+        organizationId,
+        uploadedByUserId: user.id,
+        supplierProfileId: profile.id,
+        purpose: 'CERTIFICATE',
+        bucket: this.storage.bucket,
+        storageKey: `${organizationId}/suppliers/${profile.id}/verification/${randomUUID()}${extension}`,
+        originalName: safeOriginalFileName(input.fileName),
+        mimeType: input.mimeType,
+        sizeBytes: input.sizeBytes,
+      },
+    });
+    const uploadUrl = await this.storage.createUploadUrl(attachment.storageKey, attachment.mimeType);
+    await this.prisma.auditLog.create({
+      data: {
+        actorUserId: user.id,
+        organizationId,
+        action: 'supplier.verification_document.upload_intent.create',
+        entityType: 'Attachment',
+        entityId: attachment.id,
+        metadata: { supplierProfileId: profile.id, mimeType: attachment.mimeType, sizeBytes: attachment.sizeBytes },
+      },
+    });
+    return {
+      attachment: this.publicAttachment(attachment),
+      upload: { url: uploadUrl, method: 'PUT', headers: { 'content-type': attachment.mimeType }, expiresInSeconds: 300 },
+    };
+  }
+
   async complete(user: AuthenticatedUser, attachmentId: string) {
     const attachment = await this.findManageableAttachment(user, attachmentId);
     if (attachment.status === 'READY') return this.publicAttachment(attachment);
@@ -122,12 +166,27 @@ export class AttachmentsService {
     return attachments.map((attachment) => this.publicAttachment(attachment));
   }
 
+  async listForSupplier(user: AuthenticatedUser, organizationId: string) {
+    const profile = await this.prisma.supplierProfile.findUnique({ where: { organizationId }, select: { id: true } });
+    if (!profile || !this.canReadSupplierDocuments(user, organizationId)) throw new NotFoundException('پروفایل فروشنده پیدا نشد.');
+    const attachments = await this.prisma.attachment.findMany({
+      where: { supplierProfileId: profile.id, status: { not: 'DELETED' } },
+      orderBy: { createdAt: 'asc' },
+    });
+    return attachments.map((attachment) => this.publicAttachment(attachment));
+  }
+
   async downloadUrl(user: AuthenticatedUser, attachmentId: string) {
     const attachment = await this.prisma.attachment.findUnique({
       where: { id: attachmentId },
-      include: { rfq: { select: { buyerOrganizationId: true, invitations: { select: { supplierOrganizationId: true } } } } },
+      include: {
+        rfq: { select: { buyerOrganizationId: true, invitations: { select: { supplierOrganizationId: true } } } },
+        supplierProfile: { select: { organizationId: true } },
+      },
     });
-    if (!attachment?.rfq || !this.canReadRfq(user, attachment.rfq.buyerOrganizationId, attachment.rfq.invitations.map((item) => item.supplierOrganizationId))) {
+    const canReadRfq = attachment?.rfq && this.canReadRfq(user, attachment.rfq.buyerOrganizationId, attachment.rfq.invitations.map((item) => item.supplierOrganizationId));
+    const canReadSupplierDocument = attachment?.supplierProfile && this.canReadSupplierDocuments(user, attachment.supplierProfile.organizationId);
+    if (!attachment || (!canReadRfq && !canReadSupplierDocument)) {
       throw new NotFoundException('فایل پیدا نشد.');
     }
     if (attachment.status !== 'READY') throw new ConflictException('فایل هنوز تأیید امنیتی نشده است.');
@@ -138,11 +197,18 @@ export class AttachmentsService {
   async remove(user: AuthenticatedUser, attachmentId: string) {
     const attachment = await this.prisma.attachment.findUnique({
       where: { id: attachmentId },
-      include: { rfq: { select: { lifecycleState: true, operationalStatus: true } } },
+      include: {
+        rfq: { select: { lifecycleState: true, operationalStatus: true } },
+        supplierProfile: { select: { organizationId: true, verificationStatus: true } },
+      },
     });
-    if (!attachment || !this.canManageBuyerOrganization(user, attachment.organizationId)) throw new NotFoundException('فایل پیدا نشد.');
-    if (!attachment.rfq || attachment.rfq.lifecycleState !== 'DRAFT' || !['DRAFT_INCOMPLETE', 'NEEDS_CHANGES'].includes(attachment.rfq.operationalStatus)) {
-      throw new ConflictException('حذف فایل پس از ارسال استعلام برای بررسی مجاز نیست.');
+    const canManageRfq = attachment?.rfq && this.canManageBuyerOrganization(user, attachment.organizationId);
+    const canManageSupplierDocument = attachment?.supplierProfile && this.canManageSupplierOrganization(user, attachment.supplierProfile.organizationId);
+    if (!attachment || (!canManageRfq && !canManageSupplierDocument)) throw new NotFoundException('فایل پیدا نشد.');
+    const removableRfq = attachment.rfq?.lifecycleState === 'DRAFT' && ['DRAFT_INCOMPLETE', 'NEEDS_CHANGES'].includes(attachment.rfq.operationalStatus);
+    const removableSupplierDocument = attachment.supplierProfile && !['VERIFIED', 'SUSPENDED'].includes(attachment.supplierProfile.verificationStatus);
+    if (!removableRfq && !removableSupplierDocument) {
+      throw new ConflictException('حذف این فایل در وضعیت فعلی مجاز نیست.');
     }
     await this.storage.remove(attachment.storageKey);
     await this.prisma.$transaction([
@@ -153,8 +219,13 @@ export class AttachmentsService {
   }
 
   private async findManageableAttachment(user: AuthenticatedUser, attachmentId: string) {
-    const attachment = await this.prisma.attachment.findUnique({ where: { id: attachmentId } });
-    if (!attachment || !this.canManageBuyerOrganization(user, attachment.organizationId)) throw new NotFoundException('فایل پیدا نشد.');
+    const attachment = await this.prisma.attachment.findUnique({
+      where: { id: attachmentId },
+      include: { supplierProfile: { select: { organizationId: true } } },
+    });
+    const canManageRfq = attachment?.rfqId && this.canManageBuyerOrganization(user, attachment.organizationId);
+    const canManageSupplierDocument = attachment?.supplierProfile && this.canManageSupplierOrganization(user, attachment.supplierProfile.organizationId);
+    if (!attachment || (!canManageRfq && !canManageSupplierDocument)) throw new NotFoundException('فایل پیدا نشد.');
     return attachment;
   }
 
@@ -168,6 +239,15 @@ export class AttachmentsService {
     if (user.permissions.includes('rfq.manage')) return true;
     return user.memberships.some((membership) => membership.organizationId === buyerOrganizationId
       || invitedSupplierOrganizationIds.includes(membership.organizationId));
+  }
+
+  private canManageSupplierOrganization(user: AuthenticatedUser, organizationId: string): boolean {
+    return user.memberships.some((membership) => membership.organizationId === organizationId
+      && ['SUPPLIER_OWNER', 'SUPPLIER_MANAGER'].includes(membership.role));
+  }
+
+  private canReadSupplierDocuments(user: AuthenticatedUser, organizationId: string): boolean {
+    return this.canManageSupplierOrganization(user, organizationId) || user.permissions.includes('supplier.verify');
   }
 
   private publicAttachment(attachment: {

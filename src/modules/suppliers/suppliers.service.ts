@@ -68,7 +68,7 @@ export class SuppliersService {
     return this.prisma.organization.findMany({
       where: { kind: 'SUPPLIER', supplierProfile: { verificationStatus: { in: ['PENDING', 'NEEDS_CORRECTION'] } } },
       include: {
-        supplierProfile: { include: { categories: { include: { category: true } }, serviceProvinceLinks: { include: { province: true } } } },
+        supplierProfile: { include: { categories: { include: { category: true } }, serviceProvinceLinks: { include: { province: true } }, verificationDocuments: { where: { status: { not: 'DELETED' } }, select: { id: true, purpose: true, status: true, originalName: true, mimeType: true, sizeBytes: true, uploadedAt: true, createdAt: true }, orderBy: { createdAt: 'asc' } } } },
         members: { where: { status: 'ACTIVE', role: 'SUPPLIER_OWNER' }, include: { user: { select: { id: true, mobile: true, firstName: true, lastName: true } } } },
       },
       orderBy: { updatedAt: 'asc' },
@@ -79,7 +79,7 @@ export class SuppliersService {
     this.assertCanManageProfile(user, organizationId);
     const organization = await this.prisma.organization.findFirst({
       where: { id: organizationId, kind: 'SUPPLIER' },
-      include: { supplierProfile: { include: { categories: { include: { category: true } }, serviceProvinceLinks: { include: { province: true } } } } },
+      include: { supplierProfile: { include: { categories: { include: { category: true } }, serviceProvinceLinks: { include: { province: true } }, verificationDocuments: { where: { status: { not: 'DELETED' } }, select: { id: true, purpose: true, status: true, originalName: true, mimeType: true, sizeBytes: true, uploadedAt: true, createdAt: true }, orderBy: { createdAt: 'asc' } } } } },
     });
     if (!organization) throw new NotFoundException('سازمان فروشنده پیدا نشد.');
     return organization;
@@ -132,7 +132,7 @@ export class SuppliersService {
       await tx.outboxEvent.create({
         data: { aggregateType: 'SupplierProfile', aggregateId: profile.id, eventType: 'ir.vazano.supplier.profile.submitted.v1', payload: { organizationId, categoryIds } },
       });
-      return tx.supplierProfile.findUniqueOrThrow({ where: { id: profile.id }, include: { categories: { include: { category: true } }, serviceProvinceLinks: { include: { province: true } } } });
+      return tx.supplierProfile.findUniqueOrThrow({ where: { id: profile.id }, include: { categories: { include: { category: true } }, serviceProvinceLinks: { include: { province: true } }, verificationDocuments: { where: { status: { not: 'DELETED' } }, select: { id: true, purpose: true, status: true, originalName: true, mimeType: true, sizeBytes: true, uploadedAt: true, createdAt: true }, orderBy: { createdAt: 'asc' } } } });
     });
   }
 
@@ -143,6 +143,10 @@ export class SuppliersService {
     if (input.status !== 'VERIFIED' && !input.reason?.trim()) throw new BadRequestException('ثبت دلیل برای این تصمیم الزامی است.');
     const profile = await this.prisma.supplierProfile.findUnique({ where: { organizationId } });
     if (!profile) throw new NotFoundException('پروفایل فروشنده برای بررسی پیدا نشد.');
+    if (input.status === 'VERIFIED') {
+      const readyDocumentCount = await this.prisma.attachment.count({ where: { supplierProfileId: profile.id, purpose: 'CERTIFICATE', status: 'READY' } });
+      if (readyDocumentCount === 0) throw new BadRequestException('تأیید فروشنده بدون حداقل یک مدرک سالم و بررسی‌شده مجاز نیست.');
+    }
     const organizationStatus = input.status === 'VERIFIED' ? 'ACTIVE' : input.status === 'SUSPENDED' ? 'SUSPENDED' : 'PENDING';
     return this.prisma.$transaction(async (tx) => {
       const result = await tx.supplierProfile.update({
