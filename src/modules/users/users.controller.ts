@@ -9,5 +9,6 @@ import { UsersService } from './users.service';
 export class UsersController {
   constructor(private readonly users: UsersService) {}
   @Get('me') me(@CurrentUser() user: AuthenticatedUser) { return this.users.findById(user.id); }
+  @Get('me/dashboard-summary') dashboardSummary(@CurrentUser() user: AuthenticatedUser) { return this.users.dashboardSummary(user); }
   @Patch('me') update(@CurrentUser() user: AuthenticatedUser, @Body() input: UpdateProfileDto) { return this.users.update(user.id, input); }
 }
