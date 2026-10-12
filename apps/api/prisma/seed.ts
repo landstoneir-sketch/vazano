@@ -399,6 +399,7 @@ async function main(): Promise<void> {
       update: { ...plan, taxIncluded: false, isActive: true, entitlements: { canViewMatchedRfqs: true, dailyProposalLimit: 2, shortageOverrideMax: 6 } },
     });
   }
+  const demoDiscountActive = process.env.NODE_ENV !== 'production';
   await prisma.subscriptionDiscountCode.upsert({
     where: { code: 'DEMO10' },
     create: {
@@ -412,8 +413,9 @@ async function main(): Promise<void> {
       maxRedemptions: 1000,
       validFrom: new Date('2026-01-01T00:00:00.000Z'),
       validUntil: new Date('2030-01-01T00:00:00.000Z'),
+      isActive: demoDiscountActive,
     },
-    update: {},
+    update: { isActive: demoDiscountActive },
   });
 
   for (const [key, value, descriptionFa] of systemSettings) {
