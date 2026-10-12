@@ -26,4 +26,8 @@ describe('production environment validation', () => {
   it('requires a secure public callback URL when live payments are enabled', () => {
     expect(() => validateEnvironment({ ...productionEnvironment, ZARINPAL_ENABLED: 'true', ZARINPAL_MERCHANT_ID: 'merchant-identifier', PUBLIC_API_URL: 'http://api.vazano.ir' })).toThrow(/PUBLIC_API_URL/);
   });
+
+  it('rejects the mock payment provider in production', () => {
+    expect(() => validateEnvironment({ ...productionEnvironment, PAYMENT_PROVIDER: 'mock' })).toThrow(/Mock payment provider/);
+  });
 });

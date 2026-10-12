@@ -7,6 +7,8 @@ export function validateEnvironment(environment: Environment): Environment {
   requireUrl(environment, 'WEB_ORIGIN');
   requireValue(environment, 'OTP_PEPPER', 32);
   if (environment.OTP_IP_REQUESTS_PER_MINUTE) requirePositiveInteger(environment, 'OTP_IP_REQUESTS_PER_MINUTE');
+  const paymentProvider = environment.PAYMENT_PROVIDER ?? 'zarinpal';
+  if (!['zarinpal', 'mock'].includes(paymentProvider)) throw new Error('PAYMENT_PROVIDER must be zarinpal or mock.');
 
   if (nodeEnv === 'production') {
     const webOrigin = new URL(environment.WEB_ORIGIN!);
@@ -16,6 +18,7 @@ export function validateEnvironment(environment: Environment): Environment {
     requireValue(environment, 'SMSIR_API_KEY', 16);
     requirePositiveInteger(environment, 'SMSIR_TEMPLATE_ID');
     if (environment.FILE_SCAN_MODE !== 'clamav') throw new Error('FILE_SCAN_MODE must be clamav in production.');
+    if (paymentProvider !== 'zarinpal') throw new Error('Mock payment provider must be disabled in production.');
     requireValue(environment, 'CLAMAV_HOST');
     requirePositiveInteger(environment, 'CLAMAV_PORT');
     requirePositiveInteger(environment, 'CLAMAV_TIMEOUT_MS');

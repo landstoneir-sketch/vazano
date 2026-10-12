@@ -30,7 +30,7 @@ describe('QualityControlService payments', () => {
   it('rejects checkout by a user outside the buyer organization', async () => {
     const createPayment = jest.fn();
     const prisma = { qualityControlRequest: { findUnique: jest.fn().mockResolvedValue(quotedRequest) } } as unknown as PrismaService;
-    const payments = { create: createPayment } as unknown as PaymentsService;
+    const payments = { provider: 'ZARINPAL', create: createPayment } as unknown as PaymentsService;
     const service = new QualityControlService(prisma, payments, new ConfigService());
 
     await expect(service.startCheckout({ ...buyer, memberships: [] }, 'rfq-1', 'quality-key-123')).rejects.toBeInstanceOf(ForbiddenException);
@@ -45,7 +45,7 @@ describe('QualityControlService payments', () => {
       qualityControlRequest: { findUnique: jest.fn().mockResolvedValue(quotedRequest) },
       paymentIntent: { findUnique: jest.fn().mockResolvedValue(null), create: createIntent, update: updateIntent },
     } as unknown as PrismaService;
-    const payments = { create: createPayment } as unknown as PaymentsService;
+    const payments = { provider: 'ZARINPAL', create: createPayment } as unknown as PaymentsService;
     const service = new QualityControlService(prisma, payments, new ConfigService({ PUBLIC_API_URL: 'https://api.vazano.ir' }));
 
     const result = await service.startCheckout(buyer, 'rfq-1', 'quality-key-123');
@@ -71,7 +71,7 @@ describe('QualityControlService payments', () => {
       paymentIntent: { findFirst: jest.fn().mockResolvedValue({ id: 'payment-1', status: 'SUCCEEDED', payerOrganizationId: 'buyer-org', referenceId: 'quality-request', providerReference: 'reference-1' }) },
       qualityControlRequest: { findUnique: jest.fn().mockResolvedValue({ id: 'quality-request', rfqId: 'rfq-1' }) },
     } as unknown as PrismaService;
-    const payments = { verify: verifyPayment } as unknown as PaymentsService;
+    const payments = { provider: 'ZARINPAL', verify: verifyPayment } as unknown as PaymentsService;
     const service = new QualityControlService(prisma, payments, new ConfigService());
 
     await expect(service.handlePaymentCallback('authority-1', 'OK')).resolves.toEqual({ success: true, alreadyVerified: true, referenceId: 'reference-1', rfqId: 'rfq-1' });

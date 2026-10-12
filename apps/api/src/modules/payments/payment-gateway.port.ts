@@ -1,3 +1,5 @@
+import type { PaymentProvider } from '@prisma/client';
+
 export const PAYMENT_GATEWAY = Symbol('PAYMENT_GATEWAY');
 
 export type CreatePaymentRequest = {
@@ -28,6 +30,8 @@ export type VerifyPaymentResult = {
 };
 
 export interface PaymentGatewayPort {
+  readonly provider: PaymentProvider;
+  redirectUrl(authority: string, callbackUrl: string): string;
   createPayment(input: CreatePaymentRequest): Promise<CreatePaymentResult>;
   verifyPayment(input: VerifyPaymentRequest): Promise<VerifyPaymentResult>;
 }

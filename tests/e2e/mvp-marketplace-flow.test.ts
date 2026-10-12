@@ -25,11 +25,15 @@ async function cleanupTestData() {
     ? await prisma.qualityControlRequest.findMany({ where: { rfqId: { in: rfqIds } }, select: { id: true } })
     : [];
   const qualityControlRequestIds = qualityControlRequests.map(({ id }) => id);
+  const paymentIntents = qualityControlRequestIds.length
+    ? await prisma.paymentIntent.findMany({ where: { referenceType: 'QualityControlRequest', referenceId: { in: qualityControlRequestIds } }, select: { id: true } })
+    : [];
+  const paymentIntentIds = paymentIntents.map(({ id }) => id);
   const contractRequests = rfqIds.length
     ? await prisma.contractRequest.findMany({ where: { rfqId: { in: rfqIds } }, select: { id: true } })
     : [];
   const contractRequestIds = contractRequests.map(({ id }) => id);
-  const aggregateIds = [TEST_USER_ID, ...rfqIds, ...quotationIds, ...qualityControlRequestIds, ...contractRequestIds];
+  const aggregateIds = [TEST_USER_ID, ...rfqIds, ...quotationIds, ...qualityControlRequestIds, ...contractRequestIds, ...paymentIntentIds];
 
   if (aggregateIds.length) {
     await prisma.outboxEvent.deleteMany({ where: { aggregateId: { in: aggregateIds } } });
@@ -45,6 +49,8 @@ async function cleanupTestData() {
   });
   if (rfqIds.length) {
     await prisma.contractRequest.deleteMany({ where: { rfqId: { in: rfqIds } } });
+    await prisma.paymentReceipt.deleteMany({ where: { qualityControlRequestId: { in: qualityControlRequestIds } } });
+    await prisma.paymentIntent.deleteMany({ where: { id: { in: paymentIntentIds } } });
     await prisma.qualityControlRequest.deleteMany({ where: { rfqId: { in: rfqIds } } });
   }
   if (quotationIds.length) {
@@ -121,6 +127,7 @@ test.afterEach(async () => cleanupTestData());
 test.afterAll(async () => prisma.$disconnect());
 
 test('جریان ورود، استعلام، انتشار، پیشنهاد و انتخاب فروشنده تکمیل می‌شود', async ({ page }) => {
+  test.setTimeout(240_000);
   await page.goto('/login');
   await page.getByLabel('شماره موبایل').fill(TEST_MOBILE_LOCAL);
   await page.getByRole('button', { name: 'ارسال کد تأیید' }).click();
@@ -218,13 +225,15 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   await page.getByRole('button', { name: 'انتخاب فروشنده' }).click();
   await expect(page.getByText('فروشنده منتخب ثبت شد.')).toBeVisible();
   await expect(page.getByText('فروشنده منتخب', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'تأیید درخواست و کارمزد کنترل کیفیت' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'پرداخت کارمزد و فعال‌سازی خدمت' })).toBeVisible();
   page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'تأیید درخواست و کارمزد کنترل کیفیت' }).click();
-  await expect(page.getByText('خدمت کنترل کیفیت و کارمزد آن تأیید شد.')).toBeVisible();
-  const qualityControl = await prisma.qualityControlRequest.findUnique({ where: { rfqId: rfqId! } });
+  await page.getByRole('button', { name: 'پرداخت کارمزد و فعال‌سازی خدمت' }).click();
+  await expect(page).toHaveURL(/qualityPayment=success/);
+  await expect(page.getByText('پرداخت کنترل کیفیت تأیید شد و درخواست وارد صف عملیات وازانو شده است.')).toBeVisible();
+  const qualityControl = await prisma.qualityControlRequest.findUnique({ where: { rfqId: rfqId! }, include: { paymentReceipt: true } });
   expect(qualityControl?.status).toBe('ACCEPTED');
   expect(qualityControl?.feeAmountRial).toBe(37_500_000n);
+  expect(qualityControl?.paymentReceipt?.providerReference).toMatch(/^MOCKREF-/);
 
   await page.goto('/admin/quality-control');
   const qualityControlCard = page.locator('article').filter({ hasText: TEST_RFQ_TITLE });

@@ -31,7 +31,8 @@ export class SubscriptionBillingService {
       throw new ConflictException('کلید تکرارپذیری برای درخواست دیگری استفاده شده است.');
     }
     if (existingIntent?.authority && ['REDIRECT_PENDING', 'VERIFY_PENDING', 'SUCCEEDED'].includes(existingIntent.status)) {
-      return { paymentIntentId: existingIntent.id, subscriptionId: existingIntent.referenceId, authority: existingIntent.authority, redirectUrl: `${this.startPayUrl()}${existingIntent.authority}` };
+      const callbackUrl = `${this.publicApiUrl()}/v1/subscriptions/zarinpal/callback`;
+      return { paymentIntentId: existingIntent.id, subscriptionId: existingIntent.referenceId, authority: existingIntent.authority, redirectUrl: this.payments.redirectUrl(existingIntent.authority, callbackUrl) };
     }
 
     const subscription = existingIntent
@@ -41,11 +42,10 @@ export class SubscriptionBillingService {
       throw new ConflictException('درخواست پرداخت با پلن انتخابی سازگار نیست.');
     }
     const intent = existingIntent ?? await this.prisma.paymentIntent.create({
-      data: { provider: 'ZARINPAL', purpose: 'SUBSCRIPTION', amountRial: plan.priceRial, payerOrganizationId: organizationId, referenceType: 'Subscription', referenceId: subscription.id, idempotencyKey },
+      data: { provider: this.payments.provider, purpose: 'SUBSCRIPTION', amountRial: plan.priceRial, payerOrganizationId: organizationId, referenceType: 'Subscription', referenceId: subscription.id, idempotencyKey },
     });
     try {
-      const publicApiUrl = this.config.get<string>('PUBLIC_API_URL') ?? 'http://localhost:3001';
-      const result = await this.payments.create({ amountRial: intent.amountRial, description: `خرید ${plan.nameFa}`, callbackUrl: `${publicApiUrl}/v1/subscriptions/zarinpal/callback`, mobile: user.mobile, orderId: subscription.id });
+      const result = await this.payments.create({ amountRial: intent.amountRial, description: `خرید ${plan.nameFa}`, callbackUrl: `${this.publicApiUrl()}/v1/subscriptions/zarinpal/callback`, mobile: user.mobile, orderId: subscription.id });
       await this.prisma.paymentIntent.update({ where: { id: intent.id }, data: { authority: result.authority, status: 'REDIRECT_PENDING' } });
       return { paymentIntentId: intent.id, subscriptionId: subscription.id, ...result };
     } catch (error) {
@@ -55,7 +55,7 @@ export class SubscriptionBillingService {
   }
 
   async handleCallback(authority: string, callbackStatus: 'OK' | 'NOK') {
-    const intent = await this.prisma.paymentIntent.findFirst({ where: { authority, provider: 'ZARINPAL', purpose: 'SUBSCRIPTION' } });
+    const intent = await this.prisma.paymentIntent.findFirst({ where: { authority, provider: this.payments.provider, purpose: 'SUBSCRIPTION' } });
     if (!intent) throw new NotFoundException('تراکنش اشتراک پیدا نشد.');
     if (intent.status === 'SUCCEEDED') return { success: true, alreadyVerified: true, referenceId: intent.providerReference };
     if (callbackStatus !== 'OK') {
@@ -119,8 +119,7 @@ export class SubscriptionBillingService {
     });
   }
 
-  private startPayUrl(): string {
-    const sandbox = this.config.get<string>('ZARINPAL_SANDBOX') !== 'false';
-    return this.config.get<string>('ZARINPAL_START_PAY_URL') ?? (sandbox ? 'https://sandbox.zarinpal.com/pg/StartPay/' : 'https://www.zarinpal.com/pg/StartPay/');
+  private publicApiUrl(): string {
+    return (this.config.get<string>('PUBLIC_API_URL') ?? 'http://localhost:3001').replace(/\/$/, '');
   }
 }
