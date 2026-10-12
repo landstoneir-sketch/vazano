@@ -6,6 +6,7 @@ import type { Route } from 'next';
 import { apiRequest } from '@/lib/api';
 
 type RequestOtpResult = { expiresInSeconds: number; debugCode?: string };
+type VerifyOtpResult = { isNewUser: boolean };
 
 export function LoginForm({ returnTo = '/dashboard' }: { returnTo?: string }) {
   const router = useRouter();
@@ -29,16 +30,16 @@ export function LoginForm({ returnTo = '/dashboard' }: { returnTo?: string }) {
   async function verifyCode(event: React.FormEvent) {
     event.preventDefault(); setBusy(true); setError('');
     try {
-      await apiRequest('/auth/otp/verify', { method: 'POST', body: JSON.stringify({ mobile, code, purpose: 'LOGIN' }) });
-      router.push(returnTo as Route); router.refresh();
+      const result = await apiRequest<VerifyOtpResult>('/auth/otp/verify', { method: 'POST', body: JSON.stringify({ mobile, code, purpose: 'LOGIN' }) });
+      router.push((result.isNewUser ? '/dashboard/profile' : returnTo) as Route); router.refresh();
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'کد واردشده معتبر نیست.'); }
     finally { setBusy(false); }
   }
 
   return (
     <div className="auth-card">
-      <h1>ورود به وازانو</h1>
-      <p className="muted">ورود امن با شماره موبایل و کد یک‌بارمصرف</p>
+      <h1>ورود یا ثبت‌نام در وازانو</h1>
+      <p className="muted">با شماره موبایل و کد یک‌بارمصرف؛ اگر حساب ندارید، خودکار ساخته می‌شود.</p>
       {message && <div className="message message-success" role="status">{message}</div>}
       {error && <div className="message message-error" role="alert">{error}</div>}
       {step === 'mobile' ? (
