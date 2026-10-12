@@ -344,6 +344,11 @@ enum SupportTicketStatus {
   REJECTED
 }
 
+enum SupplierReviewStatus {
+  PUBLISHED
+  HIDDEN
+}
+
 model User {
   id                      String                   @id @default(cuid())
   mobile                  String                   @unique
@@ -378,6 +383,8 @@ model User {
   requestedContracts      ContractRequest[]        @relation("ContractRequester")
   resolvedPaymentReconciliations PaymentIntent[]   @relation("PaymentReconciliationResolver")
   manualSubscriptionRenewals ManualSubscriptionRenewal[] @relation("ManualSubscriptionRenewalActor")
+  createdSupplierReviews SupplierReview[] @relation("SupplierReviewCreator")
+  moderatedSupplierReviews SupplierReview[] @relation("SupplierReviewModerator")
 
   @@map("users")
 }
@@ -437,6 +444,8 @@ model Organization {
   buyerRfqs                Rfq[]
   subscriptions            Subscription[]
   manualSubscriptionRenewals ManualSubscriptionRenewal[]
+  buyerSupplierReviews       SupplierReview[] @relation("BuyerSupplierReviews")
+  receivedSupplierReviews    SupplierReview[] @relation("ReceivedSupplierReviews")
   paymentReceipts          PaymentReceipt[]
   creditWallet             CreditWallet?
   supplierProfile          SupplierProfile?
@@ -840,6 +849,7 @@ model Rfq {
   attachments               Attachment[]
   messageThreads            MessageThread[]
   supportTickets            SupportTicket[]
+  supplierReview            SupplierReview?
 
   @@index([buyerOrganizationId, createdAt])
   @@index([lifecycleState, operationalStatus])
@@ -964,11 +974,39 @@ model Quotation {
   attachments            Attachment[]
   qualityControlRequest  QualityControlRequest?
   contractRequest        ContractRequest?
+  supplierReview         SupplierReview?
 
   @@unique([rfqId, supplierOrganizationId, version])
   @@index([rfqId, status, submittedAt])
   @@index([supplierOrganizationId, status, createdAt])
   @@map("quotations")
+}
+
+model SupplierReview {
+  id                     String               @id @default(cuid())
+  rfqId                  String               @unique @map("rfq_id")
+  quotationId            String               @unique @map("quotation_id")
+  buyerOrganizationId    String               @map("buyer_organization_id")
+  supplierOrganizationId String               @map("supplier_organization_id")
+  createdByUserId        String               @map("created_by_user_id")
+  rating                 Int
+  comment                String?              @db.Text
+  status                 SupplierReviewStatus @default(PUBLISHED)
+  moderationReason       String?              @map("moderation_reason") @db.Text
+  moderatedByUserId      String?              @map("moderated_by_user_id")
+  moderatedAt            DateTime?            @map("moderated_at") @db.Timestamptz(3)
+  createdAt              DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  rfq                    Rfq                  @relation(fields: [rfqId], references: [id], onDelete: Restrict)
+  quotation              Quotation            @relation(fields: [quotationId], references: [id], onDelete: Restrict)
+  buyerOrganization      Organization          @relation("BuyerSupplierReviews", fields: [buyerOrganizationId], references: [id], onDelete: Restrict)
+  supplierOrganization   Organization          @relation("ReceivedSupplierReviews", fields: [supplierOrganizationId], references: [id], onDelete: Restrict)
+  createdBy              User                  @relation("SupplierReviewCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  moderatedBy            User?                 @relation("SupplierReviewModerator", fields: [moderatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([supplierOrganizationId, status, createdAt])
+  @@index([buyerOrganizationId, createdAt])
+  @@map("supplier_reviews")
 }
 
 model QuotationItem {

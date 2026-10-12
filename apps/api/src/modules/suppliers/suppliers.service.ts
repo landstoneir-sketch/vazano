@@ -33,7 +33,7 @@ export class SuppliersService {
     });
 
     return Promise.all(organizations.map(async (organization) => {
-      const [invitations, submittedOpportunities, wins, recentInvitations, responseSamples] = await Promise.all([
+      const [invitations, submittedOpportunities, wins, recentInvitations, responseSamples, reviewSummary] = await Promise.all([
         this.prisma.rfqInvitation.count({ where: { supplierOrganizationId: organization.id } }),
         this.prisma.rfqInvitation.count({ where: { supplierOrganizationId: organization.id, status: 'RESPONDED' } }),
         this.prisma.quotation.count({ where: { supplierOrganizationId: organization.id, status: 'ACCEPTED' } }),
@@ -43,6 +43,11 @@ export class SuppliersService {
           select: { invitedAt: true, respondedAt: true },
           orderBy: { respondedAt: 'desc' },
           take: 500,
+        }),
+        this.prisma.supplierReview.aggregate({
+          where: { supplierOrganizationId: organization.id, status: 'PUBLISHED' },
+          _count: { _all: true },
+          _avg: { rating: true },
         }),
       ]);
       const totalResponseHours = responseSamples.reduce((total, item) => total + ((item.respondedAt!.getTime() - item.invitedAt.getTime()) / 3_600_000), 0);
@@ -57,6 +62,8 @@ export class SuppliersService {
         responseRatePercent: invitations > 0 ? Math.round((submittedOpportunities / invitations) * 1000) / 10 : 0,
         winRatePercent: submittedOpportunities > 0 ? Math.round((wins / submittedOpportunities) * 1000) / 10 : 0,
         averageResponseHours: responseSamples.length > 0 ? Math.round((totalResponseHours / responseSamples.length) * 10) / 10 : null,
+        reviewCount: reviewSummary._count._all,
+        averageRating: reviewSummary._avg.rating,
         availableCredits: organization.creditWallet?.cachedBalanceCredits ?? 0n,
         subscription: organization.subscriptions[0] ?? null,
       };

@@ -14,6 +14,7 @@ type QuotationItem = { id: string; quantity: string; unitPriceRial: string; line
 type Quotation = { id: string; code: string; status: string; finalAmountRial: string; taxRial: string; shippingRial: string; preparationDays: number | null; validUntil: string | null; supplierOrganization: { id: string; displayName: string; province: string | null; city: string | null }; items: QuotationItem[] };
 type Attachment = { id: string; originalName: string; status: string; sizeBytes: number };
 type CheckoutResult = { paymentIntentId: string; authority?: string; redirectUrl: string; alreadyPaid?: boolean };
+type SupplierReview = { id: string; rating: number; comment: string | null; status: 'PUBLISHED' | 'HIDDEN'; moderationReason: string | null; createdAt: string };
 
 function toman(value: string) { return `${(Number(value) / 10).toLocaleString('fa-IR')} تومان`; }
 
@@ -25,13 +26,19 @@ export function RfqDetail({ rfqId, qualityPaymentResult }: { rfqId: string; qual
   const [rfq, setRfq] = useState<Rfq | null>(null);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [review, setReview] = useState<SupplierReview | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
   const [message, setMessage] = useState('');
   const [busyId, setBusyId] = useState('');
 
   const load = useCallback(async () => {
     try {
-      const data = await apiRequest<{ rfq: Rfq; quotations: Quotation[] }>(`/quotations/rfqs/${rfqId}/comparison`);
-      setRfq(data.rfq); setQuotations(data.quotations);
+      const [data, reviewData] = await Promise.all([
+        apiRequest<{ rfq: Rfq; quotations: Quotation[] }>(`/quotations/rfqs/${rfqId}/comparison`),
+        apiRequest<SupplierReview | null>(`/reviews/rfqs/${rfqId}`),
+      ]);
+      setRfq(data.rfq); setQuotations(data.quotations); setReview(reviewData);
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : 'دریافت اطلاعات انجام نشد.'); }
   }, [rfqId]);
 
@@ -40,8 +47,9 @@ export function RfqDetail({ rfqId, qualityPaymentResult }: { rfqId: string; qual
     void Promise.all([
       apiRequest<{ rfq: Rfq; quotations: Quotation[] }>(`/quotations/rfqs/${rfqId}/comparison`),
       apiRequest<Attachment[]>(`/attachments/rfqs/${rfqId}`),
+      apiRequest<SupplierReview | null>(`/reviews/rfqs/${rfqId}`),
     ])
-      .then(([data, attachmentData]) => { if (active) { setRfq(data.rfq); setQuotations(data.quotations); setAttachments(attachmentData); } })
+      .then(([data, attachmentData, reviewData]) => { if (active) { setRfq(data.rfq); setQuotations(data.quotations); setAttachments(attachmentData); setReview(reviewData); } })
       .catch((reason: unknown) => { if (active) setMessage(reason instanceof Error ? reason.message : 'دریافت اطلاعات انجام نشد.'); });
     return () => { active = false; };
   }, [rfqId]);
@@ -81,6 +89,18 @@ export function RfqDetail({ rfqId, qualityPaymentResult }: { rfqId: string; qual
       await apiRequest(`/contracts/rfqs/${rfqId}`, { method: 'POST', body: JSON.stringify({}) });
       setMessage('درخواست هماهنگی قرارداد ثبت شد.'); await load();
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : 'ثبت درخواست قرارداد انجام نشد.'); }
+    finally { setBusyId(''); }
+  }
+
+  async function submitReview() {
+    if (!window.confirm('این امتیاز پس از ثبت به‌عنوان تجربه خرید معتبر منتشر می‌شود. ادامه می‌دهید؟')) return;
+    setBusyId('review'); setMessage('');
+    try {
+      const created = await apiRequest<SupplierReview>(`/reviews/rfqs/${rfqId}`, {
+        method: 'POST', body: JSON.stringify({ rating: reviewRating, ...(reviewComment.trim() ? { comment: reviewComment.trim() } : {}) }),
+      });
+      setReview(created); setMessage('امتیاز شما برای فروشنده ثبت شد.');
+    } catch (reason) { setMessage(reason instanceof Error ? reason.message : 'ثبت امتیاز انجام نشد.'); }
     finally { setBusyId(''); }
   }
 
@@ -139,6 +159,7 @@ export function RfqDetail({ rfqId, qualityPaymentResult }: { rfqId: string; qual
       </>}
       <p className="muted">این بخش خدمت هماهنگی است و به‌تنهایی امضای الکترونیکی یا قرارداد حقوقی لازم‌الاجرا ایجاد نمی‌کند.</p>
     </article>}
+    {rfq.operationalStatus === 'SELLER_SELECTED' && <article className="card stack"><div><h2>ارزیابی فروشنده منتخب</h2><p className="muted">هر خرید فقط یک ارزیابی معتبر دارد و امتیاز به پیشنهاد منتخب همین استعلام متصل می‌شود.</p></div>{review ? <div><div className="price" aria-label={`${review.rating} از ۵`}>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</div>{review.comment && <p>{review.comment}</p>}<p className="muted">ثبت‌شده در {new Date(review.createdAt).toLocaleDateString('fa-IR')}{review.status === 'HIDDEN' ? ' · توسط پشتیبانی پنهان شده است' : ' · منتشرشده'}</p>{review.status === 'HIDDEN' && review.moderationReason && <div className="message message-error">دلیل پنهان‌سازی: {review.moderationReason}</div>}</div> : <form className="form-grid" onSubmit={(event) => { event.preventDefault(); void submitReview(); }}><label className="form-field"><span>امتیاز کلی</span><select value={reviewRating} onChange={(event) => setReviewRating(Number(event.target.value))}><option value={5}>۵ — عالی</option><option value={4}>۴ — خوب</option><option value={3}>۳ — متوسط</option><option value={2}>۲ — ضعیف</option><option value={1}>۱ — بسیار ضعیف</option></select></label><label className="form-field full"><span>توضیح تجربه خرید (اختیاری)</span><textarea minLength={3} maxLength={1000} rows={3} value={reviewComment} onChange={(event) => setReviewComment(event.target.value)} /></label><button className="button button-primary" disabled={busyId === 'review'}>{busyId === 'review' ? 'در حال ثبت…' : 'ثبت قطعی امتیاز'}</button></form>}</article>}
     <h2>مقایسه پیشنهادها</h2>
     {quotations.length === 0 && <div className="card">هنوز پیشنهاد قیمتی دریافت نشده است.</div>}
     <div className="comparison-grid">{quotations.map((quote) => <article className={`card quote-card ${quote.status === 'ACCEPTED' ? 'selected-card' : ''}`} key={quote.id}>

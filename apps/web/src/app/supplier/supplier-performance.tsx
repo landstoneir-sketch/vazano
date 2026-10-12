@@ -14,6 +14,8 @@ type Performance = {
   responseRatePercent: number;
   winRatePercent: number;
   averageResponseHours: number | null;
+  reviewCount: number;
+  averageRating: number | null;
   availableCredits: string;
   subscription: null | { status: string; expiresAt: string | null; graceEndsAt: string | null; plan: { nameFa: string } };
 };
@@ -44,6 +46,7 @@ export function SupplierPerformance() {
       <div><span className="muted">نرخ پاسخ‌گویی</span><h3>{item.responseRatePercent.toLocaleString('fa-IR')}٪</h3><small>{item.respondedOpportunities.toLocaleString('fa-IR')} فرصت پاسخ‌داده‌شده</small></div>
       <div><span className="muted">نرخ انتخاب</span><h3>{item.winRatePercent.toLocaleString('fa-IR')}٪</h3><small>{item.wins.toLocaleString('fa-IR')} پیشنهاد منتخب</small></div>
       <div><span className="muted">میانگین زمان پاسخ</span><h3>{item.averageResponseHours === null ? '—' : `${item.averageResponseHours.toLocaleString('fa-IR')} ساعت`}</h3></div>
+      <div><span className="muted">رضایت خریداران</span><h3>{item.averageRating === null ? '—' : `${item.averageRating.toLocaleString('fa-IR', { maximumFractionDigits: 1 })} از ۵`}</h3><small>{item.reviewCount.toLocaleString('fa-IR')} ارزیابی خرید معتبر</small></div>
       <div><span className="muted">اعتبار قابل مصرف</span><h3>{BigInt(item.availableCredits).toLocaleString('fa-IR')}</h3></div>
       <div><span className="muted">اعتبار اشتراک</span><h3>{item.subscription?.expiresAt ? new Date(item.subscription.expiresAt).toLocaleDateString('fa-IR') : '—'}</h3></div>
     </div>
