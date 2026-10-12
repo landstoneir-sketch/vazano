@@ -40,6 +40,7 @@ npm run dev
 ## مسیرهای مهم
 
 - `/dashboard` — داشبورد
+- `/dashboard/profile` — اطلاعات حساب کاربری
 - `/dashboard/rfqs/new` — ثبت استعلام
 - `/dashboard/organization` — سازمان‌ها و اعضا
 - `/supplier` — فرصت‌های فروشنده

@@ -68,7 +68,7 @@ export function AccountNavigation() {
       <Link href={'/messages' as Route}>پیام‌ها</Link>
       <Link href="/notifications">اعلان‌ها</Link>
       {managementPath && <Link href={managementPath}>مدیریت</Link>}
-      <span className="nav-user-badge" title={account.mobile}>{maskMobile(account.mobile)}</span>
+      <Link className="nav-user-badge" href="/dashboard/profile" title="پروفایل من">{maskMobile(account.mobile)}</Link>
       <button className="nav-logout" type="button" disabled={loggingOut} onClick={() => void logout()}>
         {loggingOut ? 'در حال خروج…' : 'خروج'}
       </button>
