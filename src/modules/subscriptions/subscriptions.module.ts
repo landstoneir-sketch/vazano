@@ -9,10 +9,11 @@ import { SubscriptionLifecycleService } from './subscription-lifecycle.service';
 import { SubscriptionLifecycleWorker } from './subscription-lifecycle.worker';
 import { AdminBillingController } from './admin-billing.controller';
 import { AdminBillingService } from './admin-billing.service';
+import { SubscriptionSmsReminderService } from './subscription-sms-reminder.service';
 
 @Module({
   imports: [AuthModule, PaymentsModule],
   controllers: [SubscriptionsController, SubscriptionPaymentCallbackController, AdminBillingController],
-  providers: [SubscriptionsService, SubscriptionBillingService, SubscriptionLifecycleService, SubscriptionLifecycleWorker, AdminBillingService],
+  providers: [SubscriptionsService, SubscriptionBillingService, SubscriptionLifecycleService, SubscriptionLifecycleWorker, SubscriptionSmsReminderService, AdminBillingService],
 })
 export class SubscriptionsModule {}

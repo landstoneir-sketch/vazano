@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../shared/prisma/prisma.service';
+import { SubscriptionSmsReminderService } from './subscription-sms-reminder.service';
 
 const REMINDER_EVENT_TYPES: Readonly<Record<number, string>> = {
   [-14]: 'ir.vazano.subscription.renewal.14_days_before.v1',
@@ -11,15 +12,19 @@ const REMINDER_EVENT_TYPES: Readonly<Record<number, string>> = {
 
 @Injectable()
 export class SubscriptionLifecycleService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly smsReminders: SubscriptionSmsReminderService,
+  ) {}
 
-  async process(now = new Date()): Promise<{ reminders: number; enteredGrace: number; expired: number }> {
-    const [reminders, enteredGrace, expired] = await Promise.all([
+  async process(now = new Date()): Promise<{ reminders: number; smsReminders: number; enteredGrace: number; expired: number }> {
+    const [reminders, smsReminders, enteredGrace, expired] = await Promise.all([
       this.processDueInAppReminders(now),
+      this.smsReminders.process(now),
       this.enterGracePeriod(now),
       this.finishGracePeriod(now),
     ]);
-    return { reminders, enteredGrace, expired };
+    return { reminders, smsReminders, enteredGrace, expired };
   }
 
   private async processDueInAppReminders(now: Date): Promise<number> {

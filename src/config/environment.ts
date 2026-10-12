@@ -8,13 +8,23 @@ export function validateEnvironment(environment: Environment): Environment {
   requireValue(environment, 'OTP_PEPPER', 32);
   if (environment.OTP_IP_REQUESTS_PER_MINUTE) requirePositiveInteger(environment, 'OTP_IP_REQUESTS_PER_MINUTE');
   const paymentProvider = environment.PAYMENT_PROVIDER ?? 'zarinpal';
+  const smsProvider = environment.SMS_PROVIDER ?? 'debug';
   if (!['zarinpal', 'mock'].includes(paymentProvider)) throw new Error('PAYMENT_PROVIDER must be zarinpal or mock.');
+  if (environment.SUBSCRIPTION_SMS_ENABLED === 'true' && smsProvider === 'smsir') {
+    for (const key of [
+      'SMSIR_SUBSCRIPTION_RENEWAL_14_TEMPLATE_ID',
+      'SMSIR_SUBSCRIPTION_RENEWAL_7_TEMPLATE_ID',
+      'SMSIR_SUBSCRIPTION_RENEWAL_3_TEMPLATE_ID',
+      'SMSIR_SUBSCRIPTION_EXPIRED_TEMPLATE_ID',
+      'SMSIR_SUBSCRIPTION_GRACE_ENDED_TEMPLATE_ID',
+    ]) requirePositiveInteger(environment, key);
+  }
 
   if (nodeEnv === 'production') {
     const webOrigin = new URL(environment.WEB_ORIGIN!);
     if (webOrigin.protocol !== 'https:') throw new Error('WEB_ORIGIN must use HTTPS in production.');
     if (environment.OTP_DEBUG_ENABLED === 'true') throw new Error('OTP debug mode must be disabled in production.');
-    if ((environment.SMS_PROVIDER ?? 'debug') !== 'smsir') throw new Error('A production SMS provider must be configured.');
+    if (smsProvider !== 'smsir') throw new Error('A production SMS provider must be configured.');
     requireValue(environment, 'SMSIR_API_KEY', 16);
     requirePositiveInteger(environment, 'SMSIR_TEMPLATE_ID');
     if (environment.FILE_SCAN_MODE !== 'clamav') throw new Error('FILE_SCAN_MODE must be clamav in production.');

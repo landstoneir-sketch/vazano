@@ -13,6 +13,6 @@ import { SmsIrAdapter } from './sms/smsir.adapter';
     AuthService, SessionGuard, DebugSmsAdapter, SmsIrAdapter,
     { provide: SMS_PORT, inject: [ConfigService, DebugSmsAdapter, SmsIrAdapter], useFactory: (config: ConfigService, debug: DebugSmsAdapter, smsIr: SmsIrAdapter) => config.get('SMS_PROVIDER') === 'smsir' ? smsIr : debug },
   ],
-  exports: [AuthService, SessionGuard],
+  exports: [AuthService, SessionGuard, SMS_PORT],
 })
 export class AuthModule {}
