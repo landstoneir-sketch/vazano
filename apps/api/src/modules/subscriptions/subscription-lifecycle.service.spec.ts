@@ -5,6 +5,8 @@ describe('SubscriptionLifecycleService', () => {
     const tx = {
       subscriptionReminder: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       subscription: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      billingInvoice: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      subscriptionDiscountRedemption: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       outboxEvent: { create: jest.fn().mockResolvedValue({}) },
     };
     const prisma = {
@@ -16,7 +18,7 @@ describe('SubscriptionLifecycleService', () => {
           .mockResolvedValueOnce([{ id: 'subscription-2', organizationId: 'supplier-1' }])
           .mockResolvedValueOnce([{ id: 'subscription-3', organizationId: 'supplier-2', status: 'GRACE' }]),
       },
-      billingInvoice: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
+      billingInvoice: { findMany: jest.fn().mockResolvedValue([{ id: 'invoice-1', subscriptionId: 'subscription-4' }, { id: 'invoice-2', subscriptionId: null }]) },
       $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
     };
     const smsReminders = { process: jest.fn().mockResolvedValue(1) };
@@ -37,12 +39,14 @@ describe('SubscriptionLifecycleService', () => {
     const tx = {
       subscriptionReminder: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
       subscription: { updateMany: jest.fn() },
+      billingInvoice: { updateMany: jest.fn() },
+      subscriptionDiscountRedemption: { updateMany: jest.fn() },
       outboxEvent: { create: jest.fn() },
     };
     const prisma = {
       subscriptionReminder: { findMany: jest.fn().mockResolvedValue([{ id: 'reminder-1', subscriptionId: 'subscription-1', offsetDays: -3, subscription: { isTrialSnapshot: false } }]) },
       subscription: { findMany: jest.fn().mockResolvedValue([]) },
-      billingInvoice: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      billingInvoice: { findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
     };
     const smsReminders = { process: jest.fn().mockResolvedValue(0) };

@@ -48,13 +48,19 @@ type BillingInvoice = {
   organization: SupplierOption; subscription: { plan: { code: string; nameFa: string } } | null;
   paymentIntent: { providerReference: string | null } | null; manualRenewal: { trackingNumber: string } | null;
 };
+type DiscountCode = {
+  id: string; code: string; nameFa: string; descriptionFa: string | null; type: 'PERCENTAGE' | 'FIXED_RIAL';
+  percentageBps: number | null; fixedAmountRial: string | null; minimumPurchaseRial: string; perOrganizationLimit: number;
+  maxRedemptions: number | null; validFrom: string; validUntil: string; isActive: boolean;
+  applicablePlan: { id: string; code: string; nameFa: string } | null; _count: { redemptions: number };
+};
 type Overview = {
   summary: Record<string, number>; reminderSummary: Record<string, number>; plans: Plan[]; subscriptions: Subscription[];
   payments: Payment[]; receipts: PaymentReceipt[]; reminders: SubscriptionReminder[];
   reminderDelivery: { enabled: boolean; provider: 'SMSIR' | 'DEBUG'; templatesConfigured: boolean; liveReady: boolean; deliveryWindow: string };
-  suppliers: SupplierOption[]; manualRenewals: ManualRenewal[]; invoices: BillingInvoice[];
+  suppliers: SupplierOption[]; manualRenewals: ManualRenewal[]; invoices: BillingInvoice[]; discountCodes: DiscountCode[];
 };
-type Tab = 'plans' | 'subscriptions' | 'manual-renewals' | 'invoices' | 'payments' | 'receipts' | 'reminders';
+type Tab = 'plans' | 'discounts' | 'subscriptions' | 'manual-renewals' | 'invoices' | 'payments' | 'receipts' | 'reminders';
 type ReconciliationResult = { payment: { reconciliationStatus: Payment['reconciliationStatus'] }; provider: { success: boolean; code: number; referenceId: string | null } };
 
 type PlanDraft = {
@@ -62,6 +68,11 @@ type PlanDraft = {
   priceToman: string; grantCredits: string; dailyProposalLimit: number; maxProposalLimit: number; taxIncluded: boolean;
   isPublic: boolean; isActive: boolean; canViewMatchedRfqs: boolean; version?: number; entitlements: Record<string, unknown>;
   isTrial: boolean; trialDurationDays: number;
+};
+type DiscountDraft = {
+  code: string; nameFa: string; descriptionFa: string; type: 'PERCENTAGE' | 'FIXED_RIAL'; percentage: string;
+  fixedAmountToman: string; applicablePlanId: string; minimumPurchaseToman: string; perOrganizationLimit: number;
+  maxRedemptions: string; validFrom: string; validUntil: string; isActive: boolean;
 };
 
 const emptyPlan: PlanDraft = {
@@ -74,6 +85,12 @@ function currentLocalDateTime(): string {
   const now = new Date();
   const offset = now.getTimezoneOffset() * 60_000;
   return new Date(now.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function futureLocalDateTime(days: number): string {
+  const date = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
 function asObject(value: unknown): Record<string, unknown> {
@@ -107,6 +124,7 @@ export function BillingManager() {
   const [resolvingPaymentId, setResolvingPaymentId] = useState('');
   const [retryingReminderId, setRetryingReminderId] = useState('');
   const [manualRenewal, setManualRenewal] = useState({ organizationId: '', planId: '', amountToman: '', trackingNumber: '', paidAt: currentLocalDateTime(), note: '' });
+  const [discount, setDiscount] = useState<DiscountDraft>({ code: '', nameFa: '', descriptionFa: '', type: 'PERCENTAGE', percentage: '10', fixedAmountToman: '', applicablePlanId: '', minimumPurchaseToman: '0', perOrganizationLimit: 1, maxRedemptions: '', validFrom: currentLocalDateTime(), validUntil: futureLocalDateTime(30), isActive: true });
 
   const load = useCallback(async () => {
     setError('');
@@ -207,13 +225,45 @@ export function BillingManager() {
     finally { setBusy(false); }
   }
 
+  async function createDiscount(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError(''); setMessage('');
+    try {
+      await apiRequest('/admin/billing/discounts', { method: 'POST', body: JSON.stringify({
+        code: discount.code.trim().toUpperCase(), nameFa: discount.nameFa, descriptionFa: discount.descriptionFa || undefined,
+        type: discount.type,
+        percentageBps: discount.type === 'PERCENTAGE' ? Math.round(Number(discount.percentage) * 100) : undefined,
+        fixedAmountRial: discount.type === 'FIXED_RIAL' ? (BigInt(discount.fixedAmountToman || '0') * BigInt(10)).toString() : undefined,
+        applicablePlanId: discount.applicablePlanId || undefined,
+        minimumPurchaseRial: (BigInt(discount.minimumPurchaseToman || '0') * BigInt(10)).toString(),
+        perOrganizationLimit: discount.perOrganizationLimit,
+        maxRedemptions: discount.maxRedemptions ? Number(discount.maxRedemptions) : undefined,
+        validFrom: new Date(discount.validFrom).toISOString(), validUntil: new Date(discount.validUntil).toISOString(), isActive: discount.isActive,
+      }) });
+      setMessage('کد تخفیف ایجاد شد و از زمان شروع اعتبار قابل استفاده است.');
+      setDiscount({ code: '', nameFa: '', descriptionFa: '', type: 'PERCENTAGE', percentage: '10', fixedAmountToman: '', applicablePlanId: '', minimumPurchaseToman: '0', perOrganizationLimit: 1, maxRedemptions: '', validFrom: currentLocalDateTime(), validUntil: futureLocalDateTime(30), isActive: true });
+      await load();
+    } catch (reason: unknown) { setError(reason instanceof Error ? reason.message : 'ایجاد کد تخفیف انجام نشد.'); }
+    finally { setBusy(false); }
+  }
+
+  async function toggleDiscount(item: DiscountCode) {
+    setBusy(true); setError(''); setMessage('');
+    try {
+      await apiRequest(`/admin/billing/discounts/${item.id}/status`, { method: 'PUT', body: JSON.stringify({ isActive: !item.isActive }) });
+      setMessage(item.isActive ? 'کد تخفیف غیرفعال شد.' : 'کد تخفیف فعال شد.');
+      await load();
+    } catch (reason: unknown) { setError(reason instanceof Error ? reason.message : 'تغییر وضعیت کد تخفیف انجام نشد.'); }
+    finally { setBusy(false); }
+  }
+
   if (!overview && !error) return <div className="card">در حال دریافت اطلاعات اشتراک و پرداخت…</div>;
 
   return <div className="stack">
     {error && <div className="message message-error">{error}</div>}{message && <div className="message message-success">{message}</div>}
     <div className="dashboard-grid">{statusCards.map(([status, label]) => <article className="card billing-summary-card" key={status}><span>{label}</span><strong>{(overview?.summary[status] ?? 0).toLocaleString('fa-IR')}</strong></article>)}</div>
-    <div className="tab-list" role="tablist" aria-label="بخش مالی"><button className={tab === 'plans' ? 'tab-active' : ''} type="button" onClick={() => setTab('plans')}>پلن‌ها</button><button className={tab === 'subscriptions' ? 'tab-active' : ''} type="button" onClick={() => setTab('subscriptions')}>اشتراک‌ها</button><button className={tab === 'manual-renewals' ? 'tab-active' : ''} type="button" onClick={() => setTab('manual-renewals')}>تمدید دستی</button><button className={tab === 'invoices' ? 'tab-active' : ''} type="button" onClick={() => setTab('invoices')}>صورتحساب‌ها</button><button className={tab === 'payments' ? 'tab-active' : ''} type="button" onClick={() => setTab('payments')}>پرداخت‌ها</button><button className={tab === 'receipts' ? 'tab-active' : ''} type="button" onClick={() => setTab('receipts')}>رسیدها</button><button className={tab === 'reminders' ? 'tab-active' : ''} type="button" onClick={() => setTab('reminders')}>اخطارهای تمدید</button></div>
+    <div className="tab-list" role="tablist" aria-label="بخش مالی"><button className={tab === 'plans' ? 'tab-active' : ''} type="button" onClick={() => setTab('plans')}>پلن‌ها</button><button className={tab === 'discounts' ? 'tab-active' : ''} type="button" onClick={() => setTab('discounts')}>کدهای تخفیف</button><button className={tab === 'subscriptions' ? 'tab-active' : ''} type="button" onClick={() => setTab('subscriptions')}>اشتراک‌ها</button><button className={tab === 'manual-renewals' ? 'tab-active' : ''} type="button" onClick={() => setTab('manual-renewals')}>تمدید دستی</button><button className={tab === 'invoices' ? 'tab-active' : ''} type="button" onClick={() => setTab('invoices')}>صورتحساب‌ها</button><button className={tab === 'payments' ? 'tab-active' : ''} type="button" onClick={() => setTab('payments')}>پرداخت‌ها</button><button className={tab === 'receipts' ? 'tab-active' : ''} type="button" onClick={() => setTab('receipts')}>رسیدها</button><button className={tab === 'reminders' ? 'tab-active' : ''} type="button" onClick={() => setTab('reminders')}>اخطارهای تمدید</button></div>
     {tab === 'plans' && overview && <section className="card stack"><div className="admin-card-title"><div><h2>مدیریت پلن‌ها</h2><p>قیمت را به تومان وارد کنید؛ مبلغ در دیتابیس با واحد ریال و به‌صورت عدد صحیح ذخیره می‌شود.</p></div><button className="button button-secondary" type="button" onClick={() => { setDraft(emptyPlan); setError(''); setMessage(''); }}>پلن جدید</button></div><div className="content-item-list">{overview.plans.map((plan) => <button className={draft.id === plan.id ? 'content-item-active' : ''} type="button" key={plan.id} onClick={() => { setDraft(fromPlan(plan)); setError(''); setMessage(''); }}><strong>{plan.nameFa}</strong><span>{plan.isTrial ? 'آزمایشی رایگان' : formatToman(plan.priceRial)} · {plan.isActive ? 'فعال' : 'غیرفعال'}</span></button>)}</div><PlanForm draft={draft} setDraft={setDraft} busy={busy} onSubmit={savePlan} /></section>}
+    {tab === 'discounts' && overview && <DiscountManager items={overview.discountCodes} plans={overview.plans} draft={discount} setDraft={setDiscount} busy={busy} onSubmit={createDiscount} onToggle={toggleDiscount} />}
     {tab === 'subscriptions' && overview && <SubscriptionList items={overview.subscriptions} />}
     {tab === 'manual-renewals' && overview && <ManualRenewalManager suppliers={overview.suppliers} plans={overview.plans} items={overview.manualRenewals} draft={manualRenewal} setDraft={setManualRenewal} busy={busy} onSubmit={createManualRenewal} />}
     {tab === 'invoices' && overview && <InvoiceList items={overview.invoices} />}
@@ -221,6 +271,14 @@ export function BillingManager() {
     {tab === 'receipts' && overview && <ReceiptList items={overview.receipts} />}
     {tab === 'reminders' && overview && <ReminderList items={overview.reminders} summary={overview.reminderSummary} delivery={overview.reminderDelivery} retryingId={retryingReminderId} onRetry={retryReminder} />}
   </div>;
+}
+
+function DiscountManager({ items, plans, draft, setDraft, busy, onSubmit, onToggle }: {
+  items: DiscountCode[]; plans: Plan[]; draft: DiscountDraft; setDraft: (value: DiscountDraft) => void; busy: boolean;
+  onSubmit: (event: FormEvent) => Promise<void>; onToggle: (item: DiscountCode) => Promise<void>;
+}) {
+  const paidPlans = plans.filter((plan) => !plan.isTrial);
+  return <section className="stack"><form className="card form-grid" onSubmit={(event) => void onSubmit(event)}><div className="full"><h2>ایجاد کد تخفیف اشتراک</h2><p className="muted">مبلغ نهایی فقط در سرور محاسبه می‌شود. کدهای استفاده‌شده حذف نمی‌شوند و فقط می‌توان آن‌ها را غیرفعال کرد.</p></div><label className="form-field"><span>کد</span><input dir="ltr" minLength={3} maxLength={32} pattern="[A-Z0-9_-]{3,32}" value={draft.code} onChange={(event) => setDraft({ ...draft, code: event.target.value.toUpperCase() })} required /></label><label className="form-field"><span>نام فارسی</span><input minLength={2} maxLength={120} value={draft.nameFa} onChange={(event) => setDraft({ ...draft, nameFa: event.target.value })} required /></label><label className="form-field full"><span>توضیح</span><textarea maxLength={500} rows={2} value={draft.descriptionFa} onChange={(event) => setDraft({ ...draft, descriptionFa: event.target.value })} /></label><label className="form-field"><span>نوع تخفیف</span><select value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value as DiscountDraft['type'] })}><option value="PERCENTAGE">درصدی</option><option value="FIXED_RIAL">مبلغ ثابت</option></select></label>{draft.type === 'PERCENTAGE' ? <label className="form-field"><span>درصد تخفیف</span><input type="number" min="0.01" max="90" step="0.01" value={draft.percentage} onChange={(event) => setDraft({ ...draft, percentage: event.target.value })} required /></label> : <label className="form-field"><span>مبلغ ثابت (تومان)</span><input type="number" min="1" value={draft.fixedAmountToman} onChange={(event) => setDraft({ ...draft, fixedAmountToman: event.target.value })} required /></label>}<label className="form-field"><span>محدود به پلن</span><select value={draft.applicablePlanId} onChange={(event) => setDraft({ ...draft, applicablePlanId: event.target.value })}><option value="">همه پلن‌های پولی</option>{paidPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.nameFa}</option>)}</select></label><label className="form-field"><span>حداقل خرید (تومان)</span><input type="number" min="0" value={draft.minimumPurchaseToman} onChange={(event) => setDraft({ ...draft, minimumPurchaseToman: event.target.value })} required /></label><label className="form-field"><span>سقف هر سازمان</span><input type="number" min="1" max="1000" value={draft.perOrganizationLimit} onChange={(event) => setDraft({ ...draft, perOrganizationLimit: Number(event.target.value) })} required /></label><label className="form-field"><span>سقف کل استفاده (اختیاری)</span><input type="number" min={draft.perOrganizationLimit} value={draft.maxRedemptions} onChange={(event) => setDraft({ ...draft, maxRedemptions: event.target.value })} /></label><label className="form-field"><span>شروع اعتبار</span><input type="datetime-local" value={draft.validFrom} onChange={(event) => setDraft({ ...draft, validFrom: event.target.value })} required /></label><label className="form-field"><span>پایان اعتبار</span><input type="datetime-local" value={draft.validUntil} onChange={(event) => setDraft({ ...draft, validUntil: event.target.value })} required /></label><label className="check-field full"><input type="checkbox" checked={draft.isActive} onChange={(event) => setDraft({ ...draft, isActive: event.target.checked })} /><span>بلافاصله فعال باشد</span></label><button className="button button-primary" disabled={busy}>{busy ? 'در حال ذخیره…' : 'ایجاد کد تخفیف'}</button></form><div><h2>کدهای ثبت‌شده</h2><p className="muted">تعداد مصرف شامل رزروهای در انتظار پرداخت و پرداخت‌های قطعی است.</p></div>{items.length === 0 && <div className="card">هنوز کد تخفیفی ثبت نشده است.</div>}{items.map((item) => <article className="card admin-card-title" key={item.id}><div><div className="eyebrow">{item.code}</div><h3>{item.nameFa}</h3><p>{item.type === 'PERCENTAGE' ? `${((item.percentageBps ?? 0) / 100).toLocaleString('fa-IR')} درصد` : formatToman(item.fixedAmountRial ?? '0')} · {item.applicablePlan?.nameFa ?? 'همه پلن‌های پولی'}</p><p className="muted">اعتبار تا {new Date(item.validUntil).toLocaleString('fa-IR')} · {item._count.redemptions.toLocaleString('fa-IR')} استفاده/رزرو</p></div><div><span className={`status-badge ${item.isActive ? 'status-active' : 'status-suspended'}`}>{item.isActive ? 'فعال' : 'غیرفعال'}</span><button className="button button-secondary" type="button" disabled={busy} onClick={() => void onToggle(item)}>{item.isActive ? 'غیرفعال‌کردن' : 'فعال‌کردن'}</button></div></article>)}</section>;
 }
 
 function InvoiceList({ items }: { items: BillingInvoice[] }) {
