@@ -72,6 +72,9 @@ export class SubscriptionBillingService {
       || subscription.planId !== plan.id
       || subscription.discountCodeSnapshot !== normalizedDiscountCode
     )) throw new ConflictException('کلید تکرارپذیری برای درخواست دیگری استفاده شده است.');
+    if (existingIntent && ['FAILED', 'CANCELLED'].includes(existingIntent.status)) {
+      throw new ConflictException('این تلاش پرداخت بسته شده است؛ برای پرداخت مجدد یک درخواست تازه ایجاد کنید.');
+    }
     if (existingIntent?.authority && ['REDIRECT_PENDING', 'VERIFY_PENDING', 'SUCCEEDED'].includes(existingIntent.status)) {
       const callbackUrl = `${this.publicApiUrl()}/v1/subscriptions/zarinpal/callback`;
       return { paymentIntentId: existingIntent.id, subscriptionId: existingIntent.referenceId, authority: existingIntent.authority, redirectUrl: this.payments.redirectUrl(existingIntent.authority, callbackUrl) };
@@ -149,7 +152,7 @@ export class SubscriptionBillingService {
       await this.prisma.paymentIntent.update({ where: { id: intent.id }, data: { authority: result.authority, status: 'REDIRECT_PENDING' } });
       return { paymentIntentId: intent.id, subscriptionId: subscription.id, ...result };
     } catch (error) {
-      await this.prisma.paymentIntent.update({ where: { id: intent.id }, data: { status: 'FAILED' } });
+      await this.closeUnsuccessfulPayment(intent.id, intent.referenceId, 'FAILED', { stage: 'CREATE_PAYMENT_REQUEST' });
       throw error;
     }
   }
@@ -159,16 +162,12 @@ export class SubscriptionBillingService {
     if (!intent) throw new NotFoundException('تراکنش اشتراک پیدا نشد.');
     if (intent.status === 'SUCCEEDED') return { success: true, alreadyVerified: true, referenceId: intent.providerReference };
     if (callbackStatus !== 'OK') {
-      await this.prisma.$transaction([
-        this.prisma.paymentIntent.updateMany({ where: { id: intent.id, status: { not: 'SUCCEEDED' } }, data: { status: 'CANCELLED', callbackPayload: { status: callbackStatus } } }),
-        this.prisma.billingInvoice.updateMany({ where: { paymentIntentId: intent.id, status: { in: ['ISSUED', 'OVERDUE'] } }, data: { status: 'CANCELLED' } }),
-        this.prisma.subscriptionDiscountRedemption.updateMany({ where: { subscriptionId: intent.referenceId, status: 'RESERVED' }, data: { status: 'CANCELLED', cancelledAt: new Date() } }),
-      ]);
+      await this.closeUnsuccessfulPayment(intent.id, intent.referenceId, 'CANCELLED', { status: callbackStatus });
       return { success: false, cancelled: true };
     }
     const verification = await this.payments.verify({ amountRial: intent.amountRial, authority });
     if (!verification.success) {
-      await this.prisma.paymentIntent.updateMany({ where: { id: intent.id, status: { not: 'SUCCEEDED' } }, data: { status: 'FAILED', callbackPayload: { status: callbackStatus, code: verification.code } } });
+      await this.closeUnsuccessfulPayment(intent.id, intent.referenceId, 'FAILED', { status: callbackStatus, code: verification.code });
       return verification;
     }
 
@@ -247,6 +246,44 @@ export class SubscriptionBillingService {
 
   private publicApiUrl(): string {
     return (this.config.get<string>('PUBLIC_API_URL') ?? 'http://localhost:3001').replace(/\/$/, '');
+  }
+
+  private async closeUnsuccessfulPayment(
+    paymentIntentId: string,
+    subscriptionId: string,
+    status: 'FAILED' | 'CANCELLED',
+    callbackPayload: Prisma.InputJsonObject,
+  ): Promise<void> {
+    const closedAt = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      const claim = await tx.paymentIntent.updateMany({
+        where: { id: paymentIntentId, status: { in: ['CREATED', 'REDIRECT_PENDING', 'VERIFY_PENDING'] } },
+        data: { status, callbackPayload },
+      });
+      if (claim.count !== 1) return;
+      await tx.subscription.updateMany({ where: { id: subscriptionId, status: 'DRAFT' }, data: { status: 'CANCELLED' } });
+      await tx.billingInvoice.updateMany({
+        where: { paymentIntentId, status: { in: ['ISSUED', 'OVERDUE'] } },
+        data: { status: 'CANCELLED' },
+      });
+      await tx.subscriptionDiscountRedemption.updateMany({
+        where: { subscriptionId, status: 'RESERVED' },
+        data: { status: 'CANCELLED', cancelledAt: closedAt },
+      });
+      await tx.auditLog.create({ data: {
+        organizationId: (await tx.subscription.findUniqueOrThrow({ where: { id: subscriptionId }, select: { organizationId: true } })).organizationId,
+        action: status === 'FAILED' ? 'subscription.payment.failed' : 'subscription.payment.cancelled',
+        entityType: 'PaymentIntent',
+        entityId: paymentIntentId,
+        metadata: callbackPayload,
+      } });
+      await tx.outboxEvent.create({ data: {
+        aggregateType: 'PaymentIntent',
+        aggregateId: paymentIntentId,
+        eventType: 'ir.vazano.payment.retry_requested.v1',
+        payload: { paymentId: paymentIntentId, subscriptionId, status },
+      } });
+    });
   }
 
   private async resolveDiscount(tx: Prisma.TransactionClient, code: string, organizationId: string, plan: SubscriptionPlan) {

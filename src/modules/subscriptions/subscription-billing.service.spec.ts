@@ -62,3 +62,41 @@ describe('SubscriptionBillingService trial activation', () => {
     expect(reminderRows).toHaveLength(8);
   });
 });
+
+describe('SubscriptionBillingService unsuccessful payment', () => {
+  it('closes financial records, releases discount capacity, and emits one retry event', async () => {
+    const intent = {
+      id: 'payment-1', referenceId: 'subscription-1', provider: 'ZARINPAL', purpose: 'SUBSCRIPTION',
+      status: 'REDIRECT_PENDING', authority: 'authority-1', amountRial: 9_000_000n,
+    };
+    const tx = {
+      paymentIntent: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      subscription: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUniqueOrThrow: jest.fn().mockResolvedValue({ organizationId: 'supplier-1' }),
+      },
+      billingInvoice: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      subscriptionDiscountRedemption: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      auditLog: { create: jest.fn().mockResolvedValue({}) },
+      outboxEvent: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const prisma = {
+      paymentIntent: { findFirst: jest.fn().mockResolvedValue(intent) },
+      $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
+    };
+    const payments = { provider: 'ZARINPAL' };
+    const service = new SubscriptionBillingService(prisma as never, payments as never, {} as never);
+
+    await expect(service.handleCallback('authority-1', 'NOK')).resolves.toEqual({ success: false, cancelled: true });
+    expect(tx.subscription.updateMany).toHaveBeenCalledWith({
+      where: { id: 'subscription-1', status: 'DRAFT' }, data: { status: 'CANCELLED' },
+    });
+    expect(tx.subscriptionDiscountRedemption.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { subscriptionId: 'subscription-1', status: 'RESERVED' },
+    }));
+    expect(tx.outboxEvent.create).toHaveBeenCalledWith({ data: {
+      aggregateType: 'PaymentIntent', aggregateId: 'payment-1', eventType: 'ir.vazano.payment.retry_requested.v1',
+      payload: { paymentId: 'payment-1', subscriptionId: 'subscription-1', status: 'CANCELLED' },
+    } });
+  });
+});
