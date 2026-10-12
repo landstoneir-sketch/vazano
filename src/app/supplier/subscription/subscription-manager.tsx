@@ -66,7 +66,7 @@ export function SubscriptionManager({ paymentResult, trialResult }: { paymentRes
   }, [organizationId, trialResult]);
 
   useEffect(() => {
-    if (paymentResult !== 'success' && trialResult !== 'success') return;
+    if (!paymentResult && trialResult !== 'success') return;
     for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
       const key = sessionStorage.key(index);
       if (key?.startsWith('vazano:subscription-checkout:')) sessionStorage.removeItem(key);
@@ -97,6 +97,7 @@ export function SubscriptionManager({ paymentResult, trialResult }: { paymentRes
         router.refresh();
       }
     } catch (reason: unknown) {
+      sessionStorage.removeItem(`vazano:subscription-checkout:${organizationId}:${plan.id}:${plan.isTrial ? 'NO_DISCOUNT' : discountCode.trim().toUpperCase() || 'NO_DISCOUNT'}`);
       setError(reason instanceof Error ? reason.message : 'شروع پرداخت انجام نشد.'); setBusyPlanId('');
     }
   }
