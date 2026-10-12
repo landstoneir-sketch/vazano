@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../shared/prisma/prisma.service';
 import type { AuthenticatedUser } from '../auth/auth.types';
@@ -10,7 +11,11 @@ import { UpdateSubscriptionPlanDto } from './update-subscription-plan.dto';
 
 @Injectable()
 export class AdminBillingService {
-  constructor(private readonly prisma: PrismaService, private readonly payments: PaymentsService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly payments: PaymentsService,
+    private readonly config: ConfigService,
+  ) {}
 
   async overview(user: AuthenticatedUser) {
     this.requireAnyPermission(user, ['billing.read', 'billing.manage']);
@@ -57,6 +62,7 @@ export class AdminBillingService {
     return {
       summary: Object.fromEntries(statusGroups.map((item) => [item.status, item._count._all])),
       reminderSummary: Object.fromEntries(reminderGroups.map((item) => [`${item.channel}:${item.status}`, item._count._all])),
+      reminderDelivery: this.reminderDeliveryReadiness(),
       plans,
       subscriptions,
       payments: payments.map((payment) => ({ ...payment, payerOrganization: payment.payerOrganizationId ? payerMap.get(payment.payerOrganizationId) ?? null : null })),
@@ -278,6 +284,29 @@ export class AdminBillingService {
     const serialized = JSON.stringify(value);
     if (serialized.length > 5_000) throw new BadRequestException('تنظیمات امکانات پلن بیش از حد بزرگ است.');
     return JSON.parse(serialized) as Prisma.InputJsonObject;
+  }
+
+  private reminderDeliveryReadiness() {
+    const templateKeys = [
+      'SMSIR_SUBSCRIPTION_RENEWAL_14_TEMPLATE_ID',
+      'SMSIR_SUBSCRIPTION_RENEWAL_7_TEMPLATE_ID',
+      'SMSIR_SUBSCRIPTION_RENEWAL_3_TEMPLATE_ID',
+      'SMSIR_SUBSCRIPTION_EXPIRED_TEMPLATE_ID',
+      'SMSIR_SUBSCRIPTION_GRACE_ENDED_TEMPLATE_ID',
+    ] as const;
+    const enabled = this.config.get<string>('SUBSCRIPTION_SMS_ENABLED', 'false') === 'true';
+    const provider = this.config.get<string>('SMS_PROVIDER', 'debug');
+    const templatesConfigured = templateKeys.every((key) => {
+      const value = Number(this.config.get<string>(key));
+      return Number.isInteger(value) && value > 0;
+    });
+    return {
+      enabled,
+      provider: provider === 'smsir' ? 'SMSIR' : 'DEBUG',
+      templatesConfigured,
+      liveReady: enabled && provider === 'smsir' && templatesConfigured,
+      deliveryWindow: '09:00-20:00 Asia/Tehran',
+    };
   }
 
   private requireAnyPermission(user: AuthenticatedUser, permissions: string[]): void {

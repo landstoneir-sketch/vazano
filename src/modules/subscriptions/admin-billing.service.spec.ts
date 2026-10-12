@@ -26,7 +26,7 @@ describe('AdminBillingService payment reconciliation resolution', () => {
       paymentIntent: { findUnique: jest.fn().mockResolvedValue(payment) },
       $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
     };
-    const service = new AdminBillingService(prisma as never, {} as never);
+    const service = new AdminBillingService(prisma as never, {} as never, {} as never);
 
     await service.resolvePaymentReconciliation(financeUser, payment.id, {
       resolution: PaymentReconciliationResolution.CUSTOMER_RETRY_REQUIRED, note: 'ارسال مسیر امن پرداخت مجدد به مشتری ثبت شد.',
@@ -51,7 +51,7 @@ describe('AdminBillingService payment reconciliation resolution', () => {
     const prisma = {
       paymentIntent: { findUnique: jest.fn().mockResolvedValue({ id: 'payment-1', reconciliationStatus: 'MATCHED' }) },
     };
-    const service = new AdminBillingService(prisma as never, {} as never);
+    const service = new AdminBillingService(prisma as never, {} as never, {} as never);
 
     await expect(service.resolvePaymentReconciliation(financeUser, 'payment-1', {
       resolution: PaymentReconciliationResolution.NO_FINANCIAL_ACTION, note: 'تراکنش قبلاً به‌طور قطعی تطبیق شده است.',
@@ -75,7 +75,7 @@ describe('AdminBillingService renewal reminder retry', () => {
       subscriptionReminder: { findUnique: jest.fn().mockResolvedValue(reminder) },
       $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
     };
-    const service = new AdminBillingService(prisma as never, {} as never);
+    const service = new AdminBillingService(prisma as never, {} as never, {} as never);
 
     await expect(service.retryReminder(financeUser, reminder.id)).resolves.toMatchObject({ status: 'PENDING' });
     expect(tx.subscriptionReminder.updateMany).toHaveBeenCalledWith({
