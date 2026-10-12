@@ -377,6 +377,7 @@ model User {
   updatedFaqItems         FaqItem[]                @relation("FaqItemUpdater")
   requestedContracts      ContractRequest[]        @relation("ContractRequester")
   resolvedPaymentReconciliations PaymentIntent[]   @relation("PaymentReconciliationResolver")
+  manualSubscriptionRenewals ManualSubscriptionRenewal[] @relation("ManualSubscriptionRenewalActor")
 
   @@map("users")
 }
@@ -435,6 +436,7 @@ model Organization {
   scopedRoles              UserRole[]
   buyerRfqs                Rfq[]
   subscriptions            Subscription[]
+  manualSubscriptionRenewals ManualSubscriptionRenewal[]
   paymentReceipts          PaymentReceipt[]
   creditWallet             CreditWallet?
   supplierProfile          SupplierProfile?
@@ -1169,10 +1171,30 @@ model Subscription {
   plan                SubscriptionPlan       @relation(fields: [planId], references: [id], onDelete: Restrict)
   reminders           SubscriptionReminder[]
   paymentReceipt      PaymentReceipt?
+  manualRenewal       ManualSubscriptionRenewal?
 
   @@index([organizationId, status])
   @@index([status, expiresAt])
   @@map("subscriptions")
+}
+
+model ManualSubscriptionRenewal {
+  id                String       @id @default(cuid())
+  organizationId    String       @map("organization_id")
+  subscriptionId    String       @unique @map("subscription_id")
+  activatedByUserId String       @map("activated_by_user_id")
+  trackingNumber    String       @unique @map("tracking_number")
+  amountRial        BigInt       @map("amount_rial")
+  paidAt            DateTime     @map("paid_at") @db.Timestamptz(3)
+  note              String       @db.Text
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  subscription      Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  activatedBy       User         @relation("ManualSubscriptionRenewalActor", fields: [activatedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, paidAt])
+  @@index([activatedByUserId, createdAt])
+  @@map("manual_subscription_renewals")
 }
 
 model SubscriptionReminder {

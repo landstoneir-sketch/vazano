@@ -4,6 +4,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { SessionGuard } from '../auth/session.guard';
 import { AdminBillingService } from './admin-billing.service';
 import { CreateSubscriptionPlanDto } from './create-subscription-plan.dto';
+import { CreateManualSubscriptionRenewalDto } from './create-manual-subscription-renewal.dto';
 import { ResolvePaymentReconciliationDto } from './resolve-payment-reconciliation.dto';
 import { UpdateSubscriptionPlanDto } from './update-subscription-plan.dto';
 
@@ -44,5 +45,10 @@ export class AdminBillingController {
   @Post('reminders/:reminderId/retry')
   retryReminder(@CurrentUser() user: AuthenticatedUser, @Param('reminderId') reminderId: string) {
     return this.billing.retryReminder(user, reminderId);
+  }
+
+  @Post('manual-renewals')
+  createManualRenewal(@CurrentUser() user: AuthenticatedUser, @Body() input: CreateManualSubscriptionRenewalDto) {
+    return this.billing.createManualRenewal(user, input);
   }
 }
