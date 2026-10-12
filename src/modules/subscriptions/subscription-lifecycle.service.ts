@@ -24,14 +24,23 @@ export class SubscriptionLifecycleService {
     private readonly smsReminders: SubscriptionSmsReminderService,
   ) {}
 
-  async process(now = new Date()): Promise<{ reminders: number; smsReminders: number; enteredGrace: number; expired: number }> {
-    const [reminders, smsReminders, enteredGrace, expired] = await Promise.all([
+  async process(now = new Date()): Promise<{ reminders: number; smsReminders: number; enteredGrace: number; expired: number; overdueInvoices: number }> {
+    const [reminders, smsReminders, enteredGrace, expired, overdueInvoices] = await Promise.all([
       this.processDueInAppReminders(now),
       this.smsReminders.process(now),
       this.enterGracePeriod(now),
       this.finishGracePeriod(now),
+      this.markOverdueInvoices(now),
     ]);
-    return { reminders, smsReminders, enteredGrace, expired };
+    return { reminders, smsReminders, enteredGrace, expired, overdueInvoices };
+  }
+
+  private async markOverdueInvoices(now: Date): Promise<number> {
+    const result = await this.prisma.billingInvoice.updateMany({
+      where: { status: 'ISSUED', dueAt: { lt: now } },
+      data: { status: 'OVERDUE' },
+    });
+    return result.count;
   }
 
   private async processDueInAppReminders(now: Date): Promise<number> {

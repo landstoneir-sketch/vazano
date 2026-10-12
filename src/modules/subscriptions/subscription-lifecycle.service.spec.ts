@@ -16,12 +16,13 @@ describe('SubscriptionLifecycleService', () => {
           .mockResolvedValueOnce([{ id: 'subscription-2', organizationId: 'supplier-1' }])
           .mockResolvedValueOnce([{ id: 'subscription-3', organizationId: 'supplier-2', status: 'GRACE' }]),
       },
+      billingInvoice: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
       $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
     };
     const smsReminders = { process: jest.fn().mockResolvedValue(1) };
     const service = new SubscriptionLifecycleService(prisma as never, smsReminders as never);
 
-    await expect(service.process(new Date('2026-10-07T10:00:00.000Z'))).resolves.toEqual({ reminders: 1, smsReminders: 1, enteredGrace: 1, expired: 1 });
+    await expect(service.process(new Date('2026-10-07T10:00:00.000Z'))).resolves.toEqual({ reminders: 1, smsReminders: 1, enteredGrace: 1, expired: 1, overdueInvoices: 2 });
     expect(tx.outboxEvent.create).toHaveBeenCalledWith({
       data: {
         aggregateType: 'SubscriptionReminder',
@@ -41,12 +42,13 @@ describe('SubscriptionLifecycleService', () => {
     const prisma = {
       subscriptionReminder: { findMany: jest.fn().mockResolvedValue([{ id: 'reminder-1', subscriptionId: 'subscription-1', offsetDays: -3, subscription: { isTrialSnapshot: false } }]) },
       subscription: { findMany: jest.fn().mockResolvedValue([]) },
+      billingInvoice: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
       $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
     };
     const smsReminders = { process: jest.fn().mockResolvedValue(0) };
     const service = new SubscriptionLifecycleService(prisma as never, smsReminders as never);
 
-    await expect(service.process()).resolves.toEqual({ reminders: 0, smsReminders: 0, enteredGrace: 0, expired: 0 });
+    await expect(service.process()).resolves.toEqual({ reminders: 0, smsReminders: 0, enteredGrace: 0, expired: 0, overdueInvoices: 0 });
     expect(tx.outboxEvent.create).not.toHaveBeenCalled();
   });
 });

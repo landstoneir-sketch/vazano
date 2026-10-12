@@ -6,6 +6,7 @@ import { PaymentsService } from '../payments/payments.service';
 import { PrismaService } from '../../shared/prisma/prisma.service';
 import { addBillingPeriod, buildRenewalReminderSchedule, buildTrialReminderSchedule, SUBSCRIPTION_GRACE_PERIOD_DAYS } from './subscription-policies';
 import { buildPaymentReceiptSnapshot } from './payment-receipt-policy';
+import { buildBillingInvoiceNumber } from './billing-invoice-policy';
 
 @Injectable()
 export class SubscriptionBillingService {
@@ -56,6 +57,24 @@ export class SubscriptionBillingService {
     const intent = existingIntent ?? await this.prisma.paymentIntent.create({
       data: { provider: this.payments.provider, purpose: 'SUBSCRIPTION', amountRial: plan.priceRial, payerOrganizationId: organizationId, referenceType: 'Subscription', referenceId: subscription.id, idempotencyKey },
     });
+    const issuedAt = new Date();
+    await this.prisma.billingInvoice.upsert({
+      where: { subscriptionId: subscription.id },
+      create: {
+        invoiceNumber: buildBillingInvoiceNumber(subscription.id, issuedAt),
+        organizationId,
+        purpose: 'SUBSCRIPTION',
+        subscriptionId: subscription.id,
+        paymentIntentId: intent.id,
+        netAmountRial: plan.priceRial,
+        taxRial: 0n,
+        totalAmountRial: plan.priceRial,
+        descriptionFa: `اشتراک ${plan.nameFa}`,
+        issuedAt,
+        dueAt: new Date(issuedAt.getTime() + 24 * 60 * 60 * 1000),
+      },
+      update: { paymentIntentId: intent.id, status: 'ISSUED', dueAt: new Date(issuedAt.getTime() + 24 * 60 * 60 * 1000) },
+    });
     try {
       const result = await this.payments.create({ amountRial: intent.amountRial, description: `خرید ${plan.nameFa}`, callbackUrl: `${this.publicApiUrl()}/v1/subscriptions/zarinpal/callback`, mobile: user.mobile, orderId: subscription.id });
       await this.prisma.paymentIntent.update({ where: { id: intent.id }, data: { authority: result.authority, status: 'REDIRECT_PENDING' } });
@@ -71,7 +90,10 @@ export class SubscriptionBillingService {
     if (!intent) throw new NotFoundException('تراکنش اشتراک پیدا نشد.');
     if (intent.status === 'SUCCEEDED') return { success: true, alreadyVerified: true, referenceId: intent.providerReference };
     if (callbackStatus !== 'OK') {
-      await this.prisma.paymentIntent.updateMany({ where: { id: intent.id, status: { not: 'SUCCEEDED' } }, data: { status: 'CANCELLED', callbackPayload: { status: callbackStatus } } });
+      await this.prisma.$transaction([
+        this.prisma.paymentIntent.updateMany({ where: { id: intent.id, status: { not: 'SUCCEEDED' } }, data: { status: 'CANCELLED', callbackPayload: { status: callbackStatus } } }),
+        this.prisma.billingInvoice.updateMany({ where: { paymentIntentId: intent.id, status: { in: ['ISSUED', 'OVERDUE'] } }, data: { status: 'CANCELLED' } }),
+      ]);
       return { success: false, cancelled: true };
     }
     const verification = await this.payments.verify({ amountRial: intent.amountRial, authority });
@@ -124,6 +146,24 @@ export class SubscriptionBillingService {
         paymentIntentId: intent.id,
         providerReference: verification.referenceId,
       } });
+      await tx.billingInvoice.upsert({
+        where: { subscriptionId: subscription.id },
+        create: {
+          invoiceNumber: buildBillingInvoiceNumber(subscription.id, paidAt),
+          organizationId: subscription.organizationId,
+          purpose: 'SUBSCRIPTION',
+          status: 'PAID',
+          subscriptionId: subscription.id,
+          paymentIntentId: intent.id,
+          netAmountRial: intent.amountRial,
+          taxRial: 0n,
+          totalAmountRial: intent.amountRial,
+          descriptionFa: `اشتراک ${subscription.plan.nameFa}`,
+          issuedAt: paidAt,
+          paidAt,
+        },
+        update: { status: 'PAID', paymentIntentId: intent.id, paidAt },
+      });
       await tx.paymentIntent.update({ where: { id: intent.id }, data: { status: 'SUCCEEDED', providerReference: verification.referenceId, verifiedAt: paidAt, callbackPayload: { status: callbackStatus, code: verification.code } } });
       await tx.auditLog.create({ data: { organizationId: subscription.organizationId, action: 'subscription.activate', entityType: 'Subscription', entityId: subscription.id, metadata: { paymentIntentId: intent.id, planCode: subscription.plan.code } } });
       await tx.outboxEvent.create({ data: { aggregateType: 'Subscription', aggregateId: subscription.id, eventType: 'ir.vazano.subscription.activated.v1', payload: { subscriptionId: subscription.id, organizationId: subscription.organizationId, receiptNumber: receipt.receiptNumber } } });

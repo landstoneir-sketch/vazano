@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { PrismaService } from '../../shared/prisma/prisma.service';
 
@@ -54,6 +54,36 @@ export class SubscriptionsService {
       },
       orderBy: { paidAt: 'desc' },
     });
+  }
+
+  listInvoicesForOrganization(user: AuthenticatedUser, organizationId: string) {
+    this.requireOrganizationBillingAccess(user, organizationId);
+    return this.prisma.billingInvoice.findMany({
+      where: { organizationId, purpose: 'SUBSCRIPTION' },
+      select: {
+        id: true, invoiceNumber: true, purpose: true, status: true, netAmountRial: true, taxRial: true, totalAmountRial: true,
+        currency: true, descriptionFa: true, issuedAt: true, dueAt: true, paidAt: true,
+        subscription: { select: { plan: { select: { code: true, nameFa: true } } } },
+        paymentIntent: { select: { providerReference: true } },
+        manualRenewal: { select: { trackingNumber: true } },
+      },
+      orderBy: { issuedAt: 'desc' },
+    });
+  }
+
+  async getInvoice(user: AuthenticatedUser, invoiceId: string) {
+    const invoice = await this.prisma.billingInvoice.findUnique({
+      where: { id: invoiceId },
+      include: {
+        organization: { select: { id: true, displayName: true, legalName: true, nationalId: true, province: true, city: true } },
+        subscription: { select: { startsAt: true, expiresAt: true, plan: { select: { code: true, nameFa: true, billingCycle: true } } } },
+        paymentIntent: { select: { provider: true, providerReference: true, verifiedAt: true } },
+        manualRenewal: { select: { trackingNumber: true, paidAt: true } },
+      },
+    });
+    if (!invoice) throw new NotFoundException('صورتحساب پیدا نشد.');
+    this.requireOrganizationBillingAccess(user, invoice.organizationId);
+    return invoice;
   }
 
   private requireOrganizationBillingAccess(user: AuthenticatedUser, organizationId: string): void {
