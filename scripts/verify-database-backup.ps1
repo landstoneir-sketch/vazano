@@ -12,6 +12,8 @@ if ($backup.PSIsContainer -or $backup.Length -le 0) { throw 'The backup path is 
 $suffix = ([Guid]::NewGuid().ToString('N')).Substring(0, 12)
 $databaseName = "vazano_restore_verify_$suffix"
 $containerPath = "/tmp/$($backup.Name)-$suffix.dump"
+$countContainerPath = "/tmp/vazano-restore-count-$suffix.txt"
+$countHostPath = Join-Path ([System.IO.Path]::GetTempPath()) "vazano-restore-count-$suffix.txt"
 if ($databaseName -notmatch '^vazano_restore_verify_[a-f0-9]{12}$') { throw 'The temporary database name is invalid.' }
 $originalLocation = Get-Location
 
@@ -54,10 +56,19 @@ try {
   & docker compose exec -T postgres sh -c $restoreCommand
   if ($LASTEXITCODE -ne 0) { throw 'Restoring the backup into the temporary database failed.' }
 
-  $countCommand = 'PGPASSWORD="$POSTGRES_PASSWORD" psql -U "$POSTGRES_USER" -d "{0}" -Atc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ''public'';"' -f $databaseName
-  $tableCountOutput = & docker compose exec -T postgres sh -c $countCommand
+  $countCommand = 'PGPASSWORD="$POSTGRES_PASSWORD" psql -U "$POSTGRES_USER" -d "{0}" -Atc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ''public'';" > "{1}"' -f $databaseName, $countContainerPath
+  $countCommandBase64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($countCommand))
+  $countRunner = "echo $countCommandBase64 | base64 -d | sh"
+  & docker compose exec -T postgres sh -c $countRunner
   if ($LASTEXITCODE -ne 0) { throw 'Inspecting the restored database failed.' }
-  $tableCount = [int](($tableCountOutput | Select-Object -Last 1).Trim())
+
+  & docker compose cp "postgres:$countContainerPath" $countHostPath
+  if ($LASTEXITCODE -ne 0) { throw 'Copying the restore verification result failed.' }
+  $tableCountText = Get-Content -LiteralPath $countHostPath -Raw
+  $tableCount = 0
+  if (-not [int]::TryParse($tableCountText.Trim(), [ref]$tableCount)) {
+    throw 'The restored database table count is invalid.'
+  }
   if ($tableCount -lt 10) { throw "The restored table count is unexpectedly low: $tableCount" }
 
   Write-Output ([pscustomobject]@{ Verified = $true; BackupPath = $backup.FullName; RestoredTableCount = $tableCount; TemporaryDatabase = $databaseName })
@@ -69,5 +80,7 @@ finally {
     try { & docker compose exec -T postgres sh -c $dropCommand 2>$null | Out-Null } catch { }
   }
   try { & docker compose exec -T postgres rm -f $containerPath 2>$null | Out-Null } catch { }
+  try { & docker compose exec -T postgres rm -f $countContainerPath 2>$null | Out-Null } catch { }
+  Remove-Item -LiteralPath $countHostPath -Force -ErrorAction SilentlyContinue
   Set-Location -LiteralPath $originalLocation
 }
