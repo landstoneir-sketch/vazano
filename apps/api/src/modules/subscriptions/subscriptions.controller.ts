@@ -27,6 +27,18 @@ export class SubscriptionsController {
     return this.subscriptions.listReceiptsForOrganization(user, organizationId);
   }
 
+  @Get('organizations/:organizationId/invoices')
+  @UseGuards(SessionGuard)
+  listInvoicesForOrganization(@CurrentUser() user: AuthenticatedUser, @Param('organizationId') organizationId: string) {
+    return this.subscriptions.listInvoicesForOrganization(user, organizationId);
+  }
+
+  @Get('invoices/:invoiceId')
+  @UseGuards(SessionGuard)
+  getInvoice(@CurrentUser() user: AuthenticatedUser, @Param('invoiceId') invoiceId: string) {
+    return this.subscriptions.getInvoice(user, invoiceId);
+  }
+
   @Post('organizations/:organizationId/checkout')
   @UseGuards(SessionGuard)
   checkout(@CurrentUser() user: AuthenticatedUser, @Param('organizationId') organizationId: string, @Body() input: StartSubscriptionCheckoutDto) {

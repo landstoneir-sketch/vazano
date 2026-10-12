@@ -13,6 +13,13 @@ type PaymentReceipt = {
   id: string; receiptNumber: string; amountRial: string; taxRial: string; currency: string; providerReference: string | null; paidAt: string;
   subscription: { plan: { code: string; nameFa: string } };
 };
+type BillingInvoice = {
+  id: string; invoiceNumber: string; status: 'ISSUED' | 'PAID' | 'OVERDUE' | 'CANCELLED'; netAmountRial: string; taxRial: string; totalAmountRial: string;
+  descriptionFa: string; issuedAt: string; dueAt: string | null; paidAt: string | null;
+  subscription: { plan: { code: string; nameFa: string } } | null;
+  paymentIntent: { providerReference: string | null } | null;
+  manualRenewal: { trackingNumber: string } | null;
+};
 type CheckoutResult = { paymentIntentId: string; subscriptionId: string; authority: string; redirectUrl: string } | { trialActivated: true; subscriptionId: string; startsAt: string; expiresAt: string };
 
 function formatToman(rial: string): string {
@@ -26,6 +33,7 @@ export function SubscriptionManager({ paymentResult, trialResult }: { paymentRes
   const [plans, setPlans] = useState<Plan[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [receipts, setReceipts] = useState<PaymentReceipt[]>([]);
+  const [invoices, setInvoices] = useState<BillingInvoice[]>([]);
   const [error, setError] = useState('');
   const [busyPlanId, setBusyPlanId] = useState('');
 
@@ -45,9 +53,10 @@ export function SubscriptionManager({ paymentResult, trialResult }: { paymentRes
     void Promise.all([
       apiRequest<Subscription[]>(`/subscriptions/organizations/${organizationId}`),
       apiRequest<PaymentReceipt[]>(`/subscriptions/organizations/${organizationId}/receipts`),
-    ]).then(([subscriptionItems, receiptItems]) => {
+      apiRequest<BillingInvoice[]>(`/subscriptions/organizations/${organizationId}/invoices`),
+    ]).then(([subscriptionItems, receiptItems, invoiceItems]) => {
       if (!active) return;
-      setSubscriptions(subscriptionItems); setReceipts(receiptItems);
+      setSubscriptions(subscriptionItems); setReceipts(receiptItems); setInvoices(invoiceItems);
     }).catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : 'دریافت سوابق مالی انجام نشد.'); });
     return () => { active = false; };
   }, [organizationId, trialResult]);
@@ -97,6 +106,7 @@ export function SubscriptionManager({ paymentResult, trialResult }: { paymentRes
     {organizations.length > 0 && <label className="form-field card"><span>حساب فروشنده</span><select value={organizationId} onChange={(event) => setOrganizationId(event.target.value)}>{organizations.map((item) => <option value={item.id} key={item.id}>{item.displayName} · {item.status}</option>)}</select></label>}
     {organization && <section className="card"><h2>وضعیت فعلی</h2>{current ? <div className="subscription-status"><span className={`status-badge ${current.status === 'ACTIVE' ? 'status-active' : 'severity-medium'}`}>{current.isTrialSnapshot ? 'آزمایشی' : current.status === 'ACTIVE' ? 'فعال' : 'مهلت تنفس'}</span><strong>{current.plan.nameFa}</strong><span>{current.expiresAt ? `تا ${new Date(current.expiresAt).toLocaleDateString('fa-IR')}` : ''}</span></div> : <p className="muted">اشتراک فعال وجود ندارد. سوابق حساب حذف نشده و با خرید پلن دوباره فعال می‌شود.</p>}{!canPurchase && <div className="message">فقط مالک حساب فروشنده می‌تواند خرید یا تمدید اشتراک را انجام دهد.</div>}</section>}
     {organization && <section><h2>انتخاب پلن</h2><div className="plan-grid">{plans.map((plan) => <article className="card plan-card" key={plan.id}><h3>{plan.nameFa}</h3><strong>{plan.isTrial ? 'رایگان' : formatToman(plan.priceRial)}</strong><p>{plan.descriptionFa || `${BigInt(plan.grantCredits).toLocaleString('fa-IR')} اعتبار قابل مصرف`}</p><p>{plan.isTrial ? `مدت آزمایش: ${Number(plan.durationIso.match(/^P(\d+)D$/)?.[1] ?? 0).toLocaleString('fa-IR')} روز` : `سقف پایه روزانه: ${plan.dailyProposalLimit.toLocaleString('fa-IR')} پیشنهاد`}</p><button className="button button-primary" type="button" disabled={!canPurchase || Boolean(busyPlanId) || (plan.isTrial && (Boolean(current) || Boolean(organization.subscriptionTrialRedeemedAt)))} onClick={() => void checkout(plan)}>{busyPlanId === plan.id ? plan.isTrial ? 'در حال فعال‌سازی…' : 'در حال اتصال به زرین‌پال…' : plan.isTrial && organization.subscriptionTrialRedeemedAt ? 'قبلاً استفاده شده' : plan.isTrial ? 'فعال‌سازی دوره آزمایشی' : current ? 'تمدید با این پلن' : 'خرید این پلن'}</button></article>)}</div></section>}
+    {invoices.length > 0 && <section className="stack"><h2>صورتحساب‌ها</h2>{invoices.map((invoice) => <article className="card admin-card-title" key={invoice.id}><div><div className="eyebrow">صورتحساب {invoice.invoiceNumber}</div><h3>{invoice.descriptionFa}</h3><p>{formatToman(invoice.netAmountRial)} + مالیات {formatToman(invoice.taxRial)} · صدور {new Date(invoice.issuedAt).toLocaleDateString('fa-IR')}</p></div><div><span className={`status-badge ${invoice.status === 'PAID' ? 'status-active' : invoice.status === 'CANCELLED' ? 'status-suspended' : 'severity-medium'}`}>{invoiceStatusLabel(invoice.status)}</span>{invoice.manualRenewal?.trackingNumber && <p>پیگیری دستی: {invoice.manualRenewal.trackingNumber}</p>}{invoice.paymentIntent?.providerReference && <p>پیگیری درگاه: {invoice.paymentIntent.providerReference}</p>}<Link className="button button-secondary" href={`/dashboard/invoices/${invoice.id}` as Route}>مشاهده و چاپ</Link></div></article>)}</section>}
     {receipts.length > 0 && <section className="stack"><h2>رسیدهای پرداخت</h2>{receipts.map((receipt) => <article className="card admin-card-title" key={receipt.id}><div><div className="eyebrow">رسید {receipt.receiptNumber}</div><h3>{receipt.subscription.plan.nameFa}</h3><p>{formatToman(receipt.amountRial)} · بدون مالیات · {new Date(receipt.paidAt).toLocaleString('fa-IR')}</p></div><div><span className="status-badge status-active">پرداخت‌شده</span>{receipt.providerReference && <p>پیگیری درگاه: {receipt.providerReference}</p>}<Link className="button button-secondary" href={`/dashboard/receipts/${receipt.id}` as Route}>مشاهده و چاپ</Link></div></article>)}</section>}
     {subscriptions.length > 0 && <section className="stack"><h2>سوابق اشتراک</h2>{subscriptions.map((item) => <article className="card list-card" key={item.id}><div><strong>{item.plan.nameFa}</strong><p>{item.isTrialSnapshot ? 'آزمایشی رایگان' : formatToman(item.priceRialSnapshot)} · ثبت {new Date(item.createdAt).toLocaleDateString('fa-IR')}</p></div><span className={`status-badge ${item.status === 'ACTIVE' ? 'status-active' : item.status === 'EXPIRED' ? 'status-suspended' : 'severity-medium'}`}>{subscriptionLabel(item.status)}</span></article>)}</section>}
   </div>;
@@ -104,4 +114,8 @@ export function SubscriptionManager({ paymentResult, trialResult }: { paymentRes
 
 function subscriptionLabel(status: string): string {
   return ({ DRAFT: 'در انتظار پرداخت', ACTIVE: 'فعال', GRACE: 'مهلت تنفس', EXPIRED: 'منقضی', SUSPENDED: 'تعلیق‌شده', CANCELLED: 'لغوشده' } as Record<string, string>)[status] ?? status;
+}
+
+function invoiceStatusLabel(status: BillingInvoice['status']): string {
+  return ({ ISSUED: 'صادرشده', PAID: 'پرداخت‌شده', OVERDUE: 'سررسیدگذشته', CANCELLED: 'لغوشده' } as const)[status];
 }

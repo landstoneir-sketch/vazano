@@ -105,6 +105,7 @@ describe('AdminBillingService manual subscription renewal', () => {
     const tx = {
       subscription: { findFirst: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue(subscription) },
       manualSubscriptionRenewal: { create: jest.fn((input: { data: { activatedByUserId: string; trackingNumber: string; amountRial: bigint } }) => { renewalInput = input; return Promise.resolve(manualRenewal); }) },
+      billingInvoice: { create: jest.fn().mockResolvedValue({ id: 'invoice-1' }) },
       creditWallet: { upsert: jest.fn().mockResolvedValue({ id: 'wallet-1' }) },
       creditLedgerEntry: { create: jest.fn((input: { data: { reasonCode?: string | null } }) => { creditInput = input; return Promise.resolve({}); }) },
       subscriptionReminder: { updateMany: jest.fn().mockResolvedValue({ count: 0 }), createMany: jest.fn().mockResolvedValue({ count: 10 }) },
@@ -134,6 +135,7 @@ describe('AdminBillingService manual subscription renewal', () => {
       amountRial: 300000000n,
     });
     expect(creditInput?.data.reasonCode).toBe('SUBSCRIPTION_MANUAL_RENEWAL');
+    expect(tx.billingInvoice.create).toHaveBeenCalledTimes(1);
     expect(auditInput?.data.action).toBe('subscription.manual_renewal.create');
     expect(outboxInput?.data.eventType).toBe('ir.vazano.subscription.manual_renewal_activated.v1');
   });

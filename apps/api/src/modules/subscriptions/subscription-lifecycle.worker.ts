@@ -30,8 +30,8 @@ export class SubscriptionLifecycleWorker implements OnApplicationBootstrap, OnAp
     this.running = true;
     try {
       const result = await this.lifecycle.process();
-      if (result.reminders + result.smsReminders + result.enteredGrace + result.expired > 0) {
-        this.logger.log(`Subscription lifecycle processed inApp=${result.reminders}, sms=${result.smsReminders}, grace=${result.enteredGrace}, expired=${result.expired}.`);
+      if (result.reminders + result.smsReminders + result.enteredGrace + result.expired + result.overdueInvoices > 0) {
+        this.logger.log(`Subscription lifecycle processed inApp=${result.reminders}, sms=${result.smsReminders}, grace=${result.enteredGrace}, expired=${result.expired}, overdueInvoices=${result.overdueInvoices}.`);
       }
     } catch (error: unknown) {
       this.logger.error('Subscription lifecycle processing failed.', error instanceof Error ? error.stack : undefined);

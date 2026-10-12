@@ -10,6 +10,7 @@ import { CreateManualSubscriptionRenewalDto } from './create-manual-subscription
 import { addBillingPeriod, buildRenewalReminderSchedule, SUBSCRIPTION_GRACE_PERIOD_DAYS } from './subscription-policies';
 import { ResolvePaymentReconciliationDto } from './resolve-payment-reconciliation.dto';
 import { UpdateSubscriptionPlanDto } from './update-subscription-plan.dto';
+import { buildBillingInvoiceNumber } from './billing-invoice-policy';
 
 @Injectable()
 export class AdminBillingService {
@@ -21,7 +22,7 @@ export class AdminBillingService {
 
   async overview(user: AuthenticatedUser) {
     this.requireAnyPermission(user, ['billing.read', 'billing.manage']);
-    const [plans, subscriptions, payments, receipts, statusGroups, reminderGroups, reminders, suppliers, manualRenewals] = await Promise.all([
+    const [plans, subscriptions, payments, receipts, statusGroups, reminderGroups, reminders, suppliers, manualRenewals, invoices] = await Promise.all([
       this.prisma.subscriptionPlan.findMany({ orderBy: [{ isActive: 'desc' }, { priceRial: 'asc' }] }),
       this.prisma.subscription.findMany({
         include: {
@@ -69,6 +70,16 @@ export class AdminBillingService {
         orderBy: { createdAt: 'desc' },
         take: 100,
       }),
+      this.prisma.billingInvoice.findMany({
+        include: {
+          organization: { select: { id: true, displayName: true, legalName: true } },
+          subscription: { select: { plan: { select: { code: true, nameFa: true } } } },
+          paymentIntent: { select: { providerReference: true } },
+          manualRenewal: { select: { trackingNumber: true } },
+        },
+        orderBy: { issuedAt: 'desc' },
+        take: 100,
+      }),
     ]);
     const payerIds = [...new Set(payments.map((payment) => payment.payerOrganizationId).filter((id): id is string => Boolean(id)))];
     const payers = payerIds.length
@@ -86,6 +97,7 @@ export class AdminBillingService {
       reminders,
       suppliers,
       manualRenewals,
+      invoices,
     };
   }
 
@@ -138,6 +150,20 @@ export class AdminBillingService {
           amountRial,
           paidAt,
           note,
+        } });
+        await tx.billingInvoice.create({ data: {
+          invoiceNumber: buildBillingInvoiceNumber(subscription.id, activatedAt),
+          organizationId: organization.id,
+          purpose: 'SUBSCRIPTION',
+          status: 'PAID',
+          subscriptionId: subscription.id,
+          manualRenewalId: manualRenewal.id,
+          netAmountRial: amountRial,
+          taxRial: 0n,
+          totalAmountRial: amountRial,
+          descriptionFa: `تمدید دستی اشتراک ${plan.nameFa}`,
+          issuedAt: activatedAt,
+          paidAt,
         } });
         const wallet = await tx.creditWallet.upsert({
           where: { organizationId: organization.id },

@@ -250,6 +250,19 @@ enum PaymentReconciliationResolution {
   NO_FINANCIAL_ACTION
 }
 
+enum BillingInvoicePurpose {
+  SUBSCRIPTION
+  QUALITY_CONTROL
+  CONTRACT_SERVICE
+}
+
+enum BillingInvoiceStatus {
+  ISSUED
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
 enum CreditEntryType {
   GRANT
   RESERVE
@@ -444,6 +457,7 @@ model Organization {
   buyerRfqs                Rfq[]
   subscriptions            Subscription[]
   manualSubscriptionRenewals ManualSubscriptionRenewal[]
+  billingInvoices            BillingInvoice[]
   buyerSupplierReviews       SupplierReview[] @relation("BuyerSupplierReviews")
   receivedSupplierReviews    SupplierReview[] @relation("ReceivedSupplierReviews")
   paymentReceipts          PaymentReceipt[]
@@ -1210,6 +1224,7 @@ model Subscription {
   reminders           SubscriptionReminder[]
   paymentReceipt      PaymentReceipt?
   manualRenewal       ManualSubscriptionRenewal?
+  billingInvoice      BillingInvoice?
 
   @@index([organizationId, status])
   @@index([status, expiresAt])
@@ -1229,6 +1244,7 @@ model ManualSubscriptionRenewal {
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   subscription      Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
   activatedBy       User         @relation("ManualSubscriptionRenewalActor", fields: [activatedByUserId], references: [id], onDelete: Restrict)
+  billingInvoice    BillingInvoice?
 
   @@index([organizationId, paidAt])
   @@index([activatedByUserId, createdAt])
@@ -1306,6 +1322,7 @@ model PaymentIntent {
   createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
   paymentReceipt      PaymentReceipt?
+  billingInvoice      BillingInvoice?
   reconciliationResolvedBy User?      @relation("PaymentReconciliationResolver", fields: [reconciliationResolvedByUserId], references: [id], onDelete: SetNull)
 
   @@index([referenceType, referenceId])
@@ -1313,6 +1330,35 @@ model PaymentIntent {
   @@index([reconciliationStatus, updatedAt])
   @@index([reconciliationResolvedAt, updatedAt])
   @@map("payment_intents")
+}
+
+model BillingInvoice {
+  id                    String                @id @default(cuid())
+  invoiceNumber         String                @unique @map("invoice_number")
+  organizationId        String                @map("organization_id")
+  purpose               BillingInvoicePurpose
+  status                BillingInvoiceStatus  @default(ISSUED)
+  subscriptionId        String?               @unique @map("subscription_id")
+  paymentIntentId       String?               @unique @map("payment_intent_id")
+  manualRenewalId       String?               @unique @map("manual_renewal_id")
+  netAmountRial         BigInt                @map("net_amount_rial")
+  taxRial               BigInt                @default(0) @map("tax_rial")
+  totalAmountRial       BigInt                @map("total_amount_rial")
+  currency              String                @default("IRR")
+  descriptionFa         String                @map("description_fa")
+  issuedAt              DateTime              @default(now()) @map("issued_at") @db.Timestamptz(3)
+  dueAt                 DateTime?             @map("due_at") @db.Timestamptz(3)
+  paidAt                DateTime?             @map("paid_at") @db.Timestamptz(3)
+  createdAt             DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  subscription          Subscription?         @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  paymentIntent         PaymentIntent?        @relation(fields: [paymentIntentId], references: [id], onDelete: Restrict)
+  manualRenewal         ManualSubscriptionRenewal? @relation(fields: [manualRenewalId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, issuedAt])
+  @@index([status, dueAt])
+  @@map("billing_invoices")
 }
 
 model PaymentReceipt {
