@@ -40,12 +40,13 @@ export class QualityControlService {
       return { paymentIntentId: existing.id, alreadyPaid: true, redirectUrl: `${this.webOrigin()}/dashboard/rfqs/${rfqId}?qualityPayment=success` };
     }
     if (existing?.authority && ['REDIRECT_PENDING', 'VERIFY_PENDING'].includes(existing.status)) {
-      return { paymentIntentId: existing.id, authority: existing.authority, redirectUrl: `${this.startPayUrl()}${existing.authority}` };
+      const callbackUrl = `${this.publicApiUrl()}/v1/quality-control/zarinpal/callback`;
+      return { paymentIntentId: existing.id, authority: existing.authority, redirectUrl: this.payments.redirectUrl(existing.authority, callbackUrl) };
     }
 
     const intent = existing ?? await this.prisma.paymentIntent.create({
       data: {
-        provider: 'ZARINPAL',
+        provider: this.payments.provider,
         purpose: 'QUALITY_CONTROL',
         amountRial: request.feeAmountRial,
         payerOrganizationId: request.rfq.buyerOrganizationId,
@@ -71,7 +72,7 @@ export class QualityControlService {
   }
 
   async handlePaymentCallback(authority: string, callbackStatus: 'OK' | 'NOK') {
-    const intent = await this.prisma.paymentIntent.findFirst({ where: { authority, provider: 'ZARINPAL', purpose: 'QUALITY_CONTROL' } });
+    const intent = await this.prisma.paymentIntent.findFirst({ where: { authority, provider: this.payments.provider, purpose: 'QUALITY_CONTROL' } });
     if (!intent) throw new NotFoundException('تراکنش کنترل کیفیت پیدا نشد.');
     if (!intent.payerOrganizationId) throw new ConflictException('سازمان پرداخت‌کننده برای تراکنش کنترل کیفیت مشخص نیست.');
     const buyerOrganizationId = intent.payerOrganizationId;
@@ -162,8 +163,4 @@ export class QualityControlService {
     return (this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:3000').replace(/\/$/, '');
   }
 
-  private startPayUrl(): string {
-    const sandbox = this.config.get<string>('ZARINPAL_SANDBOX') !== 'false';
-    return this.config.get<string>('ZARINPAL_START_PAY_URL') ?? (sandbox ? 'https://sandbox.zarinpal.com/pg/StartPay/' : 'https://www.zarinpal.com/pg/StartPay/');
-  }
 }

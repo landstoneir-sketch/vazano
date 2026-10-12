@@ -17,7 +17,14 @@ type ZarinpalData = {
 
 @Injectable()
 export class ZarinpalAdapter implements PaymentGatewayPort {
+  readonly provider = 'ZARINPAL' as const;
+
   constructor(private readonly config: ConfigService) {}
+
+  redirectUrl(authority: string, callbackUrl: string): string {
+    void callbackUrl;
+    return `${this.settings().startPayUrl}${authority}`;
+  }
 
   async createPayment(input: CreatePaymentRequest): Promise<CreatePaymentResult> {
     const settings = this.settings();
@@ -30,7 +37,7 @@ export class ZarinpalAdapter implements PaymentGatewayPort {
       metadata: { mobile: input.mobile ?? '', email: input.email ?? '', order_id: input.orderId ?? '' },
     });
     if (response.code !== 100 || !response.authority) throw new BadGatewayException('درگاه پرداخت درخواست را نپذیرفت.');
-    return { authority: response.authority, redirectUrl: `${settings.startPayUrl}${response.authority}` };
+    return { authority: response.authority, redirectUrl: this.redirectUrl(response.authority, input.callbackUrl) };
   }
 
   async verifyPayment(input: VerifyPaymentRequest): Promise<VerifyPaymentResult> {
