@@ -23,6 +23,7 @@ describe('SubscriptionSmsReminderService', () => {
         expiresAt: new Date('2026-10-26T00:00:00.000Z'),
         graceEndsAt: new Date('2026-11-02T00:00:00.000Z'),
         priceRialSnapshot: 30_000_000n,
+        isTrialSnapshot: false,
         organization: { members: [{ user: { mobile: '09120000000' } }] },
       },
     };
@@ -48,5 +49,36 @@ describe('SubscriptionSmsReminderService', () => {
       { name: 'Link', value: 'https://vazano.ir/supplier/subscription' },
     ]));
     expect(prisma.auditLog.create).toHaveBeenCalled();
+  });
+
+  it('uses the dedicated one-day trial template', async () => {
+    const reminder = {
+      id: 'trial-reminder-1', subscriptionId: 'trial-subscription-1', offsetDays: -1,
+      scheduledAt: new Date('2026-10-12T07:00:00.000Z'),
+      subscription: {
+        organizationId: 'supplier-1', expiresAt: new Date('2026-10-13T07:00:00.000Z'),
+        graceEndsAt: new Date('2026-10-13T07:00:00.000Z'), priceRialSnapshot: 0n, isTrialSnapshot: true,
+        organization: { members: [{ user: { mobile: '09120000000' } }] },
+      },
+    };
+    const prisma = {
+      subscriptionReminder: {
+        findMany: jest.fn().mockResolvedValue([reminder]),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      auditLog: { count: jest.fn().mockResolvedValue(0), create: jest.fn().mockResolvedValue({ id: 'audit-1' }) },
+      $transaction: jest.fn(async (operations: Promise<unknown>[]) => Promise.all(operations)),
+    };
+    const config = {
+      get: jest.fn((key: string) => key === 'SUBSCRIPTION_SMS_ENABLED' ? 'true' : undefined),
+      getOrThrow: jest.fn().mockReturnValue('https://vazano.ir'),
+    };
+    const sms = { sendTemplate: jest.fn().mockResolvedValue(undefined) };
+    const service = new SubscriptionSmsReminderService(prisma as never, config as never, sms as never);
+
+    await expect(service.process(new Date('2026-10-12T08:00:00.000Z'))).resolves.toBe(1);
+    expect(sms.sendTemplate).toHaveBeenCalledWith('09120000000', 'SUBSCRIPTION_TRIAL_1_DAY', expect.arrayContaining([
+      { name: 'Link', value: 'https://vazano.ir/supplier/subscription' },
+    ]));
   });
 });

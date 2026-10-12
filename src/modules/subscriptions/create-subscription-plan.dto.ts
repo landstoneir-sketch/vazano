@@ -21,7 +21,7 @@ export class CreateSubscriptionPlanDto {
   billingCycle!: BillingCycle;
 
   @IsString()
-  @Matches(/^P(?:1M|3M|6M|1Y)$/)
+  @Matches(/^P(?:(?:1M|3M|6M|1Y)|(?:[1-9]|[1-8][0-9]|90)D)$/)
   durationIso!: string;
 
   @IsString()
@@ -46,6 +46,9 @@ export class CreateSubscriptionPlanDto {
 
   @IsBoolean()
   taxIncluded!: boolean;
+
+  @IsBoolean()
+  isTrial!: boolean;
 
   @IsBoolean()
   isPublic!: boolean;

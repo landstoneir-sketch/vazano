@@ -9,6 +9,7 @@ This module owns seller plan purchase, payment activation, credits, renewal sche
 - Renewal SMS delivery is limited to 09:00–20:00 Asia/Tehran, one message per organization in 24 hours, and the active supplier owner for the MVP. If several reminders are overdue, only the newest one is sent and older reminders are cancelled.
 - SMS.ir renewal templates use the canonical parameters `Date`, `Amount`, and `Link`. Provider template identifiers stay in environment configuration and are validated before startup when renewal SMS is enabled.
 - Finance managers can inspect reminder delivery status and requeue a failed SMS. Requeueing is audited and never bypasses the delivery window or the 24-hour organization limit.
+- Trial plans have a configurable 1–90 day duration, cost zero, no grace period, and can be activated only once per supplier organization. Trial reminders run at -7, -3, -1, and 0 days with dedicated provider templates.
 - `/v1/admin/billing/overview` gives finance users a unified view of plans, recent subscriptions, payments, and lifecycle counts.
 - Plan creation and editing require `billing.manage`; historical subscriptions keep price, credit, and plan-version snapshots.
 - Stable plan code, billing cycle, and duration are immutable after creation. A materially different commercial offer must be created as a new plan.

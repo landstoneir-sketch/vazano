@@ -73,7 +73,8 @@ export class AdminBillingService {
 
   async createPlan(user: AuthenticatedUser, input: CreateSubscriptionPlanDto) {
     this.requireAnyPermission(user, ['billing.manage']);
-    this.validatePlanAmountsAndLimits(input.priceRial, input.grantCredits, input.dailyProposalLimit, input.maxProposalLimit);
+    this.validatePlanAmountsAndLimits(input.priceRial, input.grantCredits, input.dailyProposalLimit, input.maxProposalLimit, input.isTrial);
+    this.validateTrialPlan(input.isTrial, input.billingCycle, input.durationIso, input.taxIncluded);
     const entitlements = this.normalizeEntitlements(input.entitlements);
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -89,6 +90,7 @@ export class AdminBillingService {
             dailyProposalLimit: input.dailyProposalLimit,
             maxProposalLimit: input.maxProposalLimit,
             taxIncluded: input.taxIncluded,
+            isTrial: input.isTrial,
             isPublic: input.isPublic,
             isActive: input.isActive,
             entitlements,
@@ -111,10 +113,10 @@ export class AdminBillingService {
 
   async updatePlan(user: AuthenticatedUser, planId: string, input: UpdateSubscriptionPlanDto) {
     this.requireAnyPermission(user, ['billing.manage']);
-    this.validatePlanAmountsAndLimits(input.priceRial, input.grantCredits, input.dailyProposalLimit, input.maxProposalLimit);
     const entitlements = this.normalizeEntitlements(input.entitlements);
     const plan = await this.prisma.subscriptionPlan.findUnique({ where: { id: planId } });
     if (!plan) throw new NotFoundException('پلن اشتراک پیدا نشد.');
+    this.validatePlanAmountsAndLimits(input.priceRial, input.grantCredits, input.dailyProposalLimit, input.maxProposalLimit, plan.isTrial);
 
     return this.prisma.$transaction(async (tx) => {
       const result = await tx.subscriptionPlan.updateMany({
@@ -274,10 +276,19 @@ export class AdminBillingService {
     });
   }
 
-  private validatePlanAmountsAndLimits(priceRial: string, grantCredits: string, dailyLimit: number, maxLimit: number): void {
-    if (BigInt(priceRial) <= 0n) throw new BadRequestException('مبلغ پلن باید بیشتر از صفر باشد.');
+  private validatePlanAmountsAndLimits(priceRial: string, grantCredits: string, dailyLimit: number, maxLimit: number, isTrial: boolean): void {
+    if (isTrial && BigInt(priceRial) !== 0n) throw new BadRequestException('مبلغ پلن آزمایشی باید صفر باشد.');
+    if (!isTrial && BigInt(priceRial) <= 0n) throw new BadRequestException('مبلغ پلن پولی باید بیشتر از صفر باشد.');
     if (BigInt(grantCredits) < 0n) throw new BadRequestException('اعتبار پلن نمی‌تواند منفی باشد.');
     if (maxLimit < dailyLimit) throw new BadRequestException('سقف افزایش‌یافته نمی‌تواند کمتر از سقف پایه روزانه باشد.');
+  }
+
+  private validateTrialPlan(isTrial: boolean, billingCycle: string, durationIso: string, taxIncluded: boolean): void {
+    if (isTrial && (billingCycle !== 'CUSTOM' || !/^P(?:[1-9]|[1-8][0-9]|90)D$/.test(durationIso))) {
+      throw new BadRequestException('مدت پلن آزمایشی باید بین ۱ تا ۹۰ روز باشد.');
+    }
+    if (isTrial && taxIncluded) throw new BadRequestException('پلن رایگان آزمایشی نمی‌تواند شامل مالیات باشد.');
+    if (!isTrial && /^P\d+D$/.test(durationIso)) throw new BadRequestException('دوره روزانه فقط برای پلن آزمایشی مجاز است.');
   }
 
   private normalizeEntitlements(value: Record<string, unknown>): Prisma.InputJsonObject {
@@ -293,6 +304,10 @@ export class AdminBillingService {
       'SMSIR_SUBSCRIPTION_RENEWAL_3_TEMPLATE_ID',
       'SMSIR_SUBSCRIPTION_EXPIRED_TEMPLATE_ID',
       'SMSIR_SUBSCRIPTION_GRACE_ENDED_TEMPLATE_ID',
+      'SMSIR_SUBSCRIPTION_TRIAL_7_TEMPLATE_ID',
+      'SMSIR_SUBSCRIPTION_TRIAL_3_TEMPLATE_ID',
+      'SMSIR_SUBSCRIPTION_TRIAL_1_TEMPLATE_ID',
+      'SMSIR_SUBSCRIPTION_TRIAL_ENDED_TEMPLATE_ID',
     ] as const;
     const enabled = this.config.get<string>('SUBSCRIPTION_SMS_ENABLED', 'false') === 'true';
     const provider = this.config.get<string>('SMS_PROVIDER', 'debug');
