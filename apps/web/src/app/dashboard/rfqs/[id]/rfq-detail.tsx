@@ -5,6 +5,7 @@ import type { Route } from 'next';
 import { useCallback, useEffect, useState } from 'react';
 import { apiRequest } from '../../../../lib/api';
 import { formatProductSpecifications, type ProductAttributeBinding, type ProductSpecifications } from '../../../../lib/product-specifications';
+import { displayedQuotationAmountRial } from '../../../../lib/quotation-display';
 
 type RfqItem = { id: string; title: string; quantity: string; specifications: ProductSpecifications; category: { nameFa: string; attributeBindings: ProductAttributeBinding[] }; unit: { symbolFa: string } };
 type QualityControlRequest = { status: string; purchaseAmountRial: string | null; feeBps: number; feeAmountRial: string | null; acceptedAt: string | null; paymentReceipt: null | { id: string; receiptNumber: string; providerReference: string | null; paidAt: string } };
@@ -16,7 +17,7 @@ type Attachment = { id: string; originalName: string; status: string; sizeBytes:
 type CheckoutResult = { paymentIntentId: string; authority?: string; redirectUrl: string; alreadyPaid?: boolean };
 type SupplierReview = { id: string; rating: number; comment: string | null; status: 'PUBLISHED' | 'HIDDEN'; moderationReason: string | null; createdAt: string };
 
-function toman(value: string) { return `${(Number(value) / 10).toLocaleString('fa-IR')} تومان`; }
+function toman(value: string | bigint) { return `${(BigInt(value) / BigInt(10)).toLocaleString('fa-IR')} تومان`; }
 
 const contractStatusLabels: Record<ContractRequest['status'], string> = {
   REQUESTED: 'ثبت‌شده', UNDER_REVIEW: 'در حال بررسی', TERMS_PREPARED: 'شرایط آماده تأیید', ACCEPTED: 'تأییدشده', COMPLETED: 'تکمیل‌شده', CANCELLED: 'لغوشده',
@@ -164,14 +165,14 @@ export function RfqDetail({ rfqId, qualityPaymentResult }: { rfqId: string; qual
     {quotations.length === 0 && <div className="card">هنوز پیشنهاد قیمتی دریافت نشده است.</div>}
     <div className="comparison-grid">{quotations.map((quote) => <article className={`card quote-card ${quote.status === 'ACCEPTED' ? 'selected-card' : ''}`} key={quote.id}>
       <div className="eyebrow">{quote.code} · نسخه {quote.status}</div><h3>{quote.supplierOrganization.displayName}</h3>
-      <strong className="price">{toman(quote.finalAmountRial)}</strong><p>مالیات: {toman(quote.taxRial)} · حمل: {toman(quote.shippingRial)}</p>
+      <strong className="price">{toman(displayedQuotationAmountRial(quote.finalAmountRial, quote.taxRial, rfq.displayPricesTaxInclusive))}</strong><p>مالیات: {toman(quote.taxRial)}{rfq.displayPricesTaxInclusive ? ' (در مبلغ اصلی محاسبه شده)' : ' (جداگانه)'} · حمل: {toman(quote.shippingRial)}</p>
       <p>آماده‌سازی: {quote.preparationDays ?? '—'} روز · اعتبار تا: {quote.validUntil ? new Date(quote.validUntil).toLocaleDateString('fa-IR') : '—'}</p>
       <ul>{quote.items.map((item) => <li key={item.id}>{item.rfqItem.title}: {toman(item.unitPriceRial)} / واحد{item.isAlternative ? ' · جایگزین' : ''}</li>)}</ul>
       <div className="list-card-actions"><Link className="button button-secondary" href={`/messages?rfq=${rfq.id}&supplier=${quote.supplierOrganization.id}` as Route}>پیام به فروشنده</Link>
       {quote.status === 'SUBMITTED' && <button className="button button-primary" disabled={busyId === quote.id} onClick={() => void accept(quote.id)}>انتخاب فروشنده</button>}</div>
       {quote.status === 'ACCEPTED' && <div className="message message-success">فروشنده منتخب</div>}
     </article>)}</div>
-    <p className="muted">قیمت اصلی بدون مالیات نمایش داده می‌شود؛ مالیات و هزینه‌های جانبی به‌صورت شفاف و جداگانه آمده‌اند.</p>
+    <p className="muted">قیمت اصلی {rfq.displayPricesTaxInclusive ? 'با مالیات' : 'بدون مالیات'} نمایش داده می‌شود؛ مالیات و هزینه‌های جانبی به‌صورت شفاف آمده‌اند.</p>
   </div>;
 }
 
