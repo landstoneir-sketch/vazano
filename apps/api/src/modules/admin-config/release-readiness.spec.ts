@@ -6,6 +6,7 @@ const readyInput: ReleaseReadinessInput = {
   termsPublished: true, privacyPublished: true, paidPlanCount: 2, activeCategoryCount: 15, activeUnitCount: 6,
   activeProvinceCount: 31, marketCoverageConfigured: true, activeBuyerOrganizationCount: 2, eligibleSupplierCount: 5,
   uncoveredCategoryCount: 0, uncoveredProvinceCount: 0,
+  uncoveredCategoryNames: [], uncoveredProvinceNames: [],
   activeSuperAdminCount: 2,
 };
 
@@ -39,10 +40,14 @@ describe('release readiness', () => {
       eligibleSupplierCount: 0,
       uncoveredCategoryCount: 15,
       uncoveredProvinceCount: 31,
+      uncoveredCategoryNames: ['تراورتن', 'گرانیت'],
+      uncoveredProvinceNames: ['تهران', 'فارس'],
     });
     expect(result.ready).toBe(false);
     expect(result.checks.filter((item) => item.status === 'BLOCKED').map((item) => item.key)).toEqual(expect.arrayContaining([
       'catalog.units', 'market.coverage', 'market.buyers', 'market.suppliers', 'market.category-supply', 'market.province-supply',
     ]));
+    expect(result.checks.find((item) => item.key === 'market.category-supply')?.detail).toContain('تراورتن');
+    expect(result.checks.find((item) => item.key === 'market.province-supply')?.detail).toContain('فارس');
   });
 });

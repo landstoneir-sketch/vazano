@@ -28,6 +28,8 @@ export type ReleaseReadinessInput = {
   eligibleSupplierCount: number;
   uncoveredCategoryCount: number;
   uncoveredProvinceCount: number;
+  uncoveredCategoryNames: string[];
+  uncoveredProvinceNames: string[];
   activeSuperAdminCount: number;
 };
 
@@ -50,8 +52,8 @@ export function evaluateReleaseReadiness(input: ReleaseReadinessInput): { ready:
     check('market.coverage', 'پوشش فعال بازار', input.marketCoverageConfigured, 'پوشش جغرافیایی بازار معتبر و با استان‌های فعال همخوان است.', 'تنظیم پوشش بازار نامعتبر است یا به استان غیرفعال اشاره می‌کند.', '/admin/settings'),
     check('market.buyers', 'خریدار پایلوت فعال', input.activeBuyerOrganizationCount > 0, `${input.activeBuyerOrganizationCount.toLocaleString('fa-IR')} سازمان خریدار فعال و دارای عضو وجود دارد.`, 'هنوز هیچ سازمان خریدار فعال و دارای عضو برای پایلوت وجود ندارد.', '/admin/users'),
     check('market.suppliers', 'فروشنده واجد شرایط', input.eligibleSupplierCount > 0, `${input.eligibleSupplierCount.toLocaleString('fa-IR')} فروشنده تأییدشده با اشتراک، دسته و پوشش فعال وجود دارد.`, 'هیچ فروشنده‌ای هم‌زمان تأییدشده، دارای اشتراک معتبر، دسته و پوشش فعال وجود ندارد.', '/admin/suppliers'),
-    check('market.category-supply', 'پوشش عرضه انواع سنگ', input.activeCategoryCount > 0 && input.uncoveredCategoryCount === 0, 'همه دسته‌های فعال حداقل یک فروشنده واجد شرایط دارند.', `${input.uncoveredCategoryCount.toLocaleString('fa-IR')} دسته فعال هنوز فروشنده واجد شرایط ندارند.`, '/admin/suppliers'),
-    check('market.province-supply', 'پوشش عرضه جغرافیایی', input.activeProvinceCount > 0 && input.uncoveredProvinceCount === 0, 'همه استان‌های هدف حداقل توسط یک فروشنده واجد شرایط پوشش داده می‌شوند.', `${input.uncoveredProvinceCount.toLocaleString('fa-IR')} استان هدف هنوز تأمین‌کننده واجد شرایط ندارند.`, '/admin/suppliers'),
+    check('market.category-supply', 'پوشش عرضه انواع سنگ', input.activeCategoryCount > 0 && input.uncoveredCategoryCount === 0, 'همه دسته‌های فعال حداقل یک فروشنده واجد شرایط دارند.', coverageGapDetail(input.uncoveredCategoryCount, 'دسته فعال', input.uncoveredCategoryNames), '/admin/suppliers'),
+    check('market.province-supply', 'پوشش عرضه جغرافیایی', input.activeProvinceCount > 0 && input.uncoveredProvinceCount === 0, 'همه استان‌های هدف حداقل توسط یک فروشنده واجد شرایط پوشش داده می‌شوند.', coverageGapDetail(input.uncoveredProvinceCount, 'استان هدف', input.uncoveredProvinceNames), '/admin/suppliers'),
     check(
       'access.super-admin',
       'مدیران ارشد بازیابی',
@@ -65,6 +67,15 @@ export function evaluateReleaseReadiness(input: ReleaseReadinessInput): { ready:
   ];
 
   return { ready: checks.every((item) => item.status !== 'BLOCKED'), checks };
+}
+
+function coverageGapDetail(count: number, subject: string, names: string[]): string {
+  const visibleNames = names.slice(0, 8);
+  const remainingCount = Math.max(0, count - visibleNames.length);
+  const namesDetail = visibleNames.length > 0
+    ? ` موارد: ${visibleNames.join('، ')}${remainingCount > 0 ? ` و ${remainingCount.toLocaleString('fa-IR')} مورد دیگر` : ''}.`
+    : '';
+  return `${count.toLocaleString('fa-IR')} ${subject} هنوز فروشنده واجد شرایط ندارد.${namesDetail}`;
 }
 
 function check(key: string, title: string, condition: boolean, readyDetail: string, blockedDetail: string, actionPath?: string): ReleaseReadinessCheck {
