@@ -1,4 +1,4 @@
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { PaymentReconciliationResolution, Prisma } from '@prisma/client';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { AdminBillingService } from './admin-billing.service';
@@ -67,6 +67,21 @@ describe('AdminBillingService payment reconciliation resolution', () => {
     await expect(service.resolvePaymentReconciliation(financeUser, 'payment-1', {
       resolution: PaymentReconciliationResolution.NO_FINANCIAL_ACTION, note: 'تراکنش قبلاً به‌طور قطعی تطبیق شده است.',
     })).rejects.toBeInstanceOf(ConflictException);
+  });
+});
+
+describe('AdminBillingService payment provider abstraction', () => {
+  it('rejects reconciliation through a different configured provider', async () => {
+    const prisma = {
+      paymentIntent: { findUnique: jest.fn().mockResolvedValue({
+        id: 'payment-legacy', provider: 'LEGACY_GATEWAY', authority: 'authority-1', amountRial: 1_000_000n,
+      }) },
+    };
+    const payments = { provider: 'ACTIVE_GATEWAY', verify: jest.fn() };
+    const service = new AdminBillingService(prisma as never, payments as never, {} as never, policySettings as never);
+
+    await expect(service.reconcilePayment(financeUser, 'payment-legacy')).rejects.toBeInstanceOf(BadRequestException);
+    expect(payments.verify).not.toHaveBeenCalled();
   });
 });
 
