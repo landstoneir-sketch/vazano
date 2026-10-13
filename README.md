@@ -87,6 +87,22 @@ powershell -ExecutionPolicy Bypass -File .\scripts\rollback-release.ps1 -Previou
 
 بازگشت برنامه زمانی ایمن است که Migrationهای انتشار جدید با روش Expand–Migrate–Contract سازگار با نسخه قبلی طراحی شده باشند. برای بازگرداندن داده‌ها از Backup باید Runbook رخداد و تأیید مسئول فنی/داده جداگانه اجرا شود؛ اسکریپت بالا هرگز پایگاه‌داده را عقب نمی‌برد.
 
+### انتشار اولیه قوانین پس از تأیید مالک و مشاور حقوقی
+
+صفحات `terms` و `privacy` عمداً به‌صورت پیش‌نویس Seed می‌شوند و در Production تا زمان انتشار، ورود کاربران بسته می‌ماند. ابتدا Hash دقیق محتوای فعلی را بدون هیچ تغییری مشاهده کنید:
+
+```powershell
+docker compose --env-file .env.production -f compose.production.yml --profile operations run --rm -e LEGAL_PUBLICATION_MODE=inspect legal-publisher
+```
+
+پس از تطبیق دو Hash با نسخه‌ای که مالک و مشاور حقوقی تأیید کرده‌اند، انتشار یک‌باره و ثبت‌شده در Audit Log انجام می‌شود. مقادیر Hash زیر باید دقیقاً از خروجی تأییدشده مرحله قبل برداشته شوند:
+
+```powershell
+docker compose --env-file .env.production -f compose.production.yml --profile operations run --rm -e LEGAL_PUBLICATION_MODE=publish -e LEGAL_TERMS_APPROVED_SHA256=<TERMS_SHA256> -e LEGAL_PRIVACY_APPROVED_SHA256=<PRIVACY_SHA256> -e LEGAL_PUBLICATION_CONFIRMATION=PUBLISH_APPROVED_LEGAL_PAGES legal-publisher
+```
+
+این ابزار متن را تغییر نمی‌دهد و در صورت تفاوت حتی یک نویسه، تغییر هم‌زمان، نبود مدیر کل فعال یا نبود تأیید صریح متوقف می‌شود. انتشار محتوای حقوقی نباید بدون تأیید واقعی انجام شود.
+
 ## کنترل کیفیت
 
 ```bash

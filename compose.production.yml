@@ -33,6 +33,18 @@ services:
     security_opt: ["no-new-privileges:true"]
     profiles: [operations]
 
+  legal-publisher:
+    image: ${VAZANO_API_IMAGE:?VAZANO_API_IMAGE must be set to an immutable release image}
+    env_file:
+      - ${VAZANO_ENV_FILE:-.env.production}
+    command: ["node", "apps/api/dist/src/operations/publish-legal-pages.js"]
+    restart: "no"
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m"]
+    networks: [application]
+    security_opt: ["no-new-privileges:true"]
+    profiles: [operations]
+
   api:
     image: ${VAZANO_API_IMAGE:?VAZANO_API_IMAGE must be set to an immutable release image}
     env_file:
