@@ -84,6 +84,12 @@ function SettingValueEditor({ settingKey, rawValue, onChange, disabled }: {
     return <div className="form-grid"><label className="check-field full"><input type="checkbox" disabled={disabled} checked={booleanValue(current.enabled, true)} onChange={(event) => setParsed({ ...current, enabled: event.target.checked })} /><span>برنامه فعال باشد</span></label><label className="form-field full"><span>کد پلن مرتبط</span><input dir="ltr" disabled={disabled} value={stringValue(current.planCode, 'SELLER_FOUNDING_P6M_V1')} onChange={(event) => setParsed({ ...current, planCode: event.target.value.toUpperCase() })} /></label><NumberSetting label="ظرفیت کارخانه" value={numberValue(current.capacity, 20)} disabled={disabled} onChange={(capacity) => setParsed({ ...current, capacity })} /><NumberSetting label="تخفیف تمدید (صدم درصد)" value={numberValue(current.renewalDiscountBps, 2000)} disabled={disabled} onChange={(renewalDiscountBps) => setParsed({ ...current, renewalDiscountBps })} /><NumberSetting label="حداقل لید معتبر" value={numberValue(current.minimumValidLeads, 10)} disabled={disabled} onChange={(minimumValidLeads) => setParsed({ ...current, minimumValidLeads })} /><NumberSetting label="تمدید تضمینی (روز)" value={numberValue(current.guaranteeExtensionDays, 90)} disabled={disabled} onChange={(guaranteeExtensionDays) => setParsed({ ...current, guaranteeExtensionDays })} /><label className="check-field full"><input type="checkbox" disabled={disabled} checked={booleanValue(current.managedSalesOnly, true)} onChange={(event) => setParsed({ ...current, managedSalesOnly: event.target.checked })} /><span>فقط توسط تیم فروش مدیریت شود</span></label><p className="muted full">قیمت و مدت این برنامه در صفحه مدیریت اشتراک‌ها و پلن مرتبط تعیین می‌شود.</p></div>;
   }
 
+  if (settingKey === 'seller.shortage_override') {
+    const current = asRecord(parsed);
+    const enabled = booleanValue(current.enabled, false);
+    return <div className="form-grid"><label className="check-field full"><input type="checkbox" disabled={disabled} checked={enabled} onChange={(event) => setParsed({ ...current, enabled: event.target.checked, expiresAt: event.target.checked ? stringValue(current.expiresAt, defaultShortageExpiry()) : null })} /><span>افزایش موقت سقف پیشنهاد فعال باشد</span></label><label className="form-field"><span>زمان پایان</span><input type="datetime-local" disabled={disabled || !enabled} value={isoToLocalInput(current.expiresAt)} onChange={(event) => setParsed({ ...current, expiresAt: localInputToIso(event.target.value) })} /></label><label className="form-field full"><span>دلیل عملیاتی</span><input dir="rtl" maxLength={200} disabled={disabled || !enabled} value={stringValue(current.reason, '')} onChange={(event) => setParsed({ ...current, reason: event.target.value })} placeholder="مثلاً کمبود عرضه تراورتن در پایلوت" /></label><p className="muted full">در این بازه، سقف روزانه هر پلن تا حداکثر تعیین‌شده همان پلن افزایش می‌یابد و پس از زمان پایان خودکار غیرفعال می‌شود.</p></div>;
+  }
+
   if (typeof parsed === 'boolean') {
     return <label className="check-field"><input type="checkbox" disabled={disabled} checked={parsed} onChange={(event) => setParsed(event.target.checked)} /><span>{parsed ? 'فعال' : 'غیرفعال'}</span></label>;
   }
@@ -112,6 +118,19 @@ function asRecord(value: unknown): Record<string, unknown> {
 function numberValue(value: unknown, fallback: number): number { return typeof value === 'number' ? value : fallback; }
 function stringValue(value: unknown, fallback: string): string { return typeof value === 'string' ? value : fallback; }
 function booleanValue(value: unknown, fallback: boolean): boolean { return typeof value === 'boolean' ? value : fallback; }
+function defaultShortageExpiry(): string { return new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); }
+function isoToLocalInput(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return '';
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+function localInputToIso(value: string): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+}
 function reminderOffsetLabel(offset: number): string {
   if (offset === 0) return 'روز پایان';
   return offset < 0 ? `${Math.abs(offset).toLocaleString('fa-IR')} روز پیش از پایان` : `${offset.toLocaleString('fa-IR')} روز پس از پایان`;
