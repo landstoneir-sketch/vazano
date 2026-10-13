@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import { Readable } from 'node:stream';
 import { ObjectStorageService } from './object-storage.service';
 
 const config = {
@@ -42,5 +43,11 @@ describe('ObjectStorageService startup', () => {
 
     await expect(storage.onModuleInit()).rejects.toBe(headFailure);
     expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads only the requested prefix for signature validation', async () => {
+    const send = jest.fn().mockResolvedValue({ Body: Readable.from([Buffer.from('0123456789')]) });
+
+    await expect(storageWithSend(send).readPrefix('safe/object.pdf', 5)).resolves.toEqual(Buffer.from('01234'));
   });
 });
