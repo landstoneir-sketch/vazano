@@ -3,6 +3,7 @@ import { Prisma, SecurityEventSeverity } from '@prisma/client';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { PrismaService } from '../../shared/prisma/prisma.service';
 import { UpdateUserStatusDto } from './update-user-status.dto';
+import { ManageableGlobalRole, manageableGlobalRoles, UpdateGlobalRolesDto } from './update-global-roles.dto';
 
 type AuditLogFilters = { limit?: string; action?: string; entityType?: string; before?: string };
 type SecurityEventFilters = { severity?: string; resolved?: string };
@@ -90,6 +91,71 @@ export class AdminOperationsService {
         metadata: { actorUserId: user.id, reason: input.reason, revokedSessions },
       } });
       return { id: target.id, status: input.status, revokedSessions };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
+  listGlobalRoleOptions(user: AuthenticatedUser) {
+    this.requirePermission(user, 'role.manage');
+    return this.prisma.role.findMany({
+      where: { key: { in: [...manageableGlobalRoles] } },
+      select: { key: true, nameFa: true, description: true },
+      orderBy: { key: 'asc' },
+    });
+  }
+
+  async updateGlobalRoles(user: AuthenticatedUser, targetUserId: string, input: UpdateGlobalRolesDto) {
+    this.requirePermission(user, 'role.manage');
+    const requestedRoles = [...new Set(input.roles)].sort();
+    const target = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: {
+        id: true, status: true,
+        userRoles: { where: { organizationId: null }, select: { role: { select: { key: true } } } },
+      },
+    });
+    if (!target) throw new NotFoundException('کاربر پیدا نشد.');
+    const existingRoles = target.userRoles
+      .map((item) => item.role.key)
+      .filter((key): key is ManageableGlobalRole => manageableGlobalRoles.includes(key as ManageableGlobalRole))
+      .sort();
+    if (existingRoles.join('|') === requestedRoles.join('|')) return { userId: target.id, globalRoles: existingRoles };
+
+    const removesSuperAdmin = target.status === 'ACTIVE'
+      && existingRoles.includes('SUPER_ADMIN')
+      && !requestedRoles.includes('SUPER_ADMIN');
+
+    return this.prisma.$transaction(async (tx) => {
+      if (removesSuperAdmin) {
+        const activeSuperAdmins = await tx.user.count({
+          where: { status: 'ACTIVE', userRoles: { some: { organizationId: null, role: { key: 'SUPER_ADMIN' } } } },
+        });
+        if (activeSuperAdmins <= 1) throw new ConflictException('نقش آخرین مدیر ارشد فعال قابل حذف نیست.');
+      }
+      const roles = await tx.role.findMany({
+        where: { key: { in: requestedRoles } },
+        select: { id: true, key: true },
+      });
+      if (roles.length !== requestedRoles.length) throw new BadRequestException('یک یا چند نقش مدیریتی در سامانه تعریف نشده است.');
+      await tx.userRole.deleteMany({
+        where: { userId: target.id, organizationId: null, role: { key: { in: [...manageableGlobalRoles] } } },
+      });
+      if (roles.length > 0) {
+        await tx.userRole.createMany({
+          data: roles.map((role) => ({ userId: target.id, roleId: role.id })),
+        });
+      }
+      await tx.auditLog.create({ data: {
+        actorUserId: user.id,
+        action: 'user.global_roles.replace',
+        entityType: 'User',
+        entityId: target.id,
+        metadata: { from: existingRoles, to: requestedRoles, reason: input.reason },
+      } });
+      await tx.securityEvent.create({ data: {
+        eventType: 'admin.user.global_roles_changed', severity: 'HIGH', outcome: 'SUCCESS', userId: target.id,
+        metadata: { actorUserId: user.id, from: existingRoles, to: requestedRoles, reason: input.reason },
+      } });
+      return { userId: target.id, globalRoles: requestedRoles };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 

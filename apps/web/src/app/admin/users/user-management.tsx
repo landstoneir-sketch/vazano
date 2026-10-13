@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { apiRequest } from '../../../lib/api';
 
 type Organization = { id: string; displayName: string; kind: string };
+type GlobalRoleOption = { key: string; nameFa: string; description: string | null };
 type ManagedUser = {
   id: string;
   mobileMasked: string;
@@ -25,11 +26,18 @@ export function UserManagement() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [globalRoleOptions, setGlobalRoleOptions] = useState<GlobalRoleOption[]>([]);
+  const [roleSelections, setRoleSelections] = useState<Record<string, string[]>>({});
+
+  function applyUsers(items: ManagedUser[]) {
+    setUsers(items);
+    setRoleSelections(Object.fromEntries(items.map((item) => [item.id, item.userRoles.map(({ role }) => role.key)])));
+  }
 
   const load = useCallback(async (search = '') => {
     setError('');
     try {
-      setUsers(await apiRequest<ManagedUser[]>(`/admin/operations/users${search ? `?query=${encodeURIComponent(search)}` : ''}`));
+      applyUsers(await apiRequest<ManagedUser[]>(`/admin/operations/users${search ? `?query=${encodeURIComponent(search)}` : ''}`));
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : 'دریافت کاربران انجام نشد.');
     }
@@ -37,8 +45,14 @@ export function UserManagement() {
 
   useEffect(() => {
     let active = true;
-    void apiRequest<ManagedUser[]>('/admin/operations/users').then((items) => { if (active) setUsers(items); }).catch((reason: unknown) => {
-      if (active) setError(reason instanceof Error ? reason.message : 'دریافت کاربران انجام نشد.');
+    void Promise.allSettled([
+      apiRequest<ManagedUser[]>('/admin/operations/users'),
+      apiRequest<GlobalRoleOption[]>('/admin/operations/global-role-options'),
+    ]).then(([usersResult, rolesResult]) => {
+      if (!active) return;
+      if (usersResult.status === 'fulfilled') applyUsers(usersResult.value);
+      else setError(usersResult.reason instanceof Error ? usersResult.reason.message : 'دریافت کاربران انجام نشد.');
+      if (rolesResult.status === 'fulfilled') setGlobalRoleOptions(rolesResult.value);
     });
     return () => { active = false; };
   }, []);
@@ -68,6 +82,30 @@ export function UserManagement() {
     } finally { setBusyId(null); }
   }
 
+  function toggleGlobalRole(userId: string, role: string) {
+    setRoleSelections((current) => {
+      const selected = current[userId] ?? [];
+      return { ...current, [userId]: selected.includes(role) ? selected.filter((item) => item !== role) : [...selected, role] };
+    });
+  }
+
+  async function saveGlobalRoles(user: ManagedUser) {
+    const reason = window.prompt('دلیل تغییر نقش‌های مدیریتی را وارد کنید:')?.trim();
+    if (!reason) return;
+    if (reason.length < 5) { setError('دلیل اقدام باید حداقل ۵ نویسه باشد.'); return; }
+    setBusyId(user.id); setError(''); setMessage('');
+    try {
+      await apiRequest(`/admin/operations/users/${user.id}/global-roles`, {
+        method: 'PUT',
+        body: JSON.stringify({ roles: roleSelections[user.id] ?? [], reason }),
+      });
+      setMessage('نقش‌های مدیریتی کاربر با موفقیت به‌روزرسانی شد.');
+      await load(query.trim());
+    } catch (reasonValue: unknown) {
+      setError(reasonValue instanceof Error ? reasonValue.message : 'تغییر نقش‌های مدیریتی انجام نشد.');
+    } finally { setBusyId(null); }
+  }
+
   return <div className="stack">
     <form className="admin-toolbar" onSubmit={search}>
       <label className="form-field admin-search"><span>جست‌وجو با نام، ایمیل یا موبایل</span><input value={query} onChange={(event) => setQuery(event.target.value)} /></label>
@@ -85,6 +123,14 @@ export function UserManagement() {
           <div className="admin-card-title"><h2>{name}</h2><span className={`status-badge status-${user.status.toLowerCase()}`}>{statusLabels[user.status]}</span></div>
           <p>{user.mobileMasked}{user.email ? ` · ${user.email}` : ''}</p>
           <div className="tag-list">{roles.map((role) => <span key={role}>{role}</span>)}{user.memberships.map((membership) => <span key={`${membership.organization.id}-${membership.role}`}>{membership.organization.displayName} · {membership.role}</span>)}</div>
+          {globalRoleOptions.length > 0 && <fieldset className="role-assignment">
+            <legend>نقش‌های مدیریتی سراسری</legend>
+            <div className="checkbox-grid">{globalRoleOptions.map((role) => <label key={role.key}>
+              <input type="checkbox" checked={(roleSelections[user.id] ?? []).includes(role.key)} onChange={() => toggleGlobalRole(user.id, role.key)} />
+              <span>{role.nameFa}</span>
+            </label>)}</div>
+            <button className="button button-secondary" type="button" disabled={busyId === user.id} onClick={() => void saveGlobalRoles(user)}>ذخیره نقش‌ها</button>
+          </fieldset>}
           <small className="muted">عضویت از {new Date(user.createdAt).toLocaleDateString('fa-IR')} · {user._count.sessions.toLocaleString('fa-IR')} نشست فعال</small>
         </div>
         <div className="list-card-actions">

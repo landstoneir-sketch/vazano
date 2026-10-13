@@ -5,6 +5,7 @@ import { SessionGuard } from '../auth/session.guard';
 import { AdminActionDto } from './admin-action.dto';
 import { AdminOperationsService } from './admin-operations.service';
 import { UpdateUserStatusDto } from './update-user-status.dto';
+import { UpdateGlobalRolesDto } from './update-global-roles.dto';
 
 @Controller('admin/operations')
 @UseGuards(SessionGuard)
@@ -23,6 +24,20 @@ export class AdminOperationsController {
     @Body() input: UpdateUserStatusDto,
   ) {
     return this.operations.updateUserStatus(user, targetUserId, input);
+  }
+
+  @Get('global-role-options')
+  listGlobalRoleOptions(@CurrentUser() user: AuthenticatedUser) {
+    return this.operations.listGlobalRoleOptions(user);
+  }
+
+  @Put('users/:id/global-roles')
+  updateGlobalRoles(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') targetUserId: string,
+    @Body() input: UpdateGlobalRolesDto,
+  ) {
+    return this.operations.updateGlobalRoles(user, targetUserId, input);
   }
 
   @Post('users/:id/revoke-sessions')
