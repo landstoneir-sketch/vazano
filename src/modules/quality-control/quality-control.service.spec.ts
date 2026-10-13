@@ -77,4 +77,17 @@ describe('QualityControlService payments', () => {
     await expect(service.handlePaymentCallback('authority-1', 'OK')).resolves.toEqual({ success: true, alreadyVerified: true, referenceId: 'reference-1', rfqId: 'rfq-1' });
     expect(verifyPayment).not.toHaveBeenCalled();
   });
+
+  it('does not verify or activate a terminal cancelled callback', async () => {
+    const verifyPayment = jest.fn();
+    const prisma = {
+      paymentIntent: { findFirst: jest.fn().mockResolvedValue({ id: 'payment-1', status: 'CANCELLED', payerOrganizationId: 'buyer-org', referenceId: 'quality-request' }) },
+      qualityControlRequest: { findUnique: jest.fn().mockResolvedValue({ id: 'quality-request', rfqId: 'rfq-1' }) },
+    } as unknown as PrismaService;
+    const payments = { provider: 'ZARINPAL', verify: verifyPayment } as unknown as PaymentsService;
+    const service = new QualityControlService(prisma, payments, new ConfigService());
+
+    await expect(service.handlePaymentCallback('authority-1', 'OK')).resolves.toEqual({ success: false, cancelled: true, rfqId: 'rfq-1' });
+    expect(verifyPayment).not.toHaveBeenCalled();
+  });
 });

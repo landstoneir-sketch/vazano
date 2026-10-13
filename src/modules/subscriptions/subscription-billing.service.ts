@@ -165,6 +165,9 @@ export class SubscriptionBillingService {
     const intent = await this.prisma.paymentIntent.findFirst({ where: { authority, provider: this.payments.provider, purpose: 'SUBSCRIPTION' } });
     if (!intent) throw new NotFoundException('تراکنش اشتراک پیدا نشد.');
     if (intent.status === 'SUCCEEDED') return { success: true, alreadyVerified: true, referenceId: intent.providerReference };
+    if (intent.status === 'CANCELLED') return { success: false, cancelled: true };
+    if (intent.status === 'FAILED') return { success: false, failed: true };
+    if (intent.status !== 'REDIRECT_PENDING') return { success: false, processing: intent.status === 'VERIFY_PENDING' };
     if (callbackStatus !== 'OK') {
       await this.closeUnsuccessfulPayment(intent.id, intent.referenceId, 'CANCELLED', { status: callbackStatus });
       return { success: false, cancelled: true };
@@ -179,12 +182,20 @@ export class SubscriptionBillingService {
 
     return this.prisma.$transaction(async (tx) => {
       const claim = await tx.paymentIntent.updateMany({
-        where: { id: intent.id, status: { not: 'SUCCEEDED' } },
+        where: { id: intent.id, status: 'REDIRECT_PENDING' },
         data: { status: 'VERIFY_PENDING' },
       });
       if (claim.count === 0) {
         const completed = await tx.paymentIntent.findUniqueOrThrow({ where: { id: intent.id } });
-        return { success: true, alreadyVerified: true, referenceId: completed.providerReference };
+        if (completed.status === 'SUCCEEDED') {
+          return { success: true, alreadyVerified: true, referenceId: completed.providerReference };
+        }
+        return {
+          success: false,
+          cancelled: completed.status === 'CANCELLED',
+          failed: completed.status === 'FAILED',
+          processing: completed.status === 'VERIFY_PENDING',
+        };
       }
 
       const subscription = await tx.subscription.findUnique({ where: { id: intent.referenceId }, include: { plan: true } });

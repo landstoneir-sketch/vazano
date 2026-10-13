@@ -109,4 +109,45 @@ describe('SubscriptionBillingService unsuccessful payment', () => {
       payload: { paymentId: 'payment-1', subscriptionId: 'subscription-1', status: 'CANCELLED' },
     } });
   });
+
+  it('does not verify or reactivate a payment that is already terminal', async () => {
+    const prisma = {
+      paymentIntent: { findFirst: jest.fn().mockResolvedValue({
+        id: 'payment-closed', referenceId: 'subscription-closed', provider: 'ZARINPAL', purpose: 'SUBSCRIPTION',
+        status: 'CANCELLED', authority: 'authority-closed', amountRial: 9_000_000n,
+      }) },
+    };
+    const payments = { provider: 'ZARINPAL', verify: jest.fn() };
+    const service = new SubscriptionBillingService(prisma as never, payments as never, {} as never, { get: jest.fn() } as never);
+
+    await expect(service.handleCallback('authority-closed', 'OK')).resolves.toEqual({ success: false, cancelled: true });
+    expect(payments.verify).not.toHaveBeenCalled();
+  });
+
+  it('reports a lost callback claim according to the committed payment status', async () => {
+    const intent = {
+      id: 'payment-race', referenceId: 'subscription-race', provider: 'ZARINPAL', purpose: 'SUBSCRIPTION',
+      status: 'REDIRECT_PENDING', authority: 'authority-race', amountRial: 9_000_000n,
+    };
+    const tx = {
+      paymentIntent: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findUniqueOrThrow: jest.fn().mockResolvedValue({ ...intent, status: 'CANCELLED' }),
+      },
+    };
+    const prisma = {
+      paymentIntent: { findFirst: jest.fn().mockResolvedValue(intent) },
+      $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
+    };
+    const payments = {
+      provider: 'ZARINPAL',
+      verify: jest.fn().mockResolvedValue({ success: true, alreadyVerified: false, referenceId: 'ref-race', code: 100 }),
+    };
+    const service = new SubscriptionBillingService(prisma as never, payments as never, {} as never, { get: jest.fn().mockResolvedValue({}) } as never);
+
+    await expect(service.handleCallback('authority-race', 'OK')).resolves.toMatchObject({ success: false, cancelled: true });
+    expect(tx.paymentIntent.updateMany).toHaveBeenCalledWith({
+      where: { id: 'payment-race', status: 'REDIRECT_PENDING' }, data: { status: 'VERIFY_PENDING' },
+    });
+  });
 });
