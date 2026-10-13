@@ -5,6 +5,7 @@ import { BUYER_COMMITMENT_AMOUNT_RIAL, BUYER_COMMITMENT_POLICY_VERSION, QUALITY_
 export type RfqPolicySettings = {
   marketCountry: string;
   marketCoverageMode: 'NATIONWIDE' | 'SELECTED_PROVINCES';
+  marketCoverageProvinceCodes: string[];
   displayPricesTaxInclusive: boolean;
   legalRole: 'INFORMATION_INTERMEDIARY' | 'MARKETPLACE_OPERATOR' | 'CONTRACTING_AGENT';
   qualityControl: { enabled: boolean; feeBps: number };
@@ -16,6 +17,7 @@ export type RfqPolicySettings = {
 const DEFAULT_POLICY: RfqPolicySettings = {
   marketCountry: 'IR',
   marketCoverageMode: 'NATIONWIDE',
+  marketCoverageProvinceCodes: [],
   displayPricesTaxInclusive: false,
   legalRole: 'INFORMATION_INTERMEDIARY',
   qualityControl: { enabled: true, feeBps: QUALITY_CONTROL_FEE_BPS },
@@ -27,6 +29,7 @@ const DEFAULT_POLICY: RfqPolicySettings = {
 const POLICY_KEYS = [
   'market.coverage.country',
   'market.coverage.mode',
+  'market.coverage.province_codes',
   'pricing.display_tax_inclusive',
   'platform.legal_role',
   'quality_control.enabled',
@@ -54,6 +57,7 @@ export function resolveRfqPolicySettings(values: Record<string, unknown>): RfqPo
   const merged = {
     marketCountry: values['market.coverage.country'] ?? DEFAULT_POLICY.marketCountry,
     marketCoverageMode: values['market.coverage.mode'] ?? DEFAULT_POLICY.marketCoverageMode,
+    marketCoverageProvinceCodes: values['market.coverage.province_codes'] ?? DEFAULT_POLICY.marketCoverageProvinceCodes,
     displayPricesTaxInclusive: values['pricing.display_tax_inclusive'] ?? DEFAULT_POLICY.displayPricesTaxInclusive,
     legalRole: values['platform.legal_role'] ?? DEFAULT_POLICY.legalRole,
     qualityControlEnabled: values['quality_control.enabled'] ?? DEFAULT_POLICY.qualityControl.enabled,
@@ -66,6 +70,7 @@ export function resolveRfqPolicySettings(values: Record<string, unknown>): RfqPo
   for (const [key, value] of Object.entries(values)) assertValidRfqPolicySetting(key, value);
   assertValidRfqPolicySetting('market.coverage.country', merged.marketCountry);
   assertValidRfqPolicySetting('market.coverage.mode', merged.marketCoverageMode);
+  assertValidRfqPolicySetting('market.coverage.province_codes', merged.marketCoverageProvinceCodes);
   assertValidRfqPolicySetting('pricing.display_tax_inclusive', merged.displayPricesTaxInclusive);
   assertValidRfqPolicySetting('platform.legal_role', merged.legalRole);
   assertValidRfqPolicySetting('quality_control.enabled', merged.qualityControlEnabled);
@@ -74,9 +79,13 @@ export function resolveRfqPolicySettings(values: Record<string, unknown>): RfqPo
   assertValidRfqPolicySetting('rfq.pilot_manual_review', merged.pilotManualReview);
   assertValidRfqPolicySetting('rfq.buyer_commitment_amount_rial', merged.buyerCommitmentAmountRial);
   assertValidRfqPolicySetting('rfq.buyer_commitment_policy_version', merged.buyerCommitmentPolicyVersion);
+  if (merged.marketCoverageMode === 'SELECTED_PROVINCES' && (merged.marketCoverageProvinceCodes as string[]).length === 0) {
+    throw new RangeError('برای پوشش استان‌های منتخب باید حداقل یک استان انتخاب شود.');
+  }
   return {
     marketCountry: merged.marketCountry as string,
     marketCoverageMode: merged.marketCoverageMode as RfqPolicySettings['marketCoverageMode'],
+    marketCoverageProvinceCodes: merged.marketCoverageProvinceCodes as string[],
     displayPricesTaxInclusive: merged.displayPricesTaxInclusive as boolean,
     legalRole: merged.legalRole as RfqPolicySettings['legalRole'],
     qualityControl: { enabled: merged.qualityControlEnabled as boolean, feeBps: merged.qualityControlFeeBps as number },
@@ -96,6 +105,12 @@ export function assertValidRfqPolicySetting(key: string, value: unknown): void {
   else if (key === 'market.coverage.mode') {
     if (!['NATIONWIDE', 'SELECTED_PROVINCES'].includes(String(value))) throw new RangeError('نوع پوشش جغرافیایی معتبر نیست.');
   }
+  else if (key === 'market.coverage.province_codes') {
+    if (!Array.isArray(value) || value.length > 31 || value.some((code) => typeof code !== 'string' || !/^[a-z][a-z0-9-]{1,63}$/.test(code))) {
+      throw new RangeError('فهرست استان‌های منتخب معتبر نیست.');
+    }
+    if (new Set(value).size !== value.length) throw new RangeError('استان تکراری در پوشش بازار مجاز نیست.');
+  }
   else if (key === 'platform.legal_role') {
     if (!['INFORMATION_INTERMEDIARY', 'MARKETPLACE_OPERATOR', 'CONTRACTING_AGENT'].includes(String(value))) throw new RangeError('نقش حقوقی پلتفرم معتبر نیست.');
   }
@@ -111,4 +126,9 @@ export function assertValidRfqPolicySetting(key: string, value: unknown): void {
   else if (key === 'rfq.buyer_commitment_policy_version') {
     if (typeof value !== 'string' || !/^[A-Z0-9_]{3,64}$/.test(value)) throw new RangeError('نسخه سیاست تعهد خریدار معتبر نیست.');
   }
+}
+
+export function isProvinceWithinMarketCoverage(policy: RfqPolicySettings, provinceCode: string | undefined): boolean {
+  if (policy.marketCoverageMode === 'NATIONWIDE') return true;
+  return Boolean(provinceCode && policy.marketCoverageProvinceCodes.includes(provinceCode));
 }

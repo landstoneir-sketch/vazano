@@ -5,10 +5,12 @@ import { apiRequest } from '../../../lib/api';
 
 type SystemSetting = { id: string; key: string; value: unknown; descriptionFa: string | null; isEditable: boolean; version: number };
 type NotificationTemplate = { id: string; code: string; eventType: string; channel: string; locale: string; titleTemplate: string; bodyTemplate: string; actionPathTemplate: string | null; isActive: boolean; version: number };
+type Province = { id: string; code: string; nameFa: string };
 
 export function AdminSettings() {
   const [settings, setSettings] = useState<SystemSetting[]>([]);
   const [templates, setTemplates] = useState<NotificationTemplate[]>([]);
+  const [provinces, setProvinces] = useState<Province[]>([]);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -16,8 +18,9 @@ export function AdminSettings() {
     void Promise.all([
       apiRequest<SystemSetting[]>('/admin/config/settings'),
       apiRequest<NotificationTemplate[]>('/admin/config/notification-templates'),
-    ]).then(([settingData, templateData]) => {
-      if (active) { setSettings(settingData); setTemplates(templateData); }
+      apiRequest<Province[]>('/locations/provinces'),
+    ]).then(([settingData, templateData, provinceData]) => {
+      if (active) { setSettings(settingData); setTemplates(templateData); setProvinces(provinceData); }
     }).catch((reason: unknown) => {
       if (active) setError(reason instanceof Error ? reason.message : 'دریافت تنظیمات انجام نشد.');
     });
@@ -27,7 +30,7 @@ export function AdminSettings() {
   return <div className="stack">
     {error && <div className="message message-error">{error}</div>}
     <section><h2>تنظیمات تجاری</h2><p className="muted">تغییرات بلافاصله در قواعد آینده سامانه اعمال می‌شوند و در سوابق مدیریت ثبت خواهند شد.</p>
-      <div className="settings-grid">{settings.map((setting) => <SettingEditor setting={setting} key={setting.id} onUpdated={(updated) => setSettings((items) => items.map((item) => item.id === updated.id ? updated : item))} />)}</div>
+      <div className="settings-grid">{settings.map((setting) => <SettingEditor setting={setting} provinces={provinces} key={setting.id} onUpdated={(updated) => setSettings((items) => items.map((item) => item.id === updated.id ? updated : item))} />)}</div>
     </section>
     <section><h2>قالب اعلان‌های داخل سامانه</h2><p className="muted">عبارت‌های داخل دو آکولاد مانند {'{{rfqCode}}'} متغیر هستند و هنگام ارسال با مقدار واقعی جایگزین می‌شوند.</p>
       <div className="stack">{templates.map((template) => <TemplateEditor template={template} key={template.id} onUpdated={(updated) => setTemplates((items) => items.map((item) => item.id === updated.id ? updated : item))} />)}</div>
@@ -35,7 +38,7 @@ export function AdminSettings() {
   </div>;
 }
 
-function SettingEditor({ setting, onUpdated }: { setting: SystemSetting; onUpdated: (setting: SystemSetting) => void }) {
+function SettingEditor({ setting, provinces, onUpdated }: { setting: SystemSetting; provinces: Province[]; onUpdated: (setting: SystemSetting) => void }) {
   const [value, setValue] = useState(() => JSON.stringify(setting.value, null, 2));
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -53,14 +56,14 @@ function SettingEditor({ setting, onUpdated }: { setting: SystemSetting; onUpdat
 
   return <article className="card setting-card">
     <code>{setting.key}</code><p>{setting.descriptionFa ?? 'بدون توضیح'}</p>
-    <SettingValueEditor settingKey={setting.key} rawValue={value} onChange={setValue} disabled={!setting.isEditable} />
+    <SettingValueEditor settingKey={setting.key} rawValue={value} provinces={provinces} onChange={setValue} disabled={!setting.isEditable} />
     <div className="setting-actions"><span className="muted">نسخه {setting.version.toLocaleString('fa-IR')}</span><button className="button button-secondary" type="button" onClick={() => void save()} disabled={busy || !setting.isEditable}>ذخیره</button></div>
     {message && <div className="message">{message}</div>}
   </article>;
 }
 
-function SettingValueEditor({ settingKey, rawValue, onChange, disabled }: {
-  settingKey: string; rawValue: string; onChange: (value: string) => void; disabled: boolean;
+function SettingValueEditor({ settingKey, rawValue, provinces, onChange, disabled }: {
+  settingKey: string; rawValue: string; provinces: Province[]; onChange: (value: string) => void; disabled: boolean;
 }) {
   const parsed = parseJson(rawValue);
   const setParsed = (value: unknown) => onChange(JSON.stringify(value, null, 2));
@@ -99,7 +102,12 @@ function SettingValueEditor({ settingKey, rawValue, onChange, disabled }: {
   }
 
   if (settingKey === 'market.coverage.mode') {
-    return <label className="form-field"><span>پوشش جغرافیایی</span><select disabled={disabled} value={stringValue(parsed, 'NATIONWIDE')} onChange={(event) => setParsed(event.target.value)}><option value="NATIONWIDE">کل ایران</option><option value="SELECTED_PROVINCES">استان‌های منتخب</option></select></label>;
+    return <label className="form-field"><span>پوشش جغرافیایی</span><select disabled={disabled} value={stringValue(parsed, 'NATIONWIDE')} onChange={(event) => setParsed(event.target.value)}><option value="NATIONWIDE">کل ایران</option><option value="SELECTED_PROVINCES">استان‌های منتخب</option></select><small>پیش از فعال‌کردن حالت منتخب، استان‌ها را در تنظیم جداگانه زیر ذخیره کنید.</small></label>;
+  }
+
+  if (settingKey === 'market.coverage.province_codes') {
+    const selected = Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+    return <fieldset className="check-grid"><legend>استان‌های مجاز</legend>{provinces.map((province) => <label className="check-field" key={province.id}><input type="checkbox" disabled={disabled} checked={selected.includes(province.code)} onChange={(event) => setParsed(event.target.checked ? [...selected, province.code] : selected.filter((code) => code !== province.code))} /><span>{province.nameFa}</span></label>)}</fieldset>;
   }
 
   if (settingKey === 'seller.proposal_fee_policy') {

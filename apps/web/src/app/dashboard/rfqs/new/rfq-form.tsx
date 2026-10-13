@@ -28,6 +28,7 @@ type UploadIntent = { attachment: Attachment; upload: { url: string; method: 'PU
 type RfqPolicy = {
   marketCountry: string;
   marketCoverageMode: 'NATIONWIDE' | 'SELECTED_PROVINCES';
+  marketCoverageProvinceCodes: string[];
   displayPricesTaxInclusive: boolean;
   legalRole: 'INFORMATION_INTERMEDIARY' | 'MARKETPLACE_OPERATOR' | 'CONTRACTING_AGENT';
   qualityControlEnabled: boolean;
@@ -211,7 +212,7 @@ export function NewRfqForm({ operatorMode = false }: { operatorMode?: boolean })
         return <label className="form-field" key={attribute.id}><span>{label}{attribute.isRequired ? ' *' : ''}</span><input aria-label={label} type={attribute.dataType === 'NUMBER' ? 'number' : 'text'} min={minimum} max={maximum} maxLength={maxLength} value={typeof value === 'string' ? value : ''} required={attribute.isRequired} onChange={(event) => setSpecifications((current) => ({ ...current, [attribute.code]: event.target.value }))} /></label>;
       })}
     </div></fieldset>}
-    <label className="form-field"><span>استان تحویل</span><select value={provinceId} onChange={(event) => { setProvinceId(event.target.value); setCities([]); setCityId(''); }} required><option value="">انتخاب استان</option>{provinces.map((item) => <option value={item.id} key={item.id}>{item.nameFa}</option>)}</select></label>
+    <label className="form-field"><span>استان تحویل</span><select value={provinceId} onChange={(event) => { setProvinceId(event.target.value); setCities([]); setCityId(''); }} required><option value="">انتخاب استان</option>{provinces.filter((item) => policy?.marketCoverageMode !== 'SELECTED_PROVINCES' || policy.marketCoverageProvinceCodes.includes(item.code)).map((item) => <option value={item.id} key={item.id}>{item.nameFa}</option>)}</select></label>
     <label className="form-field"><span>شهر تحویل (اختیاری)</span><select value={cityId} onChange={(event) => setCityId(event.target.value)} disabled={!provinceId}><option value="">{provinceId ? 'انتخاب شهر' : 'ابتدا استان را انتخاب کنید'}</option>{cities.map((item) => <option value={item.id} key={item.id}>{item.nameFa}{item.isProvinceCapital ? ' (مرکز استان)' : ''}</option>)}</select></label>
     <label className="check-field"><input type="checkbox" checked={installationRequired} onChange={(event) => setInstallationRequired(event.target.checked)} /><span>نیاز به نصب دارم</span></label>
     {policy?.qualityControlEnabled !== false

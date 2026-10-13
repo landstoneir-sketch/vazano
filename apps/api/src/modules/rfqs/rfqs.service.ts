@@ -8,7 +8,7 @@ import { CreateRfqDto } from './create-rfq.dto';
 import { canPublishRfq } from './rfq-policies';
 import { RfqReviewDecision, ReviewRfqDto } from './review-rfq.dto';
 import { PaymentsService } from '../payments/payments.service';
-import { RfqPolicySettingsService } from './rfq-policy-settings.service';
+import { isProvinceWithinMarketCoverage, RfqPolicySettingsService } from './rfq-policy-settings.service';
 
 const categoryDetailsInclude = {
   attributeBindings: {
@@ -43,6 +43,7 @@ export class RfqsService {
     return {
       marketCountry: policy.marketCountry,
       marketCoverageMode: policy.marketCoverageMode,
+      marketCoverageProvinceCodes: policy.marketCoverageProvinceCodes,
       displayPricesTaxInclusive: policy.displayPricesTaxInclusive,
       legalRole: policy.legalRole,
       qualityControlEnabled: policy.qualityControl.enabled,
@@ -306,6 +307,9 @@ export class RfqsService {
     if (!domain) throw new BadRequestException('حوزه اصلی معتبر نیست.');
     await this.validateItems(input.primaryDomainId, input);
     const deliveryLocation = await this.resolveDeliveryLocation(input);
+    if (!isProvinceWithinMarketCoverage(policy, deliveryLocation.provinceCode)) {
+      throw new BadRequestException('استان تحویل خارج از محدوده جغرافیایی فعال وازانو است.');
+    }
 
     const responseDeadline = input.responseDeadline ? new Date(input.responseDeadline) : undefined;
     if (responseDeadline && responseDeadline <= new Date()) throw new BadRequestException('مهلت پاسخ باید در آینده باشد.');
@@ -391,14 +395,14 @@ export class RfqsService {
     const provinceName = input.deliveryProvince?.trim();
     const provinceRequested = input.deliveryProvinceId || provinceName;
     const cityRequested = input.deliveryCityId || input.deliveryCity?.trim();
-    if (!provinceRequested && !cityRequested) return { provinceId: undefined, cityId: undefined, provinceName: undefined, cityName: undefined };
+    if (!provinceRequested && !cityRequested) return { provinceId: undefined, provinceCode: undefined, cityId: undefined, provinceName: undefined, cityName: undefined };
     if (!provinceRequested) throw new BadRequestException('برای انتخاب شهر، استان تحویل را نیز مشخص کنید.');
 
     const province = await this.prisma.province.findFirst({
       where: input.deliveryProvinceId ? { id: input.deliveryProvinceId, isActive: true } : { nameFa: provinceName, isActive: true },
     });
     if (!province) throw new BadRequestException('استان تحویل معتبر یا فعال نیست.');
-    if (!cityRequested) return { provinceId: province.id, cityId: undefined, provinceName: province.nameFa, cityName: undefined };
+    if (!cityRequested) return { provinceId: province.id, provinceCode: province.code, cityId: undefined, provinceName: province.nameFa, cityName: undefined };
 
     const cityName = input.deliveryCity?.trim();
     const city = await this.prisma.city.findFirst({
@@ -407,7 +411,7 @@ export class RfqsService {
         : { nameFa: cityName, provinceId: province.id, isActive: true },
     });
     if (!city) throw new BadRequestException('شهر تحویل با استان انتخاب‌شده مطابقت ندارد یا غیرفعال است.');
-    return { provinceId: province.id, cityId: city.id, provinceName: province.nameFa, cityName: city.nameFa };
+    return { provinceId: province.id, provinceCode: province.code, cityId: city.id, provinceName: province.nameFa, cityName: city.nameFa };
   }
 
   private async validateItems(primaryDomainId: string, input: CreateRfqDto): Promise<void> {
