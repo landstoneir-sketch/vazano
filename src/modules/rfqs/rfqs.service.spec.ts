@@ -11,7 +11,7 @@ describe('RfqsService commitment payment callbacks', () => {
     const payments = { provider: 'TEST_GATEWAY', verify: jest.fn() };
     const service = new RfqsService(prisma as never, payments as never, {} as never, {} as never);
 
-    await expect(service.handleCommitmentCallback('authority-1', 'OK')).resolves.toEqual({ success: false, cancelled: true });
+    await expect(service.handleCommitmentCallback('authority-1', 'OK')).resolves.toEqual({ success: false, cancelled: true, rfqId: 'rfq-1' });
     expect(payments.verify).not.toHaveBeenCalled();
     expect(prisma.paymentIntent.findFirst).toHaveBeenCalledWith({
       where: { authority: 'authority-1', provider: 'TEST_GATEWAY', purpose: 'BUYER_COMMITMENT' },
