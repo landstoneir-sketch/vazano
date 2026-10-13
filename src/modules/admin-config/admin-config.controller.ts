@@ -16,6 +16,11 @@ export class AdminConfigController {
     return this.config.listSettings(user);
   }
 
+  @Get('release-readiness')
+  releaseReadiness(@CurrentUser() user: AuthenticatedUser) {
+    return this.config.releaseReadiness(user);
+  }
+
   @Put('settings/:settingId')
   updateSetting(@CurrentUser() user: AuthenticatedUser, @Param('settingId') settingId: string, @Body() input: UpdateSystemSettingDto) {
     return this.config.updateSetting(user, settingId, input);
