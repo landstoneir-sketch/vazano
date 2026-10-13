@@ -388,7 +388,7 @@ export class AdminBillingService {
     this.requireAnyPermission(user, ['billing.manage']);
     const payment = await this.prisma.paymentIntent.findUnique({ where: { id: paymentId } });
     if (!payment) throw new NotFoundException('تراکنش پرداخت پیدا نشد.');
-    if (payment.provider !== 'ZARINPAL') throw new BadRequestException('تطبیق خودکار برای ارائه‌دهنده این تراکنش پشتیبانی نمی‌شود.');
+    if (payment.provider !== this.payments.provider) throw new BadRequestException('تطبیق خودکار برای ارائه‌دهنده این تراکنش پشتیبانی نمی‌شود.');
     if (!payment.authority) throw new ConflictException('شناسه مرجع درگاه برای این تراکنش ثبت نشده است.');
 
     const verification = await this.payments.verify({ amountRial: payment.amountRial, authority: payment.authority });
