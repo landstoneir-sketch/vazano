@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Inject, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { HttpException, HttpStatus, Inject, Injectable, NotFoundException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OtpPurpose } from '@prisma/client';
 import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
@@ -53,7 +53,7 @@ export class AuthService {
     return { expiresInSeconds: ttl, ...(debugEnabled ? { debugCode: code } : {}) };
   }
 
-  async verifyOtp(rawMobile: string, purpose: OtpPurpose, code: string, ipAddress?: string, userAgent?: string): Promise<VerifyOtpResult> {
+  async verifyOtp(rawMobile: string, purpose: OtpPurpose, code: string, legalAccepted: boolean, ipAddress?: string, userAgent?: string): Promise<VerifyOtpResult> {
     const mobile = normalizeIranianMobile(rawMobile);
     const otp = await this.prisma.otpCode.findFirst({ where: { mobile, purpose, consumedAt: null }, orderBy: { createdAt: 'desc' } });
     if (!otp || otp.expiresAt <= new Date()) {
@@ -83,12 +83,48 @@ export class AuthService {
       ]);
       throw new UnauthorizedException('کد تأیید صحیح نیست.');
     }
+    if (!legalAccepted) throw new UnauthorizedException('پذیرش قوانین و حریم خصوصی الزامی است.');
+    const legalPages = await this.prisma.cmsPage.findMany({
+      where: { slug: { in: ['terms', 'privacy'] } },
+      select: { id: true, slug: true, titleFa: true, bodyFa: true, status: true, version: true },
+    });
+    const termsPage = legalPages.find((page) => page.slug === 'terms');
+    const privacyPage = legalPages.find((page) => page.slug === 'privacy');
+    if (!termsPage || !privacyPage) throw new ServiceUnavailableException('نسخه قوانین یا حریم خصوصی سامانه آماده نیست.');
+    if (this.config.get<string>('NODE_ENV') === 'production' && (termsPage.status !== 'PUBLISHED' || privacyPage.status !== 'PUBLISHED')) {
+      throw new ServiceUnavailableException('قوانین و حریم خصوصی هنوز برای ثبت‌نام منتشر نشده‌اند.');
+    }
     const rawToken = randomBytes(32).toString('base64url');
     const expiresAt = new Date(Date.now() + this.config.get<number>('SESSION_TTL_DAYS', 30) * 86_400_000);
     const result = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.user.findUnique({ where: { mobile } });
       const user = existing ?? await tx.user.create({ data: { mobile, mobileVerifiedAt: new Date() } });
       if (user.status !== 'ACTIVE') throw new UnauthorizedException('حساب کاربری غیرفعال است.');
+      const acceptanceWhere = {
+        userId: user.id,
+        termsPageId: termsPage.id,
+        termsVersion: termsPage.version,
+        privacyPageId: privacyPage.id,
+        privacyVersion: privacyPage.version,
+      };
+      const existingAcceptance = await tx.legalAcceptance.findFirst({ where: acceptanceWhere, select: { id: true } });
+      if (!existingAcceptance) {
+        const acceptance = await tx.legalAcceptance.create({ data: {
+          ...acceptanceWhere,
+          termsContentHash: this.hashLegalContent(termsPage.titleFa, termsPage.bodyFa),
+          privacyContentHash: this.hashLegalContent(privacyPage.titleFa, privacyPage.bodyFa),
+          ipAddress,
+          userAgent: this.safeUserAgent(userAgent),
+        } });
+        await tx.auditLog.create({ data: {
+          actorUserId: user.id,
+          action: 'legal.consent.accept',
+          entityType: 'LegalAcceptance',
+          entityId: acceptance.id,
+          ipAddress,
+          metadata: { termsVersion: termsPage.version, privacyVersion: privacyPage.version },
+        } });
+      }
       await tx.otpCode.update({ where: { id: otp.id }, data: { consumedAt: new Date() } });
       await tx.session.create({ data: { userId: user.id, tokenHash: this.hashToken(rawToken), expiresAt, ipAddress, userAgent } });
       await tx.auditLog.create({ data: { actorUserId: user.id, action: 'auth.login', entityType: 'User', entityId: user.id, ipAddress } });
@@ -149,5 +185,8 @@ export class AuthService {
   private hashOtp(mobile: string, purpose: OtpPurpose, code: string): string {
     const pepper = this.config.getOrThrow<string>('OTP_PEPPER');
     return createHmac('sha256', pepper).update(`${mobile}:${purpose}:${code}`).digest('hex');
+  }
+  private hashLegalContent(title: string, body: string): string {
+    return createHash('sha256').update(`${title}\n${body}`, 'utf8').digest('hex');
   }
 }
