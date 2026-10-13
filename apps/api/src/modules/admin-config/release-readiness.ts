@@ -21,7 +21,11 @@ export type ReleaseReadinessInput = {
   privacyPublished: boolean;
   paidPlanCount: number;
   activeCategoryCount: number;
+  activeUnitCount: number;
   activeProvinceCount: number;
+  marketCoverageConfigured: boolean;
+  activeBuyerOrganizationCount: number;
+  eligibleSupplierCount: number;
   activeSuperAdminCount: number;
 };
 
@@ -39,7 +43,11 @@ export function evaluateReleaseReadiness(input: ReleaseReadinessInput): { ready:
     check('content.privacy', 'سیاست حریم خصوصی', input.privacyPublished, 'صفحه حریم خصوصی منتشر شده است.', 'صفحه حریم خصوصی هنوز پیش‌نویس است و باید پس از تأیید مالک/حقوقی منتشر شود.', '/admin/content'),
     check('billing.plan', 'پلن پولی قابل خرید', input.paidPlanCount > 0, `${input.paidPlanCount.toLocaleString('fa-IR')} پلن پولی فعال و عمومی وجود دارد.`, 'هیچ پلن پولی فعال و عمومی برای خرید وجود ندارد.', '/admin/billing'),
     check('catalog.categories', 'دسته‌بندی قابل استفاده', input.activeCategoryCount > 0, `${input.activeCategoryCount.toLocaleString('fa-IR')} دسته فعال وجود دارد.`, 'دسته‌بندی فعالی برای ثبت استعلام وجود ندارد.', '/admin/catalog'),
+    check('catalog.units', 'واحدهای اندازه‌گیری', input.activeUnitCount > 0, `${input.activeUnitCount.toLocaleString('fa-IR')} واحد اندازه‌گیری فعال وجود دارد.`, 'هیچ واحد فعالی برای اقلام استعلام وجود ندارد.', '/admin/catalog'),
     check('locations.provinces', 'پوشش استان‌های ایران', input.activeProvinceCount >= 31, `${input.activeProvinceCount.toLocaleString('fa-IR')} استان فعال ثبت شده است.`, `فقط ${input.activeProvinceCount.toLocaleString('fa-IR')} استان فعال ثبت شده است.`, '/admin/locations'),
+    check('market.coverage', 'پوشش فعال بازار', input.marketCoverageConfigured, 'پوشش جغرافیایی بازار معتبر و با استان‌های فعال همخوان است.', 'تنظیم پوشش بازار نامعتبر است یا به استان غیرفعال اشاره می‌کند.', '/admin/settings'),
+    check('market.buyers', 'خریدار پایلوت فعال', input.activeBuyerOrganizationCount > 0, `${input.activeBuyerOrganizationCount.toLocaleString('fa-IR')} سازمان خریدار فعال و دارای عضو وجود دارد.`, 'هنوز هیچ سازمان خریدار فعال و دارای عضو برای پایلوت وجود ندارد.', '/admin/users'),
+    check('market.suppliers', 'فروشنده واجد شرایط', input.eligibleSupplierCount > 0, `${input.eligibleSupplierCount.toLocaleString('fa-IR')} فروشنده تأییدشده با اشتراک، دسته و پوشش فعال وجود دارد.`, 'هیچ فروشنده‌ای هم‌زمان تأییدشده، دارای اشتراک معتبر، دسته و پوشش فعال وجود ندارد.', '/admin/suppliers'),
     check(
       'access.super-admin',
       'مدیران ارشد بازیابی',

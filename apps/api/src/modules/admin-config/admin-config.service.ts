@@ -16,16 +16,66 @@ export class AdminConfigService {
 
   async releaseReadiness(user: AuthenticatedUser) {
     this.requireAnyPermission(user, ['settings.read', 'settings.manage']);
-    const [legalPages, paidPlanCount, activeCategoryCount, activeProvinceCount, activeSuperAdminCount] = await Promise.all([
+    const now = new Date();
+    const [
+      legalPages,
+      paidPlanCount,
+      activeCategoryCount,
+      activeUnitCount,
+      activeProvinces,
+      activeBuyerOrganizationCount,
+      eligibleSupplierCount,
+      activeSuperAdminCount,
+      marketPolicyRows,
+    ] = await Promise.all([
       this.prisma.cmsPage.findMany({ where: { slug: { in: ['terms', 'privacy'] } }, select: { slug: true, status: true } }),
       this.prisma.subscriptionPlan.count({ where: { isActive: true, isPublic: true, isTrial: false, priceRial: { gt: 0 } } }),
       this.prisma.category.count({ where: { isActive: true, parentId: { not: null } } }),
-      this.prisma.province.count({ where: { isActive: true } }),
+      this.prisma.unitOfMeasure.count({ where: { isActive: true } }),
+      this.prisma.province.findMany({ where: { isActive: true }, select: { code: true } }),
+      this.prisma.organization.count({
+        where: {
+          kind: 'BUYER',
+          status: 'ACTIVE',
+          members: { some: { status: 'ACTIVE', role: { in: ['BUYER_OWNER', 'BUYER_MEMBER'] } } },
+        },
+      }),
+      this.prisma.supplierProfile.count({
+        where: {
+          verificationStatus: 'VERIFIED',
+          categories: { some: {} },
+          OR: [
+            { nationwideCoverage: true },
+            { serviceProvinceLinks: { some: {} } },
+            { serviceProvinces: { isEmpty: false } },
+          ],
+          organization: {
+            status: 'ACTIVE',
+            members: { some: { status: 'ACTIVE', role: { in: ['SUPPLIER_OWNER', 'SUPPLIER_MANAGER', 'SUPPLIER_SALES'] } } },
+            subscriptions: { some: { status: 'ACTIVE', startsAt: { lte: now }, expiresAt: { gt: now } } },
+          },
+        },
+      }),
       this.prisma.user.count({
         where: { status: 'ACTIVE', userRoles: { some: { organizationId: null, role: { key: 'SUPER_ADMIN' } } } },
       }),
+      this.prisma.systemSetting.findMany({
+        where: { key: { in: ['market.coverage.country', 'market.coverage.mode', 'market.coverage.province_codes'] } },
+        select: { key: true, value: true },
+      }),
     ]);
     const pageStatus = new Map(legalPages.map((page) => [page.slug, page.status]));
+    const activeProvinceCodes = new Set(activeProvinces.map((province) => province.code));
+    let marketCoverageConfigured = false;
+    try {
+      const marketPolicy = resolveRfqPolicySettings(Object.fromEntries(marketPolicyRows.map((row) => [row.key, row.value])));
+      marketCoverageConfigured = marketPolicy.marketCountry === 'IR'
+        && (marketPolicy.marketCoverageMode === 'NATIONWIDE'
+          || marketPolicy.marketCoverageProvinceCodes.every((code) => activeProvinceCodes.has(code)));
+    }
+    catch {
+      marketCoverageConfigured = false;
+    }
     const renewalTemplateKeys = [
       'SMSIR_SUBSCRIPTION_RENEWAL_14_TEMPLATE_ID', 'SMSIR_SUBSCRIPTION_RENEWAL_7_TEMPLATE_ID', 'SMSIR_SUBSCRIPTION_RENEWAL_3_TEMPLATE_ID',
       'SMSIR_SUBSCRIPTION_EXPIRED_TEMPLATE_ID', 'SMSIR_SUBSCRIPTION_GRACE_ENDED_TEMPLATE_ID', 'SMSIR_SUBSCRIPTION_TRIAL_7_TEMPLATE_ID',
@@ -56,7 +106,11 @@ export class AdminConfigService {
         privacyPublished: pageStatus.get('privacy') === 'PUBLISHED',
         paidPlanCount,
         activeCategoryCount,
-        activeProvinceCount,
+        activeUnitCount,
+        activeProvinceCount: activeProvinces.length,
+        marketCoverageConfigured,
+        activeBuyerOrganizationCount,
+        eligibleSupplierCount,
         activeSuperAdminCount,
       }),
     };
