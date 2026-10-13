@@ -7,5 +7,6 @@ export default async function RfqDetailPage({ params, searchParams }: PageProps<
   const query = await searchParams;
   const qualityPayment = typeof query.qualityPayment === 'string' ? query.qualityPayment : undefined;
   const commitmentPayment = typeof query.commitmentPayment === 'string' ? query.commitmentPayment : undefined;
-  return <section className="container dashboard"><RfqDetail rfqId={id} qualityPaymentResult={qualityPayment} commitmentPaymentResult={commitmentPayment} /></section>;
+  const receiptId = typeof query.receiptId === 'string' ? query.receiptId : undefined;
+  return <section className="container dashboard"><RfqDetail rfqId={id} qualityPaymentResult={qualityPayment} commitmentPaymentResult={commitmentPayment} commitmentReceiptId={receiptId} /></section>;
 }
