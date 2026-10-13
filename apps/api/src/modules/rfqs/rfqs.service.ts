@@ -262,28 +262,42 @@ export class RfqsService {
     const intent = await this.prisma.paymentIntent.findFirst({ where: { authority, provider: 'ZARINPAL', purpose: 'BUYER_COMMITMENT' } });
     if (!intent) throw new NotFoundException('تراکنش پرداخت پیدا نشد.');
     if (intent.status === 'SUCCEEDED') return { success: true, alreadyVerified: true, referenceId: intent.providerReference };
+    if (intent.status === 'CANCELLED') return { success: false, cancelled: true };
+    if (intent.status === 'FAILED') return { success: false, failed: true };
+    if (intent.status !== 'REDIRECT_PENDING') return { success: false, processing: intent.status === 'VERIFY_PENDING' };
     if (callbackStatus !== 'OK') {
-      await this.prisma.$transaction([
-        this.prisma.paymentIntent.update({ where: { id: intent.id }, data: { status: 'CANCELLED', callbackPayload: { status: callbackStatus } } }),
-        this.prisma.rfq.update({ where: { id: intent.referenceId }, data: { commitmentStatus: 'REQUIRED' } }),
-      ]);
+      await this.prisma.$transaction(async (tx) => {
+        const claim = await tx.paymentIntent.updateMany({ where: { id: intent.id, status: 'REDIRECT_PENDING' }, data: { status: 'CANCELLED', callbackPayload: { status: callbackStatus } } });
+        if (claim.count === 1) await tx.rfq.update({ where: { id: intent.referenceId }, data: { commitmentStatus: 'REQUIRED' } });
+      });
       return { success: false, cancelled: true };
     }
     const verification = await this.payments.verify({ amountRial: intent.amountRial, authority });
     if (!verification.success) {
-      await this.prisma.$transaction([
-        this.prisma.paymentIntent.update({ where: { id: intent.id }, data: { status: 'FAILED', callbackPayload: { status: callbackStatus, code: verification.code } } }),
-        this.prisma.rfq.update({ where: { id: intent.referenceId }, data: { commitmentStatus: 'REQUIRED' } }),
-      ]);
+      await this.prisma.$transaction(async (tx) => {
+        const claim = await tx.paymentIntent.updateMany({ where: { id: intent.id, status: 'REDIRECT_PENDING' }, data: { status: 'FAILED', callbackPayload: { status: callbackStatus, code: verification.code } } });
+        if (claim.count === 1) await tx.rfq.update({ where: { id: intent.referenceId }, data: { commitmentStatus: 'REQUIRED' } });
+      });
       return verification;
     }
-    await this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx) => {
+      const claim = await tx.paymentIntent.updateMany({ where: { id: intent.id, status: 'REDIRECT_PENDING' }, data: { status: 'VERIFY_PENDING' } });
+      if (claim.count === 0) {
+        const completed = await tx.paymentIntent.findUniqueOrThrow({ where: { id: intent.id } });
+        if (completed.status === 'SUCCEEDED') return { success: true, alreadyVerified: true, referenceId: completed.providerReference };
+        return {
+          success: false,
+          cancelled: completed.status === 'CANCELLED',
+          failed: completed.status === 'FAILED',
+          processing: completed.status === 'VERIFY_PENDING',
+        };
+      }
       await tx.paymentIntent.update({ where: { id: intent.id }, data: { status: 'SUCCEEDED', providerReference: verification.referenceId, verifiedAt: new Date(), callbackPayload: { status: callbackStatus, code: verification.code } } });
       await tx.rfq.update({ where: { id: intent.referenceId }, data: { commitmentStatus: 'HELD', operationalStatus: 'READY_TO_PUBLISH' } });
       await tx.auditLog.create({ data: { organizationId: intent.payerOrganizationId, action: 'rfq.commitment.held', entityType: 'Rfq', entityId: intent.referenceId, metadata: { paymentIntentId: intent.id, providerReference: verification.referenceId } } });
       await tx.outboxEvent.create({ data: { aggregateType: 'Rfq', aggregateId: intent.referenceId, eventType: 'ir.vazano.buyer.commitment.held.v1', payload: { rfqId: intent.referenceId, paymentIntentId: intent.id } } });
+      return verification;
     });
-    return verification;
   }
 
   private async create(user: AuthenticatedUser, input: CreateRfqDto, source: RfqSource) {

@@ -79,21 +79,33 @@ export class QualityControlService {
     const request = await this.prisma.qualityControlRequest.findUnique({ where: { id: intent.referenceId } });
     if (!request) throw new NotFoundException('درخواست کنترل کیفیت مرتبط با پرداخت پیدا نشد.');
     if (intent.status === 'SUCCEEDED') return { success: true, alreadyVerified: true, referenceId: intent.providerReference, rfqId: request.rfqId };
+    if (intent.status === 'CANCELLED') return { success: false, cancelled: true, rfqId: request.rfqId };
+    if (intent.status === 'FAILED') return { success: false, failed: true, rfqId: request.rfqId };
+    if (intent.status !== 'REDIRECT_PENDING') return { success: false, processing: intent.status === 'VERIFY_PENDING', rfqId: request.rfqId };
     if (callbackStatus !== 'OK') {
-      await this.prisma.paymentIntent.updateMany({ where: { id: intent.id, status: { not: 'SUCCEEDED' } }, data: { status: 'CANCELLED', callbackPayload: { status: callbackStatus } } });
+      await this.prisma.paymentIntent.updateMany({ where: { id: intent.id, status: 'REDIRECT_PENDING' }, data: { status: 'CANCELLED', callbackPayload: { status: callbackStatus } } });
       return { success: false, cancelled: true, rfqId: request.rfqId };
     }
     const verification = await this.payments.verify({ amountRial: intent.amountRial, authority });
     if (!verification.success) {
-      await this.prisma.paymentIntent.updateMany({ where: { id: intent.id, status: { not: 'SUCCEEDED' } }, data: { status: 'FAILED', callbackPayload: { status: callbackStatus, code: verification.code } } });
+      await this.prisma.paymentIntent.updateMany({ where: { id: intent.id, status: 'REDIRECT_PENDING' }, data: { status: 'FAILED', callbackPayload: { status: callbackStatus, code: verification.code } } });
       return { ...verification, rfqId: request.rfqId };
     }
 
     return this.prisma.$transaction(async (tx) => {
-      const claim = await tx.paymentIntent.updateMany({ where: { id: intent.id, status: { not: 'SUCCEEDED' } }, data: { status: 'VERIFY_PENDING' } });
+      const claim = await tx.paymentIntent.updateMany({ where: { id: intent.id, status: 'REDIRECT_PENDING' }, data: { status: 'VERIFY_PENDING' } });
       if (claim.count === 0) {
         const completed = await tx.paymentIntent.findUniqueOrThrow({ where: { id: intent.id } });
-        return { success: true, alreadyVerified: true, referenceId: completed.providerReference, rfqId: request.rfqId };
+        if (completed.status === 'SUCCEEDED') {
+          return { success: true, alreadyVerified: true, referenceId: completed.providerReference, rfqId: request.rfqId };
+        }
+        return {
+          success: false,
+          cancelled: completed.status === 'CANCELLED',
+          failed: completed.status === 'FAILED',
+          processing: completed.status === 'VERIFY_PENDING',
+          rfqId: request.rfqId,
+        };
       }
       const paidAt = new Date();
       const changed = await tx.qualityControlRequest.updateMany({ where: { id: request.id, status: 'QUOTED' }, data: { status: 'ACCEPTED', acceptedAt: paidAt } });
