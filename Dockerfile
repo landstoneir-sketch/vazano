@@ -26,6 +26,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 vazano
 COPY --chown=vazano:nodejs apps/api/prisma ./apps/api/prisma
+COPY --chown=vazano:nodejs apps/api/src/modules/auth/domain/mobile.ts ./apps/api/src/modules/auth/domain/mobile.ts
+RUN npm run prisma:generate
 USER vazano
 CMD ["npm", "run", "prisma:deploy"]
 

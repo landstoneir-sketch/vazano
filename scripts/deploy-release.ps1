@@ -33,6 +33,9 @@ try {
   & docker @composeArguments --profile operations run --rm migration
   if ($LASTEXITCODE -ne 0) { throw 'Database migration failed; application rollout was not started.' }
 
+  & docker @composeArguments --profile operations run --rm bootstrap
+  if ($LASTEXITCODE -ne 0) { throw 'Production reference-data bootstrap failed; application rollout was not started.' }
+
   & docker @composeArguments up -d --remove-orphans --wait --wait-timeout $ReadinessTimeoutSeconds api web gateway
   if ($LASTEXITCODE -ne 0) { throw 'Application containers did not become healthy.' }
 

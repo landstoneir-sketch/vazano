@@ -6,7 +6,7 @@ const productionEnvironment = {
   SMSIR_API_KEY: '0123456789012345', SMSIR_TEMPLATE_ID: '961076', FILE_SCAN_MODE: 'clamav',
   CLAMAV_HOST: 'clamav', CLAMAV_PORT: '3310', CLAMAV_TIMEOUT_MS: '15000',
   S3_ENDPOINT: 'https://storage.vazano.ir', S3_BUCKET: 'vazano', S3_ACCESS_KEY: 'access-key', S3_SECRET_KEY: '0123456789012345',
-  ZARINPAL_ENABLED: 'false', TRUST_PROXY_HOPS: '1', SEED_DEMO_DATA: 'false',
+  ZARINPAL_ENABLED: 'false', TRUST_PROXY_HOPS: '1', SEED_DEMO_DATA: 'false', SEED_ADMIN_MOBILE: '09120000000',
 };
 
 describe('production environment validation', () => {
@@ -21,6 +21,7 @@ describe('production environment validation', () => {
     ['WEB_ORIGIN', 'http://vazano.ir'],
     ['SEED_DEMO_DATA', 'true'],
     ['TRUST_PROXY_HOPS', '0'],
+    ['SEED_ADMIN_MOBILE', '02100000000'],
   ])('rejects unsafe %s', (key, value) => {
     expect(() => validateEnvironment({ ...productionEnvironment, [key]: value })).toThrow();
   });

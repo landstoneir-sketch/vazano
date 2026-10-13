@@ -23,6 +23,16 @@ services:
     security_opt: ["no-new-privileges:true"]
     profiles: [operations]
 
+  bootstrap:
+    image: ${VAZANO_MIGRATION_IMAGE:?VAZANO_MIGRATION_IMAGE must be set to an immutable release image}
+    env_file:
+      - ${VAZANO_ENV_FILE:-.env.production}
+    command: ["npm", "run", "prisma:seed"]
+    restart: "no"
+    networks: [application]
+    security_opt: ["no-new-privileges:true"]
+    profiles: [operations]
+
   api:
     image: ${VAZANO_API_IMAGE:?VAZANO_API_IMAGE must be set to an immutable release image}
     env_file:
