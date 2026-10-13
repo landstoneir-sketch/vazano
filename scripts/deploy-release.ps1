@@ -15,6 +15,39 @@ if (-not (Test-Path -LiteralPath $resolvedEnvironmentFile -PathType Leaf)) {
   throw "Production environment file was not found: $resolvedEnvironmentFile"
 }
 
+function Get-EnvironmentValue {
+  param([string]$Path, [string]$Key)
+  $escapedKey = [Regex]::Escape($Key)
+  $line = Get-Content -LiteralPath $Path | Where-Object { $_ -match "^\s*$escapedKey\s*=" } | Select-Object -Last 1
+  if (-not $line) { throw "$Key is missing from the production environment file." }
+  $value = ($line -split '=', 2)[1].Trim().Trim('"').Trim("'")
+  if (-not $value) { throw "$Key must not be empty in the production environment file." }
+  return $value
+}
+
+function Assert-ImmutableReleaseImage {
+  param([string]$Key, [string]$Reference, [switch]$DigestOnly)
+  if ($Reference -match '(?i)(replace|change[_-]?me|placeholder|example|your[_-])') {
+    throw "$Key contains a placeholder and must be replaced before deployment."
+  }
+  if ($Reference -match '(?i)(^|:)latest($|@)') {
+    throw "$Key must not use the mutable latest tag."
+  }
+  $hasDigest = $Reference -match '(?i)@sha256:[0-9a-f]{64}$'
+  $hasFullGitSha = $Reference -match '(?i):[0-9a-f]{40}$'
+  if ($DigestOnly -and -not $hasDigest) {
+    throw "$Key must use an immutable sha256 digest."
+  }
+  if (-not $DigestOnly -and -not ($hasDigest -or $hasFullGitSha)) {
+    throw "$Key must use a full Git SHA tag or sha256 digest."
+  }
+}
+
+foreach ($key in @('VAZANO_API_IMAGE', 'VAZANO_WEB_IMAGE', 'VAZANO_MIGRATION_IMAGE')) {
+  Assert-ImmutableReleaseImage -Key $key -Reference (Get-EnvironmentValue -Path $resolvedEnvironmentFile -Key $key)
+}
+Assert-ImmutableReleaseImage -Key 'VAZANO_GATEWAY_IMAGE' -Reference (Get-EnvironmentValue -Path $resolvedEnvironmentFile -Key 'VAZANO_GATEWAY_IMAGE') -DigestOnly
+
 try {
   Set-Location -LiteralPath $projectRoot
   & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'wait-for-docker.ps1') -TimeoutSeconds 60 -DoNotStart
