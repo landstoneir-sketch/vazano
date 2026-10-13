@@ -13,7 +13,9 @@
     "prisma:validate": "prisma validate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
-    "prisma:seed": "tsx prisma/seed.ts"
+    "prisma:seed": "tsx prisma/seed.ts",
+    "legal:inspect": "node dist/src/operations/publish-legal-pages.js inspect",
+    "legal:publish": "node dist/src/operations/publish-legal-pages.js publish"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1147.0",
