@@ -73,7 +73,7 @@ function Invoke-VazanoReleaseSmokeChecks {
   param([string]$GatewayUrl)
 
   $gatewayBaseUrl = $GatewayUrl.TrimEnd('/')
-  $smokePaths = @('/healthz', '/', '/login', '/v1/catalog/categories', '/v1/locations/provinces')
+  $smokePaths = @('/healthz', '/', '/login', '/v1/catalog/categories', '/v1/catalog/units', '/v1/locations/provinces')
   foreach ($path in $smokePaths) {
     $url = "$gatewayBaseUrl$path"
     try {
@@ -88,6 +88,9 @@ function Invoke-VazanoReleaseSmokeChecks {
   $categories = @(Invoke-RestMethod -Uri "$gatewayBaseUrl/v1/catalog/categories" -Method Get -TimeoutSec 10)
   if ($categories.Count -lt 1) { throw 'Post-deployment smoke check found no active product category.' }
 
+  $units = @(Invoke-RestMethod -Uri "$gatewayBaseUrl/v1/catalog/units" -Method Get -TimeoutSec 10)
+  if ($units.Count -lt 1) { throw 'Post-deployment smoke check found no active unit of measure.' }
+
   $provinces = @(Invoke-RestMethod -Uri "$gatewayBaseUrl/v1/locations/provinces" -Method Get -TimeoutSec 10)
   if ($provinces.Count -lt 31) {
     throw "Post-deployment smoke check found only $($provinces.Count) active provinces."
@@ -96,6 +99,7 @@ function Invoke-VazanoReleaseSmokeChecks {
   return [pscustomobject]@{
     Paths = $smokePaths
     ActiveCategories = $categories.Count
+    ActiveUnits = $units.Count
     ActiveProvinces = $provinces.Count
   }
 }

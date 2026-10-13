@@ -102,6 +102,7 @@ try {
     ReadinessUrl = $readinessUrl
     SmokeChecks = $smokeResult.Paths.Count
     ActiveCategories = $smokeResult.ActiveCategories
+    ActiveUnits = $smokeResult.ActiveUnits
     ActiveProvinces = $smokeResult.ActiveProvinces
     CheckedAt = (Get-Date).ToUniversalTime().ToString('o')
   })
