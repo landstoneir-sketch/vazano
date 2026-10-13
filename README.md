@@ -73,10 +73,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\verify-database-backup.ps1 -B
 
 Image وب به‌صورت پیش‌فرض API را از مسیر هم‌دامنه `/v1` فراخوانی می‌کند؛ بنابراین آدرس داخلی یا `localhost` داخل مرورگر کاربر نهایی قرار نمی‌گیرد. نمونه تنظیم Reverse Proxy در `deploy/nginx.conf` مسیر `/v1` را به سرویس خصوصی `api:3001` و سایر مسیرها را به `web:3000` می‌فرستد. TLS باید در Load Balancer یا Reverse Proxy لبه فعال باشد و API مستقیماً روی اینترنت منتشر نشود.
 
-برای انتشار نسخه‌دار، فایل `.env.production.example` را روی سرور به `.env.production` تبدیل و فقط با Secretهای واقعی محیط تکمیل کنید. Imageهای API، وب، Migration و Gateway باید با Tag یا Digest غیرقابل‌تغییر تعیین شوند. سپس اسکریپت زیر ابتدا اعتبار تنظیمات را کنترل می‌کند، Migration را اجرا می‌کند، سرویس‌ها را بالا می‌آورد و Readiness نهایی را می‌سنجد:
+برای انتشار نسخه‌دار، فایل `.env.production.example` را روی سرور به `.env.production` تبدیل و فقط با Secretهای واقعی محیط تکمیل کنید. Imageهای API، وب، Migration و Gateway باید با Tag یا Digest غیرقابل‌تغییر تعیین شوند. پیش از انتشار باید Backup گرفته و بازیابی آن با اسکریپت بالا آزموده شود؛ فایل رسید `.verified.json` به‌صورت خودکار کنار Backup ایجاد می‌شود. سپس اسکریپت انتشار با مسیر همان Backup اجرا می‌شود و پیش از Migration، Hash و تازگی رسید بازیابی را کنترل می‌کند:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\deploy-release.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy-release.ps1 -VerifiedBackupPath .\backups\vazano-postgres-YYYYMMDD-HHMMSS.dump
 ```
 
 ## کنترل کیفیت

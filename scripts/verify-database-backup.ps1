@@ -8,6 +8,12 @@ $projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $resolvedBackup = Resolve-Path -LiteralPath $BackupPath
 $backup = Get-Item -LiteralPath $resolvedBackup.Path
 if ($backup.PSIsContainer -or $backup.Length -le 0) { throw 'The backup path is invalid.' }
+$checksumPath = "$($backup.FullName).sha256"
+if (-not (Test-Path -LiteralPath $checksumPath -PathType Leaf)) { throw 'The backup checksum file is missing.' }
+$expectedHash = ((Get-Content -LiteralPath $checksumPath -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+if ($expectedHash -notmatch '^[0-9a-f]{64}$') { throw 'The backup checksum file is invalid.' }
+$actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $backup.FullName).Hash.ToLowerInvariant()
+if ($actualHash -ne $expectedHash) { throw 'The backup checksum does not match the backup file.' }
 
 $suffix = ([Guid]::NewGuid().ToString('N')).Substring(0, 12)
 $databaseName = "vazano_restore_verify_$suffix"
@@ -71,7 +77,24 @@ try {
   }
   if ($tableCount -lt 10) { throw "The restored table count is unexpectedly low: $tableCount" }
 
-  Write-Output ([pscustomobject]@{ Verified = $true; BackupPath = $backup.FullName; RestoredTableCount = $tableCount; TemporaryDatabase = $databaseName })
+  $verifiedAtUtc = (Get-Date).ToUniversalTime().ToString('o')
+  $verificationPath = "$($backup.FullName).verified.json"
+  $verification = [ordered]@{
+    Version = 1
+    BackupFile = $backup.Name
+    BackupSha256 = $actualHash
+    VerifiedAtUtc = $verifiedAtUtc
+    RestoredTableCount = $tableCount
+  }
+  [System.IO.File]::WriteAllText($verificationPath, ($verification | ConvertTo-Json), [System.Text.UTF8Encoding]::new($false))
+  Write-Output ([pscustomobject]@{
+    Verified = $true
+    BackupPath = $backup.FullName
+    VerificationPath = $verificationPath
+    BackupSha256 = $actualHash
+    RestoredTableCount = $tableCount
+    TemporaryDatabase = $databaseName
+  })
 }
 finally {
   Set-Location -LiteralPath $projectRoot
