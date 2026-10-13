@@ -30,6 +30,7 @@ export function validateEnvironment(environment: Environment): Environment {
     if (webOrigin.protocol !== 'https:') throw new Error('WEB_ORIGIN must use HTTPS in production.');
     if (environment.OTP_DEBUG_ENABLED === 'true') throw new Error('OTP debug mode must be disabled in production.');
     if (environment.SEED_DEMO_DATA === 'true') throw new Error('Development demo data must be disabled in production.');
+    requireIranianMobile(environment, 'SEED_ADMIN_MOBILE');
     requirePositiveInteger(environment, 'TRUST_PROXY_HOPS');
     if (smsProvider !== 'smsir') throw new Error('A production SMS provider must be configured.');
     requireProductionSecret(environment, 'OTP_PEPPER', 32);
@@ -83,4 +84,14 @@ function assertNotPlaceholder(key: string, value: string): void {
   if (/(?:replace|change[_-]?me|placeholder|example|your[_-])/i.test(value)) {
     throw new Error(`${key} contains a placeholder and must be replaced before production deployment.`);
   }
+}
+
+function requireIranianMobile(environment: Environment, key: string): string {
+  const value = requireValue(environment, key).replace(/[\s()-]/g, '');
+  assertNotPlaceholder(key, value);
+  const localValue = value.startsWith('+98') ? `0${value.slice(3)}`
+    : value.startsWith('0098') ? `0${value.slice(4)}`
+      : value.startsWith('98') && value.length === 12 ? `0${value.slice(2)}` : value;
+  if (!/^09\d{9}$/.test(localValue)) throw new Error(`${key} must be a valid Iranian mobile number.`);
+  return localValue;
 }

@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { normalizeIranianMobile } from '../src/modules/auth/domain/mobile';
 
 const prisma = new PrismaClient();
+const isProduction = process.env.NODE_ENV === 'production';
 const permissions = [
   'user.read', 'user.manage', 'organization.read', 'organization.manage', 'supplier.verify',
   'category.read', 'category.manage', 'rfq.create', 'rfq.create_on_behalf', 'rfq.read', 'rfq.review',
@@ -289,12 +290,12 @@ async function main(): Promise<void> {
     const province = await prisma.province.upsert({
       where: { code },
       create: { code, nameFa, nameEn, sortOrder: sortOrder + 1 },
-      update: { nameFa, nameEn, sortOrder: sortOrder + 1, isActive: true },
+      update: isProduction ? {} : { nameFa, nameEn, sortOrder: sortOrder + 1, isActive: true },
     });
     await prisma.city.upsert({
       where: { provinceId_code: { provinceId: province.id, code: capitalCode } },
       create: { provinceId: province.id, code: capitalCode, nameFa: capitalNameFa, nameEn: capitalNameEn, isProvinceCapital: true, sortOrder: 1 },
-      update: { nameFa: capitalNameFa, nameEn: capitalNameEn, isProvinceCapital: true, sortOrder: 1, isActive: true },
+      update: isProduction ? {} : { nameFa: capitalNameFa, nameEn: capitalNameEn, isProvinceCapital: true, sortOrder: 1, isActive: true },
     });
     await prisma.rfq.updateMany({
       where: { deliveryProvince: nameFa, deliveryProvinceId: null },
@@ -320,18 +321,18 @@ async function main(): Promise<void> {
   const industry = await prisma.industry.upsert({
     where: { code: 'building-materials' },
     create: { code: 'building-materials', nameFa: 'مصالح ساختمانی', nameEn: 'Building Materials', sortOrder: 10 },
-    update: { nameFa: 'مصالح ساختمانی', isActive: true },
+    update: isProduction ? {} : { nameFa: 'مصالح ساختمانی', isActive: true },
   });
   const naturalStone = await prisma.category.upsert({
     where: { code: 'natural-stone' },
     create: { industryId: industry.id, code: 'natural-stone', slug: 'natural-stone', nameFa: 'سنگ طبیعی', nameEn: 'Natural Stone', sortOrder: 10 },
-    update: { industryId: industry.id, nameFa: 'سنگ طبیعی', isActive: true },
+    update: isProduction ? {} : { industryId: industry.id, nameFa: 'سنگ طبیعی', isActive: true },
   });
   for (const [code, slug, nameFa, nameEn] of naturalStoneCategories) {
     await prisma.category.upsert({
       where: { code },
       create: { industryId: industry.id, parentId: naturalStone.id, code, slug, nameFa, nameEn, sortOrder: naturalStoneCategories.findIndex((item) => item[0] === code) + 1 },
-      update: { industryId: industry.id, parentId: naturalStone.id, nameFa, nameEn, isActive: true },
+      update: isProduction ? {} : { industryId: industry.id, parentId: naturalStone.id, nameFa, nameEn, isActive: true },
     });
   }
 
@@ -347,7 +348,7 @@ async function main(): Promise<void> {
     await prisma.unitOfMeasure.upsert({
       where: { code },
       create: { code, nameFa, symbolFa, decimalScale },
-      update: { nameFa, symbolFa, decimalScale, isActive: true },
+      update: isProduction ? {} : { nameFa, symbolFa, decimalScale, isActive: true },
     });
   }
 
@@ -367,7 +368,7 @@ async function main(): Promise<void> {
         options: [...definition.options],
         validation: definition.validation,
       },
-      update: {
+      update: isProduction ? {} : {
         nameFa: definition.nameFa,
         nameEn: definition.nameEn,
         dataType: definition.dataType,
@@ -381,7 +382,7 @@ async function main(): Promise<void> {
       await prisma.categoryAttribute.upsert({
         where: { categoryId_attributeId: { categoryId: category.id, attributeId: attribute.id } },
         create: { categoryId: category.id, attributeId: attribute.id, isRequired: definition.isRequired, sortOrder: sortOrder + 1 },
-        update: { isRequired: definition.isRequired, sortOrder: sortOrder + 1 },
+        update: isProduction ? {} : { isRequired: definition.isRequired, sortOrder: sortOrder + 1 },
       });
     }
   }
@@ -395,11 +396,11 @@ async function main(): Promise<void> {
   for (const plan of plans) {
     await prisma.subscriptionPlan.upsert({
       where: { code: plan.code },
-      create: { ...plan, taxIncluded: false, entitlements: { canViewMatchedRfqs: true, dailyProposalLimit: 2, shortageOverrideMax: 6 } },
-      update: { ...plan, taxIncluded: false, isActive: true, entitlements: { canViewMatchedRfqs: true, dailyProposalLimit: 2, shortageOverrideMax: 6 } },
+      create: { ...plan, taxIncluded: false, isActive: !isProduction, isPublic: !isProduction, entitlements: { canViewMatchedRfqs: true, dailyProposalLimit: 2, shortageOverrideMax: 6 } },
+      update: isProduction ? {} : { ...plan, taxIncluded: false, isActive: true, isPublic: true, entitlements: { canViewMatchedRfqs: true, dailyProposalLimit: 2, shortageOverrideMax: 6 } },
     });
   }
-  const demoDiscountActive = process.env.NODE_ENV !== 'production';
+  const demoDiscountActive = !isProduction;
   await prisma.subscriptionDiscountCode.upsert({
     where: { code: 'DEMO10' },
     create: {
@@ -422,7 +423,7 @@ async function main(): Promise<void> {
     await prisma.systemSetting.upsert({
       where: { key },
       create: { key, value, descriptionFa },
-      update: { value, descriptionFa },
+      update: isProduction ? { descriptionFa } : { value, descriptionFa },
     });
   }
 
@@ -430,14 +431,17 @@ async function main(): Promise<void> {
     await prisma.notificationTemplate.upsert({
       where: { code: template.code },
       create: { ...template, channel: 'IN_APP', locale: 'fa-IR' },
-      update: { ...template, channel: 'IN_APP', locale: 'fa-IR', isActive: true },
+      update: isProduction ? {} : { ...template, channel: 'IN_APP', locale: 'fa-IR', isActive: true },
     });
   }
 
   const adminMobile = process.env.SEED_ADMIN_MOBILE;
   if (adminMobile) {
-    const user = await prisma.user.upsert({ where: { mobile: normalizeIranianMobile(adminMobile) }, create: { mobile: normalizeIranianMobile(adminMobile), mobileVerifiedAt: new Date() }, update: {} });
     const role = await prisma.role.findUniqueOrThrow({ where: { key: 'SUPER_ADMIN' } });
+    const existingProductionAdmin = isProduction
+      ? await prisma.userRole.findFirst({ where: { roleId: role.id, organizationId: null, user: { status: 'ACTIVE' } }, select: { user: true } })
+      : null;
+    const user = existingProductionAdmin?.user ?? await prisma.user.upsert({ where: { mobile: normalizeIranianMobile(adminMobile) }, create: { mobile: normalizeIranianMobile(adminMobile), mobileVerifiedAt: new Date() }, update: {} });
     const existing = await prisma.userRole.findFirst({ where: { userId: user.id, roleId: role.id, organizationId: null } });
     if (!existing) await prisma.userRole.create({ data: { userId: user.id, roleId: role.id } });
 
@@ -487,7 +491,7 @@ async function main(): Promise<void> {
       });
     }
 
-    if (process.env.NODE_ENV !== 'production' && process.env.SEED_DEMO_DATA !== 'false') {
+    if (!isProduction && process.env.SEED_DEMO_DATA !== 'false') {
       const buyer = await prisma.organization.upsert({
         where: { id: 'demo-buyer-organization' },
         create: { id: 'demo-buyer-organization', kind: 'BUYER', type: 'COMPANY', legalName: 'خریدار آزمایشی وازانو', displayName: 'خریدار آزمایشی', province: 'تهران', city: 'تهران', status: 'ACTIVE' },
