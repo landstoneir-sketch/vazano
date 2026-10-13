@@ -7,6 +7,17 @@ const financeUser: AuthenticatedUser = {
   id: 'finance-1', mobile: '09120000000', status: 'ACTIVE', permissions: ['billing.manage'], globalRoles: ['FINANCE'], memberships: [],
 };
 
+const policySettings = { get: jest.fn().mockResolvedValue({
+  gracePeriodDays: 7,
+  renewalWarningOffsetsDays: [-14, -7, -3, 0, 7],
+  trialWarningOffsetsDays: [-7, -3, -1, 0],
+  sms: { startHour: 9, endHour: 20, timezone: 'Asia/Tehran', renewalMaxPer24Hours: 1 },
+  foundingProgram: {
+    enabled: true, planCode: 'SELLER_FOUNDING_P6M_V1', capacity: 20, renewalDiscountBps: 2000,
+    minimumValidLeads: 10, guaranteeExtensionDays: 90, managedSalesOnly: true,
+  },
+}) };
+
 describe('AdminBillingService payment reconciliation resolution', () => {
   it('records a finance decision without changing payment status', async () => {
     let updateInput: Prisma.PaymentIntentUpdateManyArgs | undefined;
@@ -26,7 +37,7 @@ describe('AdminBillingService payment reconciliation resolution', () => {
       paymentIntent: { findUnique: jest.fn().mockResolvedValue(payment) },
       $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
     };
-    const service = new AdminBillingService(prisma as never, {} as never, {} as never);
+    const service = new AdminBillingService(prisma as never, {} as never, {} as never, policySettings as never);
 
     await service.resolvePaymentReconciliation(financeUser, payment.id, {
       resolution: PaymentReconciliationResolution.CUSTOMER_RETRY_REQUIRED, note: 'ارسال مسیر امن پرداخت مجدد به مشتری ثبت شد.',
@@ -51,7 +62,7 @@ describe('AdminBillingService payment reconciliation resolution', () => {
     const prisma = {
       paymentIntent: { findUnique: jest.fn().mockResolvedValue({ id: 'payment-1', reconciliationStatus: 'MATCHED' }) },
     };
-    const service = new AdminBillingService(prisma as never, {} as never, {} as never);
+    const service = new AdminBillingService(prisma as never, {} as never, {} as never, policySettings as never);
 
     await expect(service.resolvePaymentReconciliation(financeUser, 'payment-1', {
       resolution: PaymentReconciliationResolution.NO_FINANCIAL_ACTION, note: 'تراکنش قبلاً به‌طور قطعی تطبیق شده است.',
@@ -75,7 +86,7 @@ describe('AdminBillingService renewal reminder retry', () => {
       subscriptionReminder: { findUnique: jest.fn().mockResolvedValue(reminder) },
       $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
     };
-    const service = new AdminBillingService(prisma as never, {} as never, {} as never);
+    const service = new AdminBillingService(prisma as never, {} as never, {} as never, policySettings as never);
 
     await expect(service.retryReminder(financeUser, reminder.id)).resolves.toMatchObject({ status: 'PENDING' });
     expect(tx.subscriptionReminder.updateMany).toHaveBeenCalledWith({
@@ -118,7 +129,7 @@ describe('AdminBillingService manual subscription renewal', () => {
       subscriptionPlan: { findUnique: jest.fn().mockResolvedValue(plan) },
       $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
     };
-    const service = new AdminBillingService(prisma as never, {} as never, {} as never);
+    const service = new AdminBillingService(prisma as never, {} as never, {} as never, policySettings as never);
 
     await expect(service.createManualRenewal(financeUser, {
       organizationId: organization.id,
@@ -142,11 +153,32 @@ describe('AdminBillingService manual subscription renewal', () => {
 
   it('rejects a reused tracking number before changing subscription state', async () => {
     const prisma = { manualSubscriptionRenewal: { findUnique: jest.fn().mockResolvedValue({ id: 'existing' }) } };
-    const service = new AdminBillingService(prisma as never, {} as never, {} as never);
+    const service = new AdminBillingService(prisma as never, {} as never, {} as never, policySettings as never);
 
     await expect(service.createManualRenewal(financeUser, {
       organizationId: 'organization-1', planId: 'plan-1', amountRial: '1000', trackingNumber: 'BANK-123',
       paidAt: new Date(Date.now() - 60_000).toISOString(), note: 'شماره پیگیری تکراری برای آزمون ثبت شد.',
     })).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('rejects a new founding member after the configured capacity is reached', async () => {
+    const plan = {
+      id: 'founding-plan-1', code: 'SELLER_FOUNDING_P6M_V1', isActive: true, isTrial: false,
+      durationIso: 'P6M', grantCredits: 20n, version: 1,
+    };
+    const prisma = {
+      manualSubscriptionRenewal: { findUnique: jest.fn().mockResolvedValue(null) },
+      organization: { findUnique: jest.fn().mockResolvedValue({ id: 'organization-new', kind: 'SUPPLIER', status: 'ACTIVE' }) },
+      subscriptionPlan: { findUnique: jest.fn().mockResolvedValue(plan) },
+      subscription: {
+        findMany: jest.fn().mockResolvedValue(Array.from({ length: 20 }, (_, index) => ({ organizationId: `organization-${index}` }))),
+      },
+    };
+    const service = new AdminBillingService(prisma as never, {} as never, {} as never, policySettings as never);
+
+    await expect(service.createManualRenewal(financeUser, {
+      organizationId: 'organization-new', planId: plan.id, amountRial: '300000000', trackingNumber: 'BANK-999',
+      paidAt: new Date(Date.now() - 60_000).toISOString(), note: 'آزمون جلوگیری از عبور از ظرفیت برنامه مؤسس.',
+    })).rejects.toThrow('ظرفیت برنامه کارخانه‌های مؤسس تکمیل شده است.');
   });
 });

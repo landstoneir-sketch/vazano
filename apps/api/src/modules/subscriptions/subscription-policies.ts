@@ -16,15 +16,21 @@ export function resolveSubscriptionStatus(
   return 'EXPIRED';
 }
 
-export function buildRenewalReminderSchedule(expiresAt: Date): Array<{ offsetDays: number; scheduledAt: Date }> {
-  return RENEWAL_WARNING_OFFSETS_DAYS.map((offsetDays) => ({
+export function buildRenewalReminderSchedule(
+  expiresAt: Date,
+  offsets: readonly number[] = RENEWAL_WARNING_OFFSETS_DAYS,
+): Array<{ offsetDays: number; scheduledAt: Date }> {
+  return offsets.map((offsetDays) => ({
     offsetDays,
     scheduledAt: new Date(expiresAt.getTime() + offsetDays * 24 * 60 * 60 * 1000),
   }));
 }
 
-export function buildTrialReminderSchedule(expiresAt: Date): Array<{ offsetDays: number; scheduledAt: Date }> {
-  return TRIAL_WARNING_OFFSETS_DAYS.map((offsetDays) => ({
+export function buildTrialReminderSchedule(
+  expiresAt: Date,
+  offsets: readonly number[] = TRIAL_WARNING_OFFSETS_DAYS,
+): Array<{ offsetDays: number; scheduledAt: Date }> {
+  return offsets.map((offsetDays) => ({
     offsetDays,
     scheduledAt: new Date(expiresAt.getTime() + offsetDays * 24 * 60 * 60 * 1000),
   }));

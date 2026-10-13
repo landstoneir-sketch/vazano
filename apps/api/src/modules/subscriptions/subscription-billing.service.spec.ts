@@ -48,7 +48,17 @@ describe('SubscriptionBillingService trial activation', () => {
       $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
     };
     const payments = { create: jest.fn() };
-    const service = new SubscriptionBillingService(prisma as never, payments as never, {} as never);
+    const policySettings = { get: jest.fn().mockResolvedValue({
+      gracePeriodDays: 7,
+      renewalWarningOffsetsDays: [-14, -7, -3, 0, 7],
+      trialWarningOffsetsDays: [-7, -3, -1, 0],
+      sms: { startHour: 9, endHour: 20, timezone: 'Asia/Tehran', renewalMaxPer24Hours: 1 },
+      foundingProgram: {
+        enabled: true, planCode: 'SELLER_FOUNDING_P6M_V1', capacity: 20, renewalDiscountBps: 2000,
+        minimumValidLeads: 10, guaranteeExtensionDays: 90, managedSalesOnly: true,
+      },
+    }) };
+    const service = new SubscriptionBillingService(prisma as never, payments as never, {} as never, policySettings as never);
 
     await expect(service.startCheckout(supplierOwner, 'supplier-1', plan.id, 'trial-request-123')).resolves.toMatchObject({
       trialActivated: true,
@@ -85,7 +95,7 @@ describe('SubscriptionBillingService unsuccessful payment', () => {
       $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
     };
     const payments = { provider: 'ZARINPAL' };
-    const service = new SubscriptionBillingService(prisma as never, payments as never, {} as never);
+    const service = new SubscriptionBillingService(prisma as never, payments as never, {} as never, { get: jest.fn() } as never);
 
     await expect(service.handleCallback('authority-1', 'NOK')).resolves.toEqual({ success: false, cancelled: true });
     expect(tx.subscription.updateMany).toHaveBeenCalledWith({

@@ -1,11 +1,15 @@
 import { SubscriptionSmsReminderService } from './subscription-sms-reminder.service';
 
 describe('SubscriptionSmsReminderService', () => {
+  const policySettings = { get: jest.fn().mockResolvedValue({
+    sms: { startHour: 9, endHour: 20, timezone: 'Asia/Tehran', renewalMaxPer24Hours: 1 },
+  }) };
+
   it('does not query or send when subscription SMS is disabled', async () => {
     const prisma = { subscriptionReminder: { findMany: jest.fn() } };
     const config = { get: jest.fn().mockReturnValue('false') };
     const sms = { sendTemplate: jest.fn() };
-    const service = new SubscriptionSmsReminderService(prisma as never, config as never, sms as never);
+    const service = new SubscriptionSmsReminderService(prisma as never, config as never, sms as never, policySettings as never);
 
     await expect(service.process(new Date('2026-10-12T08:00:00.000Z'))).resolves.toBe(0);
     expect(prisma.subscriptionReminder.findMany).not.toHaveBeenCalled();
@@ -41,7 +45,7 @@ describe('SubscriptionSmsReminderService', () => {
       getOrThrow: jest.fn().mockReturnValue('https://vazano.ir'),
     };
     const sms = { sendTemplate: jest.fn().mockResolvedValue(undefined) };
-    const service = new SubscriptionSmsReminderService(prisma as never, config as never, sms as never);
+    const service = new SubscriptionSmsReminderService(prisma as never, config as never, sms as never, policySettings as never);
 
     await expect(service.process(new Date('2026-10-12T08:00:00.000Z'))).resolves.toBe(1);
     expect(sms.sendTemplate).toHaveBeenCalledWith('09120000000', 'SUBSCRIPTION_RENEWAL_14_DAYS', expect.arrayContaining([
@@ -74,7 +78,7 @@ describe('SubscriptionSmsReminderService', () => {
       getOrThrow: jest.fn().mockReturnValue('https://vazano.ir'),
     };
     const sms = { sendTemplate: jest.fn().mockResolvedValue(undefined) };
-    const service = new SubscriptionSmsReminderService(prisma as never, config as never, sms as never);
+    const service = new SubscriptionSmsReminderService(prisma as never, config as never, sms as never, policySettings as never);
 
     await expect(service.process(new Date('2026-10-12T08:00:00.000Z'))).resolves.toBe(1);
     expect(sms.sendTemplate).toHaveBeenCalledWith('09120000000', 'SUBSCRIPTION_TRIAL_1_DAY', expect.arrayContaining([

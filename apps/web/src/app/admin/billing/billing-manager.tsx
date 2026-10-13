@@ -68,6 +68,7 @@ type PlanDraft = {
   priceToman: string; grantCredits: string; dailyProposalLimit: number; maxProposalLimit: number; taxIncluded: boolean;
   isPublic: boolean; isActive: boolean; canViewMatchedRfqs: boolean; version?: number; entitlements: Record<string, unknown>;
   isTrial: boolean; trialDurationDays: number;
+  totalProposalLimit: number;
 };
 type DiscountDraft = {
   code: string; nameFa: string; descriptionFa: string; type: 'PERCENTAGE' | 'FIXED_RIAL'; percentage: string;
@@ -79,6 +80,7 @@ const emptyPlan: PlanDraft = {
   code: '', nameFa: '', descriptionFa: '', billingCycle: 'P1M', durationIso: 'P1M', priceToman: '', grantCredits: '0',
   dailyProposalLimit: 2, maxProposalLimit: 6, taxIncluded: false, isPublic: true, isActive: true, canViewMatchedRfqs: true, entitlements: {},
   isTrial: false, trialDurationDays: 14,
+  totalProposalLimit: 0,
 };
 
 function currentLocalDateTime(): string {
@@ -106,6 +108,7 @@ function fromPlan(plan: Plan): PlanDraft {
     isPublic: plan.isPublic, isActive: plan.isActive, canViewMatchedRfqs: entitlements.canViewMatchedRfqs !== false,
     version: plan.version, entitlements, isTrial: plan.isTrial,
     trialDurationDays: Number(plan.durationIso.match(/^P(\d+)D$/)?.[1] ?? 14),
+    totalProposalLimit: typeof entitlements.totalProposalLimit === 'number' ? entitlements.totalProposalLimit : 0,
   };
 }
 
@@ -153,6 +156,7 @@ export function BillingManager() {
         canViewMatchedRfqs: draft.canViewMatchedRfqs,
         dailyProposalLimit: draft.dailyProposalLimit,
         shortageOverrideMax: draft.maxProposalLimit,
+        totalProposalLimit: draft.totalProposalLimit || null,
       };
       const editable = {
         nameFa: draft.nameFa, descriptionFa: draft.descriptionFa || undefined, priceRial: (priceToman * BigInt(10)).toString(),
@@ -309,11 +313,12 @@ function PlanForm({ draft, setDraft, busy, onSubmit }: { draft: PlanDraft; setDr
     <label className="form-field"><span>کد پایدار</span><input value={draft.code} disabled={Boolean(draft.id)} pattern="[A-Z0-9]+(?:_[A-Z0-9]+)*" onChange={(event) => setDraft({ ...draft, code: event.target.value.toUpperCase() })} required /></label>
     <label className="form-field full"><span>توضیح پلن</span><textarea rows={3} dir="rtl" value={draft.descriptionFa} onChange={(event) => setDraft({ ...draft, descriptionFa: event.target.value })} /></label>
     <label className="check-field full"><input type="checkbox" checked={draft.isTrial} disabled={Boolean(draft.id)} onChange={(event) => setDraft({ ...draft, isTrial: event.target.checked, billingCycle: event.target.checked ? 'CUSTOM' : 'P1M', durationIso: event.target.checked ? 'P14D' : 'P1M', priceToman: event.target.checked ? '0' : '', taxIncluded: false })} /><span>پلن آزمایشی رایگان؛ هر سازمان فقط یک‌بار</span></label>
-    {draft.isTrial ? <label className="form-field"><span>مدت دوره آزمایشی (روز)</span><input type="number" min="1" max="90" value={draft.trialDurationDays} disabled={Boolean(draft.id)} onChange={(event) => setDraft({ ...draft, trialDurationDays: Number(event.target.value) })} required /></label> : <label className="form-field"><span>دوره صورتحساب</span><select value={draft.billingCycle} disabled={Boolean(draft.id)} onChange={(event) => applyCycle(event.target.value as BillingCycle)}><option value="P1M">یک‌ماهه</option><option value="P3M">سه‌ماهه</option><option value="P6M">شش‌ماهه</option><option value="P1Y">سالانه</option></select></label>}
+    {draft.isTrial ? <label className="form-field"><span>مدت دوره آزمایشی (روز)</span><input type="number" min="1" max="90" value={draft.trialDurationDays} disabled={Boolean(draft.id)} onChange={(event) => setDraft({ ...draft, trialDurationDays: Number(event.target.value) })} required />{draft.id && <small>برای تغییر مدت، پلن جایگزین بسازید و این نسخه را غیرفعال کنید تا اشتراک‌های قبلی ثابت بمانند.</small>}</label> : <label className="form-field"><span>دوره صورتحساب</span><select value={draft.billingCycle} disabled={Boolean(draft.id)} onChange={(event) => applyCycle(event.target.value as BillingCycle)}><option value="P1M">یک‌ماهه</option><option value="P3M">سه‌ماهه</option><option value="P6M">شش‌ماهه</option><option value="P1Y">سالانه</option></select>{draft.id && <small>برای تغییر دوره، پلن جدید بسازید و نسخه قبلی را غیرفعال کنید.</small>}</label>}
     <label className="form-field"><span>مبلغ (تومان)</span><input type="number" min={draft.isTrial ? '0' : '1'} value={draft.isTrial ? '0' : draft.priceToman} disabled={draft.isTrial} onChange={(event) => setDraft({ ...draft, priceToman: event.target.value })} required /></label>
     <label className="form-field"><span>اعتبار قابل مصرف</span><input type="number" min="0" value={draft.grantCredits} onChange={(event) => setDraft({ ...draft, grantCredits: event.target.value })} required /></label>
     <label className="form-field"><span>سقف پایه پیشنهاد روزانه</span><input type="number" min="0" value={draft.dailyProposalLimit} onChange={(event) => setDraft({ ...draft, dailyProposalLimit: Number(event.target.value) })} required /></label>
     <label className="form-field"><span>حداکثر سقف در کمبود عرضه</span><input type="number" min="0" value={draft.maxProposalLimit} onChange={(event) => setDraft({ ...draft, maxProposalLimit: Number(event.target.value) })} required /></label>
+    <label className="form-field"><span>سقف کل پیشنهاد در دوره</span><input type="number" min="0" max="100000" value={draft.totalProposalLimit} onChange={(event) => setDraft({ ...draft, totalProposalLimit: Number(event.target.value) })} required /><small>صفر یعنی بدون سقف کل؛ محدودیت روزانه همچنان اعمال می‌شود.</small></label>
     <div className="full check-grid"><label className="check-field"><input type="checkbox" checked={draft.isActive} onChange={(event) => setDraft({ ...draft, isActive: event.target.checked })} /><span>قابل خرید باشد</span></label><label className="check-field"><input type="checkbox" checked={draft.isPublic} onChange={(event) => setDraft({ ...draft, isPublic: event.target.checked })} /><span>در صفحه عمومی نمایش داده شود</span></label><label className="check-field"><input type="checkbox" checked={draft.canViewMatchedRfqs} onChange={(event) => setDraft({ ...draft, canViewMatchedRfqs: event.target.checked })} /><span>مشاهده استعلام‌های مرتبط</span></label><label className="check-field"><input type="checkbox" checked={draft.taxIncluded} disabled={draft.isTrial} onChange={(event) => setDraft({ ...draft, taxIncluded: event.target.checked })} /><span>مبلغ شامل مالیات است</span></label></div>
     <button className="button button-primary" disabled={busy}>{busy ? 'در حال ذخیره…' : draft.id ? 'ذخیره تغییرات پلن' : 'ایجاد پلن'}</button>
   </form>;

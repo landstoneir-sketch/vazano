@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../shared/prisma/prisma.service';
 import { SMS_PORT, type SmsPort, type SmsTemplateCode, type SmsTemplateParameter } from '../auth/sms/sms.port';
+import { SubscriptionPolicySettingsService, type SubscriptionPolicySettings } from './subscription-policy-settings.service';
 
 const SMS_TEMPLATE_BY_OFFSET: Readonly<Record<number, SmsTemplateCode>> = {
   [-14]: 'SUBSCRIPTION_RENEWAL_14_DAYS',
@@ -24,10 +25,13 @@ export class SubscriptionSmsReminderService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     @Inject(SMS_PORT) private readonly sms: SmsPort,
+    private readonly policySettings: SubscriptionPolicySettingsService,
   ) {}
 
   async process(now = new Date()): Promise<number> {
-    if (this.config.get<string>('SUBSCRIPTION_SMS_ENABLED', 'false') !== 'true' || !this.isWithinTehranDeliveryWindow(now)) return 0;
+    if (this.config.get<string>('SUBSCRIPTION_SMS_ENABLED', 'false') !== 'true') return 0;
+    const policy = await this.policySettings.get();
+    if (!this.isWithinDeliveryWindow(now, policy.sms)) return 0;
     const reminders = await this.prisma.subscriptionReminder.findMany({
       where: {
         channel: 'SMS',
@@ -83,7 +87,7 @@ export class SubscriptionSmsReminderService {
           createdAt: { gte: new Date(now.getTime() - 86_400_000) },
         },
       });
-      if (sentWithinLastDay > 0) continue;
+      if (sentWithinLastDay >= policy.sms.renewalMaxPer24Hours) continue;
 
       const claimed = await this.prisma.subscriptionReminder.updateMany({
         where: { id: reminder.id, status: 'PENDING' },
@@ -145,13 +149,13 @@ export class SubscriptionSmsReminderService {
       : '';
   }
 
-  private isWithinTehranDeliveryWindow(now: Date): boolean {
+  private isWithinDeliveryWindow(now: Date, policy: SubscriptionPolicySettings['sms']): boolean {
     const hour = Number(new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Asia/Tehran',
+      timeZone: policy.timezone,
       hour: '2-digit',
       hourCycle: 'h23',
     }).format(now));
-    return hour >= 9 && hour < 20;
+    return hour >= policy.startHour && hour < policy.endHour;
   }
 
   private async failReminder(reminderId: string, failureReason: string): Promise<void> {

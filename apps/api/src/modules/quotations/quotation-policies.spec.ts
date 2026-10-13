@@ -1,4 +1,4 @@
-import { calculateProposalFeeCredits, calculateQuotationTotals, startOfTehranDay } from './quotation-policies';
+import { calculateProposalFeeCredits, calculateQuotationTotals, startOfTehranDay, totalProposalLimitFromEntitlements } from './quotation-policies';
 
 describe('quotation policies', () => {
   it('calculates monetary totals with integer rial values', () => {
@@ -17,5 +17,11 @@ describe('quotation policies', () => {
 
   it('uses the Tehran calendar day boundary', () => {
     expect(startOfTehranDay(new Date('2026-10-07T01:00:00.000Z')).toISOString()).toBe('2026-10-06T20:30:00.000Z');
+  });
+
+  it('reads a positive total proposal limit from plan entitlements', () => {
+    expect(totalProposalLimitFromEntitlements({ totalProposalLimit: 2 })).toBe(2);
+    expect(totalProposalLimitFromEntitlements({ totalProposalLimit: 0 })).toBeNull();
+    expect(totalProposalLimitFromEntitlements({ totalProposalLimit: '2' })).toBeNull();
   });
 });
