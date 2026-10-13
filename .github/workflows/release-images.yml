@@ -11,12 +11,56 @@ concurrency:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify release tag matches package version
+        shell: bash
+        run: |
+          package_version="$(node -p 'require("./package.json").version')"
+          expected_tag="v${package_version}"
+          test "$GITHUB_REF_NAME" = "$expected_tag" || {
+            echo "Release tag $GITHUB_REF_NAME does not match package version $expected_tag."
+            exit 1
+          }
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Validate and generate database client
+        run: |
+          npm run prisma:validate --workspace @vazano/api
+          npm run prisma:generate
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Run release quality gate
+        run: |
+          npm run lint
+          npm run typecheck
+          npm run test
+          npm run build
+
   publish:
+    needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
