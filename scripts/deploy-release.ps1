@@ -73,19 +73,46 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'Application containers did not become healthy.' }
 
   $deadline = (Get-Date).AddSeconds($ReadinessTimeoutSeconds)
-  $readinessUrl = "$($GatewayUrl.TrimEnd('/'))/v1/health/ready"
+  $gatewayBaseUrl = $GatewayUrl.TrimEnd('/')
+  $readinessUrl = "$gatewayBaseUrl/v1/health/ready"
+  $isReady = $false
   do {
     try {
       $response = Invoke-WebRequest -Uri $readinessUrl -UseBasicParsing -TimeoutSec 5
       if ($response.StatusCode -eq 200) {
-        Write-Output ([pscustomobject]@{ Deployed = $true; ReadinessUrl = $readinessUrl; CheckedAt = (Get-Date).ToUniversalTime().ToString('o') })
-        exit 0
+        $isReady = $true
+        break
       }
     } catch { }
     Start-Sleep -Seconds 2
   } while ((Get-Date) -lt $deadline)
 
-  throw "Release readiness check failed: $readinessUrl"
+  if (-not $isReady) { throw "Release readiness check failed: $readinessUrl" }
+
+  $smokePaths = @('/healthz', '/', '/login', '/v1/catalog/categories', '/v1/locations/provinces')
+  foreach ($path in $smokePaths) {
+    $url = "$gatewayBaseUrl$path"
+    try {
+      $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10
+      if ($response.StatusCode -ne 200) { throw "Unexpected HTTP status $($response.StatusCode)." }
+    } catch {
+      throw "Post-deployment smoke check failed for $path. $($_.Exception.Message)"
+    }
+  }
+
+  $categories = @(Invoke-RestMethod -Uri "$gatewayBaseUrl/v1/catalog/categories" -Method Get -TimeoutSec 10)
+  if ($categories.Count -lt 1) { throw 'Post-deployment smoke check found no active product category.' }
+  $provinces = @(Invoke-RestMethod -Uri "$gatewayBaseUrl/v1/locations/provinces" -Method Get -TimeoutSec 10)
+  if ($provinces.Count -lt 31) { throw "Post-deployment smoke check found only $($provinces.Count) active provinces." }
+
+  Write-Output ([pscustomobject]@{
+    Deployed = $true
+    ReadinessUrl = $readinessUrl
+    SmokeChecks = $smokePaths.Count
+    ActiveCategories = $categories.Count
+    ActiveProvinces = $provinces.Count
+    CheckedAt = (Get-Date).ToUniversalTime().ToString('o')
+  })
 }
 finally {
   Set-Location -LiteralPath $originalLocation
