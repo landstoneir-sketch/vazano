@@ -40,7 +40,16 @@ export function evaluateReleaseReadiness(input: ReleaseReadinessInput): { ready:
     check('billing.plan', 'پلن پولی قابل خرید', input.paidPlanCount > 0, `${input.paidPlanCount.toLocaleString('fa-IR')} پلن پولی فعال و عمومی وجود دارد.`, 'هیچ پلن پولی فعال و عمومی برای خرید وجود ندارد.', '/admin/billing'),
     check('catalog.categories', 'دسته‌بندی قابل استفاده', input.activeCategoryCount > 0, `${input.activeCategoryCount.toLocaleString('fa-IR')} دسته فعال وجود دارد.`, 'دسته‌بندی فعالی برای ثبت استعلام وجود ندارد.', '/admin/catalog'),
     check('locations.provinces', 'پوشش استان‌های ایران', input.activeProvinceCount >= 31, `${input.activeProvinceCount.toLocaleString('fa-IR')} استان فعال ثبت شده است.`, `فقط ${input.activeProvinceCount.toLocaleString('fa-IR')} استان فعال ثبت شده است.`, '/admin/locations'),
-    check('access.super-admin', 'مدیر کل فعال', input.activeSuperAdminCount > 0, `${input.activeSuperAdminCount.toLocaleString('fa-IR')} مدیر کل فعال وجود دارد.`, 'هیچ مدیر کل فعالی برای بازیابی و مدیریت سامانه وجود ندارد.', '/admin/users'),
+    check(
+      'access.super-admin',
+      'مدیران ارشد بازیابی',
+      input.activeSuperAdminCount >= 2,
+      `${input.activeSuperAdminCount.toLocaleString('fa-IR')} مدیر ارشد فعال برای مدیریت و بازیابی وجود دارد.`,
+      input.activeSuperAdminCount === 0
+        ? 'هیچ مدیر ارشد فعالی برای بازیابی و مدیریت سامانه وجود ندارد.'
+        : 'فقط یک مدیر ارشد فعال وجود دارد؛ برای جلوگیری از قفل‌شدن مدیریت سامانه، یک مدیر ارشد پشتیبان تعیین کنید.',
+      '/admin/users',
+    ),
   ];
 
   return { ready: checks.every((item) => item.status !== 'BLOCKED'), checks };

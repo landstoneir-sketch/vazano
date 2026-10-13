@@ -20,4 +20,10 @@ describe('release readiness', () => {
     expect(result.checks.find((item) => item.key === 'content.terms')?.status).toBe('BLOCKED');
     expect(result.checks.find((item) => item.key === 'integration.payment')?.status).toBe('BLOCKED');
   });
+
+  it('blocks launch until a second active recovery administrator exists', () => {
+    const result = evaluateReleaseReadiness({ ...readyInput, activeSuperAdminCount: 1 });
+    expect(result.ready).toBe(false);
+    expect(result.checks.find((item) => item.key === 'access.super-admin')).toMatchObject({ status: 'BLOCKED', actionPath: '/admin/users' });
+  });
 });
