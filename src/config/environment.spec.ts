@@ -7,6 +7,10 @@ const productionEnvironment = {
   CLAMAV_HOST: 'clamav', CLAMAV_PORT: '3310', CLAMAV_TIMEOUT_MS: '15000',
   S3_ENDPOINT: 'https://storage.vazano.ir', S3_BUCKET: 'vazano', S3_ACCESS_KEY: 'access-key', S3_SECRET_KEY: '0123456789012345',
   ZARINPAL_ENABLED: 'false', TRUST_PROXY_HOPS: '1', SEED_DEMO_DATA: 'false', SEED_ADMIN_MOBILE: '09120000000',
+  VAZANO_API_IMAGE: `ghcr.io/vazano/api:${'a'.repeat(40)}`,
+  VAZANO_WEB_IMAGE: `ghcr.io/vazano/web:${'b'.repeat(40)}`,
+  VAZANO_MIGRATION_IMAGE: `ghcr.io/vazano/migration:${'c'.repeat(40)}`,
+  VAZANO_GATEWAY_IMAGE: `nginx@sha256:${'d'.repeat(64)}`,
 };
 
 describe('production environment validation', () => {
@@ -40,6 +44,15 @@ describe('production environment validation', () => {
 
   it('rejects the mock payment provider in production', () => {
     expect(() => validateEnvironment({ ...productionEnvironment, PAYMENT_PROVIDER: 'mock' })).toThrow(/Mock payment provider/);
+  });
+
+  it.each([
+    ['VAZANO_API_IMAGE', 'ghcr.io/vazano/api:latest'],
+    ['VAZANO_WEB_IMAGE', 'ghcr.io/vazano/web:v1.0.0'],
+    ['VAZANO_MIGRATION_IMAGE', 'ghcr.io/your-org/vazano-migration:replace-with-git-sha'],
+    ['VAZANO_GATEWAY_IMAGE', 'nginx:1.27.4-alpine'],
+  ])('rejects mutable production image reference for %s', (key, value) => {
+    expect(() => validateEnvironment({ ...productionEnvironment, [key]: value })).toThrow();
   });
 
   it('requires every renewal template before subscription SMS is enabled', () => {
