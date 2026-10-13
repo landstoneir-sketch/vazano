@@ -76,6 +76,29 @@ export class ObjectStorageService implements OnModuleInit {
     return result.Body;
   }
 
+  async readPrefix(storageKey: string, maximumBytes = 512): Promise<Buffer> {
+    const result = await this.client.send(new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: storageKey,
+      Range: `bytes=0-${Math.max(0, maximumBytes - 1)}`,
+    }));
+    if (!(result.Body instanceof Readable)) throw new Error('Object storage did not return a readable stream.');
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+    try {
+      for await (const chunk of result.Body) {
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
+        const remainingBytes = maximumBytes - totalBytes;
+        if (remainingBytes <= 0) break;
+        chunks.push(buffer.subarray(0, remainingBytes));
+        totalBytes += Math.min(buffer.length, remainingBytes);
+      }
+      return Buffer.concat(chunks, totalBytes);
+    } finally {
+      result.Body.destroy();
+    }
+  }
+
   async remove(storageKey: string): Promise<void> {
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: storageKey }));
   }

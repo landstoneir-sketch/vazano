@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { PrismaService } from '../../shared/prisma/prisma.service';
 import { CreateUploadIntentDto } from './create-upload-intent.dto';
-import { DEFAULT_MAX_ATTACHMENT_SIZE_BYTES, normalizedAttachmentExtension, safeOriginalFileName } from './attachment-policy';
+import { DEFAULT_MAX_ATTACHMENT_SIZE_BYTES, matchesAttachmentSignature, normalizedAttachmentExtension, safeOriginalFileName } from './attachment-policy';
 import { FileSafetyService } from './file-safety.service';
 import { ObjectStorageService } from './object-storage.service';
 
@@ -119,6 +119,21 @@ export class AttachmentsService {
     if (object.sizeBytes !== attachment.sizeBytes || object.mimeType !== attachment.mimeType) {
       await this.prisma.attachment.update({ where: { id: attachment.id }, data: { status: 'REJECTED', scanReason: 'OBJECT_METADATA_MISMATCH' } });
       throw new BadRequestException('اندازه یا نوع فایل بارگذاری‌شده با درخواست اولیه یکسان نیست.');
+    }
+    const signature = await this.storage.readPrefix(attachment.storageKey);
+    if (!matchesAttachmentSignature(attachment.mimeType, signature)) {
+      await this.prisma.$transaction([
+        this.prisma.attachment.update({ where: { id: attachment.id }, data: { status: 'REJECTED', scanReason: 'FILE_SIGNATURE_MISMATCH' } }),
+        this.prisma.auditLog.create({ data: {
+          actorUserId: user.id,
+          organizationId: attachment.organizationId,
+          action: 'attachment.upload.reject',
+          entityType: 'Attachment',
+          entityId: attachment.id,
+          metadata: { reason: 'FILE_SIGNATURE_MISMATCH', declaredMimeType: attachment.mimeType },
+        } }),
+      ]);
+      throw new BadRequestException('محتوای فایل با نوع اعلام‌شده همخوانی ندارد.');
     }
 
     const content = this.fileSafety.requiresContent() ? await this.storage.read(attachment.storageKey) : undefined;
