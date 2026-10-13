@@ -236,17 +236,18 @@ export class RfqsService {
     if (existing && (existing.purpose !== 'BUYER_COMMITMENT' || existing.referenceId !== rfq.id || existing.amountRial !== rfq.commitmentAmountRial)) {
       throw new ConflictException('کلید تکرارپذیری برای درخواست دیگری استفاده شده است.');
     }
+    if (existing && ['FAILED', 'CANCELLED'].includes(existing.status)) {
+      throw new ConflictException('این تلاش پرداخت بسته شده است؛ برای پرداخت مجدد یک درخواست تازه ایجاد کنید.');
+    }
+    const callbackUrl = `${this.config.get<string>('PUBLIC_API_URL') ?? 'http://localhost:3001'}/v1/rfqs/commitments/zarinpal/callback`;
     if (existing?.authority && ['REDIRECT_PENDING', 'VERIFY_PENDING', 'SUCCEEDED'].includes(existing.status)) {
-      const sandbox = this.config.get<string>('ZARINPAL_SANDBOX') !== 'false';
-      const startPayUrl = this.config.get<string>('ZARINPAL_START_PAY_URL') ?? (sandbox ? 'https://sandbox.zarinpal.com/pg/StartPay/' : 'https://www.zarinpal.com/pg/StartPay/');
-      return { paymentIntentId: existing.id, authority: existing.authority, redirectUrl: `${startPayUrl}${existing.authority}` };
+      return { paymentIntentId: existing.id, authority: existing.authority, redirectUrl: this.payments.redirectUrl(existing.authority, callbackUrl) };
     }
     const intent = existing ?? await this.prisma.paymentIntent.create({
-      data: { provider: 'ZARINPAL', purpose: 'BUYER_COMMITMENT', amountRial: rfq.commitmentAmountRial, payerOrganizationId: rfq.buyerOrganizationId, referenceType: 'Rfq', referenceId: rfq.id, idempotencyKey },
+      data: { provider: this.payments.provider, purpose: 'BUYER_COMMITMENT', amountRial: rfq.commitmentAmountRial, payerOrganizationId: rfq.buyerOrganizationId, referenceType: 'Rfq', referenceId: rfq.id, idempotencyKey },
     });
-    const publicApiUrl = this.config.get<string>('PUBLIC_API_URL') ?? 'http://localhost:3001';
     try {
-      const result = await this.payments.create({ amountRial: intent.amountRial, description: `سپرده تعهد استعلام ${rfq.code}`, callbackUrl: `${publicApiUrl}/v1/rfqs/commitments/zarinpal/callback`, mobile: user.mobile, orderId: intent.id });
+      const result = await this.payments.create({ amountRial: intent.amountRial, description: `سپرده تعهد استعلام ${rfq.code}`, callbackUrl, mobile: user.mobile, orderId: intent.id });
       await this.prisma.$transaction([
         this.prisma.paymentIntent.update({ where: { id: intent.id }, data: { authority: result.authority, status: 'REDIRECT_PENDING' } }),
         this.prisma.rfq.update({ where: { id: rfq.id }, data: { commitmentStatus: 'PAYMENT_PENDING' } }),
@@ -259,7 +260,7 @@ export class RfqsService {
   }
 
   async handleCommitmentCallback(authority: string, callbackStatus: string) {
-    const intent = await this.prisma.paymentIntent.findFirst({ where: { authority, provider: 'ZARINPAL', purpose: 'BUYER_COMMITMENT' } });
+    const intent = await this.prisma.paymentIntent.findFirst({ where: { authority, provider: this.payments.provider, purpose: 'BUYER_COMMITMENT' } });
     if (!intent) throw new NotFoundException('تراکنش پرداخت پیدا نشد.');
     if (intent.status === 'SUCCEEDED') return { success: true, alreadyVerified: true, referenceId: intent.providerReference };
     if (intent.status === 'CANCELLED') return { success: false, cancelled: true };

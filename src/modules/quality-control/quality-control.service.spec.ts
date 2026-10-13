@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { PrismaService } from '../../shared/prisma/prisma.service';
 import type { AuthenticatedUser } from '../auth/auth.types';
@@ -89,5 +89,21 @@ describe('QualityControlService payments', () => {
 
     await expect(service.handlePaymentCallback('authority-1', 'OK')).resolves.toEqual({ success: false, cancelled: true, rfqId: 'rfq-1' });
     expect(verifyPayment).not.toHaveBeenCalled();
+  });
+
+  it('requires a fresh idempotency key after a terminal checkout attempt', async () => {
+    const prisma = {
+      qualityControlRequest: { findUnique: jest.fn().mockResolvedValue(quotedRequest) },
+      paymentIntent: { findUnique: jest.fn().mockResolvedValue({
+        id: 'payment-closed', status: 'FAILED', purpose: 'QUALITY_CONTROL', referenceId: 'quality-request',
+        payerOrganizationId: 'buyer-org', amountRial: 30_000_000n,
+      }) },
+    } as unknown as PrismaService;
+    const createPayment = jest.fn();
+    const payments = { provider: 'ZARINPAL', create: createPayment } as unknown as PaymentsService;
+    const service = new QualityControlService(prisma, payments, new ConfigService());
+
+    await expect(service.startCheckout(buyer, 'rfq-1', 'used-key')).rejects.toBeInstanceOf(ConflictException);
+    expect(createPayment).not.toHaveBeenCalled();
   });
 });
