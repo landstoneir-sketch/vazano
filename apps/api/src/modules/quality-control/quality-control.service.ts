@@ -39,6 +39,9 @@ export class QualityControlService {
     if (existing?.status === 'SUCCEEDED') {
       return { paymentIntentId: existing.id, alreadyPaid: true, redirectUrl: `${this.webOrigin()}/dashboard/rfqs/${rfqId}?qualityPayment=success` };
     }
+    if (existing && ['FAILED', 'CANCELLED'].includes(existing.status)) {
+      throw new ConflictException('این تلاش پرداخت بسته شده است؛ برای پرداخت مجدد یک درخواست تازه ایجاد کنید.');
+    }
     if (existing?.authority && ['REDIRECT_PENDING', 'VERIFY_PENDING'].includes(existing.status)) {
       const callbackUrl = `${this.publicApiUrl()}/v1/quality-control/zarinpal/callback`;
       return { paymentIntentId: existing.id, authority: existing.authority, redirectUrl: this.payments.redirectUrl(existing.authority, callbackUrl) };
