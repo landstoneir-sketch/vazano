@@ -27,7 +27,9 @@ import { validateEnvironment } from './config/environment';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, cache: true, envFilePath: ['.env', '../../.env'], validate: validateEnvironment }),
+    // The repository-root environment is canonical in local development. The
+    // workspace-local file remains a backwards-compatible fallback only.
+    ConfigModule.forRoot({ isGlobal: true, cache: true, envFilePath: ['../../.env', '.env'], validate: validateEnvironment }),
     PrismaModule,
     AuthModule,
     UsersModule,
