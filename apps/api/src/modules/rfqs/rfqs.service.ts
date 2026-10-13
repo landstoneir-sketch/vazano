@@ -5,10 +5,10 @@ import { randomUUID } from 'node:crypto';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { PrismaService } from '../../shared/prisma/prisma.service';
 import { CreateRfqDto } from './create-rfq.dto';
-import { BUYER_COMMITMENT_AMOUNT_RIAL, BUYER_COMMITMENT_POLICY_VERSION, QUALITY_CONTROL_FEE_BPS } from './rfq-policies';
 import { canPublishRfq } from './rfq-policies';
 import { RfqReviewDecision, ReviewRfqDto } from './review-rfq.dto';
 import { PaymentsService } from '../payments/payments.service';
+import { RfqPolicySettingsService } from './rfq-policy-settings.service';
 
 const categoryDetailsInclude = {
   attributeBindings: {
@@ -24,6 +24,7 @@ export class RfqsService {
     private readonly prisma: PrismaService,
     private readonly payments: PaymentsService,
     private readonly config: ConfigService,
+    private readonly policySettings: RfqPolicySettingsService,
   ) {}
 
   listForUser(user: AuthenticatedUser) {
@@ -99,9 +100,12 @@ export class RfqsService {
     return this.create(user, input, RfqSource.BUYER_SELF_SERVICE);
   }
 
-  createOnBehalf(user: AuthenticatedUser, input: CreateRfqDto) {
+  async createOnBehalf(user: AuthenticatedUser, input: CreateRfqDto) {
     if (!user.permissions.includes('rfq.create_on_behalf')) {
       throw new ForbiddenException('مجوز ثبت استعلام به نمایندگی از خریدار را ندارید.');
+    }
+    if (!(await this.policySettings.get()).operatorEntryEnabled) {
+      throw new ConflictException('ثبت استعلام توسط اپراتور در حال حاضر غیرفعال است.');
     }
     if (!input.buyerContactUserId) {
       throw new BadRequestException('انتخاب کاربر خریدار برای ثبت توسط اپراتور الزامی است.');
@@ -116,13 +120,17 @@ export class RfqsService {
     }
     if (rfq.items.length === 0) throw new BadRequestException('استعلام باید حداقل یک ردیف داشته باشد.');
     const now = new Date();
+    const approvalStatus = rfq.manualReviewRequired ? 'PENDING' : 'APPROVED';
+    const operationalStatus = rfq.manualReviewRequired
+      ? 'UNDER_REVIEW'
+      : (rfq.commitmentStatus === 'NOT_REQUIRED' ? 'READY_TO_PUBLISH' : 'WAITING_COMMITMENT');
     const updated = await this.prisma.$transaction(async (tx) => {
       const result = await tx.rfq.update({
         where: { id: rfqId },
-        data: { lifecycleState: 'SUBMITTED', operationalStatus: 'UNDER_REVIEW', approvalStatus: 'PENDING', submittedAt: now },
+        data: { lifecycleState: 'SUBMITTED', operationalStatus, approvalStatus, submittedAt: now },
       });
-      await tx.auditLog.create({ data: { actorUserId: user.id, organizationId: rfq.buyerOrganizationId, action: 'rfq.submit_for_review', entityType: 'Rfq', entityId: rfqId } });
-      await tx.outboxEvent.create({ data: { aggregateType: 'Rfq', aggregateId: rfqId, eventType: 'ir.vazano.rfq.submitted.v1', payload: { rfqId } } });
+      await tx.auditLog.create({ data: { actorUserId: user.id, organizationId: rfq.buyerOrganizationId, action: rfq.manualReviewRequired ? 'rfq.submit_for_review' : 'rfq.submit_auto_approved', entityType: 'Rfq', entityId: rfqId } });
+      await tx.outboxEvent.create({ data: { aggregateType: 'Rfq', aggregateId: rfqId, eventType: 'ir.vazano.rfq.submitted.v1', payload: { rfqId, manualReviewRequired: rfq.manualReviewRequired } } });
       return result;
     });
     return updated;
@@ -263,6 +271,10 @@ export class RfqsService {
   }
 
   private async create(user: AuthenticatedUser, input: CreateRfqDto, source: RfqSource) {
+    const policy = await this.policySettings.get();
+    if (input.qualityControlRequested && !policy.qualityControl.enabled) {
+      throw new ConflictException('خدمت کنترل کیفیت در حال حاضر غیرفعال است.');
+    }
     const organization = await this.prisma.organization.findUnique({ where: { id: input.buyerOrganizationId } });
     if (!organization || organization.kind !== 'BUYER' || organization.status !== 'ACTIVE') throw new NotFoundException('سازمان خریدار فعال پیدا نشد.');
 
@@ -302,10 +314,10 @@ export class RfqsService {
           description: input.description,
           entryMethod: input.entryMethod ?? 'STANDARD',
           source,
-          manualReviewRequired: true,
+          manualReviewRequired: policy.pilotManualReview,
           commitmentStatus: commitmentRequired ? 'REQUIRED' : 'NOT_REQUIRED',
-          commitmentAmountRial: commitmentRequired ? BUYER_COMMITMENT_AMOUNT_RIAL : null,
-          commitmentPolicyVersion: commitmentRequired ? BUYER_COMMITMENT_POLICY_VERSION : null,
+          commitmentAmountRial: commitmentRequired ? policy.buyerCommitment.amountRial : null,
+          commitmentPolicyVersion: commitmentRequired ? policy.buyerCommitment.policyVersion : null,
           deliveryProvinceId: deliveryLocation.provinceId,
           deliveryCityId: deliveryLocation.cityId,
           deliveryProvince: deliveryLocation.provinceName,
@@ -314,8 +326,8 @@ export class RfqsService {
           responseDeadline,
           installationRequired: input.installationRequired ?? false,
           qualityControlRequested: input.qualityControlRequested ?? false,
-          qualityControlFeeBps: input.qualityControlRequested ? QUALITY_CONTROL_FEE_BPS : null,
-          displayPricesTaxInclusive: false,
+          qualityControlFeeBps: input.qualityControlRequested ? policy.qualityControl.feeBps : null,
+          displayPricesTaxInclusive: policy.displayPricesTaxInclusive,
           items: {
             create: input.items.map((item, index) => ({
               categoryId: item.categoryId,
@@ -327,7 +339,7 @@ export class RfqsService {
               sortOrder: index,
             })),
           },
-          qualityControlRequest: input.qualityControlRequested ? { create: { feeBps: QUALITY_CONTROL_FEE_BPS } } : undefined,
+          qualityControlRequest: input.qualityControlRequested ? { create: { feeBps: policy.qualityControl.feeBps } } : undefined,
         },
         include: { items: true, qualityControlRequest: true },
       });
@@ -338,7 +350,14 @@ export class RfqsService {
           action: source === RfqSource.PLATFORM_OPERATOR ? 'rfq.create_on_behalf' : 'rfq.create',
           entityType: 'Rfq',
           entityId: rfq.id,
-          metadata: { source, buyerContactUserId, manualReviewRequired: true },
+          metadata: {
+            source,
+            buyerContactUserId,
+            manualReviewRequired: policy.pilotManualReview,
+            legalRole: policy.legalRole,
+            marketCountry: policy.marketCountry,
+            marketCoverageMode: policy.marketCoverageMode,
+          },
         },
       });
       await tx.outboxEvent.create({

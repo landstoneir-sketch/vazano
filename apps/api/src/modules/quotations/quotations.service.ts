@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { PrismaService } from '../../shared/prisma/prisma.service';
 import { CreateQuotationDto } from './create-quotation.dto';
-import { calculateProposalFeeCredits, calculateQuotationTotals, effectiveDailyProposalLimit, PROPOSAL_FEE_POLICY_VERSION, startOfTehranDay, totalProposalLimitFromEntitlements } from './quotation-policies';
+import { calculateProposalFeeCredits, calculateQuotationTotals, effectiveDailyProposalLimit, resolveProposalFeePolicy, startOfTehranDay, totalProposalLimitFromEntitlements } from './quotation-policies';
 import { calculateQualityControlFeeRial } from '../rfqs/rfq-policies';
 
 const categoryDetailsInclude = {
@@ -143,7 +143,9 @@ export class QuotationsService {
           throw new ConflictException('سقف کل ارسال پیشنهاد این پلن تکمیل شده است.');
         }
       }
-      const feeCredits = calculateProposalFeeCredits(quotation.finalAmountRial);
+      const feePolicySetting = await tx.systemSetting.findUnique({ where: { key: 'seller.proposal_fee_policy' }, select: { value: true } });
+      const feePolicy = resolveProposalFeePolicy(feePolicySetting?.value);
+      const feeCredits = calculateProposalFeeCredits(quotation.finalAmountRial, feePolicy);
       const wallet = await tx.creditWallet.findUnique({ where: { organizationId: quotation.supplierOrganizationId } });
       if (!wallet || wallet.cachedBalanceCredits < feeCredits) throw new ConflictException('اعتبار حساب برای ارسال این پیشنهاد کافی نیست.');
       const debit = await tx.creditWallet.updateMany({
@@ -160,7 +162,7 @@ export class QuotationsService {
           referenceId: quotation.id,
           idempotencyKey: `quotation:${quotation.id}:submit:v1`,
           reasonCode: 'QUOTATION_SUBMISSION_FEE',
-          metadata: { policyVersion: PROPOSAL_FEE_POLICY_VERSION, finalAmountRial: quotation.finalAmountRial.toString() },
+          metadata: { policyVersion: feePolicy.version, finalAmountRial: quotation.finalAmountRial.toString(), rate: feePolicy.rate },
         },
       });
       await tx.quotation.updateMany({
@@ -173,7 +175,7 @@ export class QuotationsService {
         data: { status: 'RESPONDED', respondedAt: now },
       });
       await tx.rfq.update({ where: { id: quotation.rfqId }, data: { operationalStatus: 'HAS_QUOTES' } });
-      await tx.auditLog.create({ data: { actorUserId: user.id, organizationId: quotation.supplierOrganizationId, action: 'quotation.submit', entityType: 'Quotation', entityId: quotation.id, metadata: { feeCredits: feeCredits.toString(), policyVersion: PROPOSAL_FEE_POLICY_VERSION, dailyProposalLimit } } });
+      await tx.auditLog.create({ data: { actorUserId: user.id, organizationId: quotation.supplierOrganizationId, action: 'quotation.submit', entityType: 'Quotation', entityId: quotation.id, metadata: { feeCredits: feeCredits.toString(), policyVersion: feePolicy.version, dailyProposalLimit } } });
       await tx.outboxEvent.create({ data: { aggregateType: 'Quotation', aggregateId: quotation.id, eventType: 'ir.vazano.quotation.submitted.v1', payload: { quotationId: quotation.id, rfqId: quotation.rfqId, supplierOrganizationId: quotation.supplierOrganizationId } } });
       return result;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });

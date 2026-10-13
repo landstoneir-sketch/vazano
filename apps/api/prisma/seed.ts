@@ -108,7 +108,7 @@ const systemSettings = [
   ['notification.sms.send_window_local', { startHour: 9, endHour: 20, timezone: 'Asia/Tehran' }, 'بازه مجاز ارسال پیامک'],
   ['notification.sms.renewal_max_per_24h', 1, 'حداکثر پیامک تمدید در ۲۴ ساعت'],
   ['seller.proposal_fee_policy', { version: '1.2', rate: '0.001', minToman: 100_000, maxToman: 5_000_000, refundFractionIfEligible: '2/3' }, 'سیاست هزینه ارسال پیشنهاد فروشنده'],
-  ['seller.daily_proposal_limit', { base: 2, shortageOverrideMax: 6 }, 'محدودیت روزانه پیشنهاد موفق'],
+  ['seller.daily_proposal_limit', { base: 2, shortageOverrideMax: 6 }, 'مرجع قدیمی؛ سقف‌های فعال از بخش پلن‌های اشتراک مدیریت می‌شوند'],
   ['seller.shortage_override', { enabled: false, expiresAt: null, reason: '' }, 'افزایش موقت سقف روزانه پیشنهاد در کمبود عرضه'],
 ] as const;
 
@@ -436,10 +436,11 @@ async function main(): Promise<void> {
   });
 
   for (const [key, value, descriptionFa] of systemSettings) {
+    const isEditable = key !== 'seller.daily_proposal_limit';
     await prisma.systemSetting.upsert({
       where: { key },
-      create: { key, value, descriptionFa },
-      update: isProduction ? { descriptionFa } : { value, descriptionFa },
+      create: { key, value, descriptionFa, isEditable },
+      update: isProduction ? { descriptionFa, isEditable } : { value, descriptionFa, isEditable },
     });
   }
 
