@@ -79,6 +79,14 @@ Image وب به‌صورت پیش‌فرض API را از مسیر هم‌دام�
 powershell -ExecutionPolicy Bypass -File .\scripts\deploy-release.ps1 -VerifiedBackupPath .\backups\vazano-postgres-YYYYMMDD-HHMMSS.dump
 ```
 
+برای بازگرداندن نسخه برنامه، فایل تنظیمات نسخه سالم قبلی را با نامی مانند `.env.production.previous` نگه دارید و دستور زیر را اجرا کنید. این فرایند فقط Imageهای قبلی API، وب و Gateway را فعال می‌کند، Migration معکوس اجرا نمی‌کند و پس از بازگشت کنترل سلامت و داده‌های مرجع را تکرار می‌کند:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\rollback-release.ps1 -PreviousEnvironmentFile .env.production.previous
+```
+
+بازگشت برنامه زمانی ایمن است که Migrationهای انتشار جدید با روش Expand–Migrate–Contract سازگار با نسخه قبلی طراحی شده باشند. برای بازگرداندن داده‌ها از Backup باید Runbook رخداد و تأیید مسئول فنی/داده جداگانه اجرا شود؛ اسکریپت بالا هرگز پایگاه‌داده را عقب نمی‌برد.
+
 ## کنترل کیفیت
 
 ```bash
