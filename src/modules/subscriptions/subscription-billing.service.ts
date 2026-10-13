@@ -4,10 +4,11 @@ import { Prisma, type SubscriptionPlan } from '@prisma/client';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { PaymentsService } from '../payments/payments.service';
 import { PrismaService } from '../../shared/prisma/prisma.service';
-import { addBillingPeriod, buildRenewalReminderSchedule, buildTrialReminderSchedule, SUBSCRIPTION_GRACE_PERIOD_DAYS } from './subscription-policies';
+import { addBillingPeriod, buildRenewalReminderSchedule, buildTrialReminderSchedule } from './subscription-policies';
 import { buildPaymentReceiptSnapshot } from './payment-receipt-policy';
 import { buildBillingInvoiceNumber } from './billing-invoice-policy';
 import { calculateSubscriptionDiscount } from './subscription-discount-policy';
+import { SubscriptionPolicySettingsService } from './subscription-policy-settings.service';
 
 @Injectable()
 export class SubscriptionBillingService {
@@ -15,6 +16,7 @@ export class SubscriptionBillingService {
     private readonly prisma: PrismaService,
     private readonly payments: PaymentsService,
     private readonly config: ConfigService,
+    private readonly policySettings: SubscriptionPolicySettingsService,
   ) {}
 
   async previewDiscount(user: AuthenticatedUser, organizationId: string, planId: string, discountCode: string) {
@@ -27,6 +29,7 @@ export class SubscriptionBillingService {
     ]);
     if (!organization || organization.kind !== 'SUPPLIER' || organization.status !== 'ACTIVE') throw new NotFoundException('سازمان فروشنده فعال پیدا نشد.');
     if (!plan || plan.isTrial) throw new NotFoundException('پلن پولی معتبر پیدا نشد.');
+    await this.assertCustomerPurchasablePlan(plan.code);
     const discount = await this.prisma.$transaction((tx) => this.resolveDiscount(tx, discountCode.trim().toUpperCase(), organizationId, plan));
     return {
       code: discount.code,
@@ -47,6 +50,7 @@ export class SubscriptionBillingService {
     if (!organization || organization.kind !== 'SUPPLIER') throw new NotFoundException('سازمان فروشنده پیدا نشد.');
     if (organization.status !== 'ACTIVE') throw new ConflictException('خرید اشتراک پس از تأیید فروشنده فعال می‌شود.');
     if (!plan) throw new NotFoundException('پلن اشتراک معتبر نیست.');
+    await this.assertCustomerPurchasablePlan(plan.code);
     const normalizedDiscountCode = discountCode?.trim().toUpperCase() || null;
     const [existingIntent, existingTrialRequest] = await Promise.all([
       this.prisma.paymentIntent.findUnique({ where: { idempotencyKey } }),
@@ -171,6 +175,8 @@ export class SubscriptionBillingService {
       return verification;
     }
 
+    const policy = await this.policySettings.get();
+
     return this.prisma.$transaction(async (tx) => {
       const claim = await tx.paymentIntent.updateMany({
         where: { id: intent.id, status: { not: 'SUCCEEDED' } },
@@ -190,8 +196,8 @@ export class SubscriptionBillingService {
       });
       const startsAt = current?.expiresAt ?? paidAt;
       const expiresAt = addBillingPeriod(startsAt, subscription.plan.durationIso);
-      const graceEndsAt = new Date(expiresAt.getTime() + SUBSCRIPTION_GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000);
-      const schedule = buildRenewalReminderSchedule(expiresAt);
+      const graceEndsAt = new Date(expiresAt.getTime() + policy.gracePeriodDays * 24 * 60 * 60 * 1000);
+      const schedule = buildRenewalReminderSchedule(expiresAt, policy.renewalWarningOffsetsDays);
       const receipt = buildPaymentReceiptSnapshot(intent.id, intent.amountRial, paidAt);
 
       const wallet = await tx.creditWallet.upsert({
@@ -315,7 +321,15 @@ export class SubscriptionBillingService {
     }
   }
 
+  private async assertCustomerPurchasablePlan(planCode: string): Promise<void> {
+    const founding = (await this.policySettings.get()).foundingProgram;
+    if (planCode === founding.planCode && (!founding.enabled || founding.managedSalesOnly)) {
+      throw new NotFoundException('این پلن فقط از طریق تیم فروش وازانو فعال می‌شود.');
+    }
+  }
+
   private async activateTrial(user: AuthenticatedUser, organizationId: string, plan: SubscriptionPlan, idempotencyKey: string) {
+    const policy = await this.policySettings.get();
     return this.prisma.$transaction(async (tx) => {
       const existingRequest = await tx.subscription.findUnique({ where: { trialActivationKey: idempotencyKey } });
       if (existingRequest) {
@@ -378,7 +392,7 @@ export class SubscriptionBillingService {
         data: { status: 'CANCELLED', cancelledAt: activatedAt },
       });
       await tx.subscriptionReminder.createMany({
-        data: buildTrialReminderSchedule(expiresAt).flatMap(({ offsetDays, scheduledAt }) =>
+        data: buildTrialReminderSchedule(expiresAt, policy.trialWarningOffsetsDays).flatMap(({ offsetDays, scheduledAt }) =>
           (['SMS', 'IN_APP'] as const).map((channel) => ({ subscriptionId: subscription.id, offsetDays, scheduledAt, channel }))),
         skipDuplicates: true,
       });

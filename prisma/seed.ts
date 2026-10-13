@@ -104,6 +104,7 @@ const systemSettings = [
   ['subscription.grace_period_days', 7, 'مهلت تنفس پس از پایان اشتراک'],
   ['subscription.renewal_warning_offsets_days', [-14, -7, -3, 0, 7], 'روزهای ارسال اخطار تمدید نسبت به انقضا'],
   ['subscription.trial_warning_offsets_days', [-7, -3, -1, 0], 'روزهای ارسال اخطار پایان دوره آزمایشی'],
+  ['subscription.founding_program', { enabled: true, planCode: 'SELLER_FOUNDING_P6M_V1', capacity: 20, renewalDiscountBps: 2000, minimumValidLeads: 10, guaranteeExtensionDays: 90, managedSalesOnly: true }, 'قواعد برنامه غیرعمومی کارخانه‌های مؤسس؛ قیمت و مدت از بخش پلن‌های اشتراک مدیریت می‌شود'],
   ['notification.sms.send_window_local', { startHour: 9, endHour: 20, timezone: 'Asia/Tehran' }, 'بازه مجاز ارسال پیامک'],
   ['notification.sms.renewal_max_per_24h', 1, 'حداکثر پیامک تمدید در ۲۴ ساعت'],
   ['seller.proposal_fee_policy', { version: '1.2', rate: '0.001', minToman: 100_000, maxToman: 5_000_000, refundFractionIfEligible: '2/3' }, 'سیاست هزینه ارسال پیشنهاد فروشنده'],
@@ -393,16 +394,25 @@ async function main(): Promise<void> {
   }
 
   const plans = [
-    { code: 'SELLER_P1M_V1', nameFa: 'اشتراک فروشنده یک‌ماهه', billingCycle: 'P1M' as const, durationIso: 'P1M', priceRial: 50_000_000n, grantCredits: 5_000_000n },
-    { code: 'SELLER_P3M_V1', nameFa: 'اشتراک فروشنده سه‌ماهه', billingCycle: 'P3M' as const, durationIso: 'P3M', priceRial: 145_500_000n, grantCredits: 14_550_000n },
-    { code: 'SELLER_P6M_V1', nameFa: 'اشتراک فروشنده شش‌ماهه', billingCycle: 'P6M' as const, durationIso: 'P6M', priceRial: 279_000_000n, grantCredits: 27_900_000n },
-    { code: 'SELLER_P1Y_V1', nameFa: 'اشتراک فروشنده سالانه', billingCycle: 'P1Y' as const, durationIso: 'P1Y', priceRial: 480_000_000n, grantCredits: 48_000_000n },
+    { code: 'SELLER_TRIAL_14D_V1', nameFa: 'دوره آزمایشی ۱۴روزه', descriptionFa: 'یک‌بار برای هر سازمان؛ روزانه یک و در مجموع حداکثر دو پیشنهاد', billingCycle: 'CUSTOM' as const, durationIso: 'P14D', priceRial: 0n, grantCredits: 10_000_000n, dailyProposalLimit: 1, maxProposalLimit: 2, isTrial: true, isPublic: true },
+    { code: 'SELLER_P1M_V1', nameFa: 'اشتراک فروشنده یک‌ماهه', descriptionFa: 'دسترسی به استعلام‌های مرتبط و ارسال روزانه دو پیشنهاد', billingCycle: 'P1M' as const, durationIso: 'P1M', priceRial: 50_000_000n, grantCredits: 5_000_000n, dailyProposalLimit: 2, maxProposalLimit: 6, isTrial: false, isPublic: true },
+    { code: 'SELLER_P3M_V1', nameFa: 'اشتراک فروشنده سه‌ماهه', descriptionFa: 'اشتراک سه‌ماهه با قیمت مصوب اولیه MVP', billingCycle: 'P3M' as const, durationIso: 'P3M', priceRial: 145_500_000n, grantCredits: 14_550_000n, dailyProposalLimit: 2, maxProposalLimit: 6, isTrial: false, isPublic: true },
+    { code: 'SELLER_P6M_V1', nameFa: 'اشتراک فروشنده شش‌ماهه', descriptionFa: 'اشتراک شش‌ماهه با قیمت مصوب اولیه MVP', billingCycle: 'P6M' as const, durationIso: 'P6M', priceRial: 279_000_000n, grantCredits: 27_900_000n, dailyProposalLimit: 2, maxProposalLimit: 6, isTrial: false, isPublic: true },
+    { code: 'SELLER_P1Y_V1', nameFa: 'اشتراک فروشنده سالانه', descriptionFa: 'اشتراک سالانه با قیمت مصوب اولیه MVP', billingCycle: 'P1Y' as const, durationIso: 'P1Y', priceRial: 480_000_000n, grantCredits: 48_000_000n, dailyProposalLimit: 2, maxProposalLimit: 6, isTrial: false, isPublic: true },
+    { code: 'SELLER_FOUNDING_P6M_V1', nameFa: 'کارخانه‌های مؤسس شش‌ماهه', descriptionFa: 'پلن غیرعمومی با ظرفیت ۲۰ کارخانه و مدیریت دستی تیم فروش', billingCycle: 'P6M' as const, durationIso: 'P6M', priceRial: 300_000_000n, grantCredits: 30_000_000n, dailyProposalLimit: 2, maxProposalLimit: 6, isTrial: false, isPublic: false },
   ];
   for (const plan of plans) {
+    const entitlements = {
+      canViewMatchedRfqs: true,
+      dailyProposalLimit: plan.dailyProposalLimit,
+      shortageOverrideMax: plan.maxProposalLimit,
+      ...(plan.isTrial ? { totalProposalLimit: 2 } : {}),
+      ...(plan.code === 'SELLER_FOUNDING_P6M_V1' ? { managedSalesOnly: true } : {}),
+    };
     await prisma.subscriptionPlan.upsert({
       where: { code: plan.code },
-      create: { ...plan, taxIncluded: false, isActive: !isProduction, isPublic: !isProduction, entitlements: { canViewMatchedRfqs: true, dailyProposalLimit: 2, shortageOverrideMax: 6 } },
-      update: isProduction ? {} : { ...plan, taxIncluded: false, isActive: true, isPublic: true, entitlements: { canViewMatchedRfqs: true, dailyProposalLimit: 2, shortageOverrideMax: 6 } },
+      create: { ...plan, taxIncluded: false, isActive: !isProduction, isPublic: !isProduction && plan.isPublic, entitlements },
+      update: isProduction ? {} : { ...plan, taxIncluded: false, isActive: true, entitlements },
     });
   }
   const demoDiscountActive = !isProduction;

@@ -7,12 +7,13 @@ import { resolvePaymentReconciliationStatus } from '../payments/payment-reconcil
 import { PaymentsService } from '../payments/payments.service';
 import { CreateSubscriptionPlanDto } from './create-subscription-plan.dto';
 import { CreateManualSubscriptionRenewalDto } from './create-manual-subscription-renewal.dto';
-import { addBillingPeriod, buildRenewalReminderSchedule, SUBSCRIPTION_GRACE_PERIOD_DAYS } from './subscription-policies';
+import { addBillingPeriod, buildRenewalReminderSchedule } from './subscription-policies';
 import { ResolvePaymentReconciliationDto } from './resolve-payment-reconciliation.dto';
 import { UpdateSubscriptionPlanDto } from './update-subscription-plan.dto';
 import { buildBillingInvoiceNumber } from './billing-invoice-policy';
 import { CreateSubscriptionDiscountDto } from './create-subscription-discount.dto';
 import { UpdateSubscriptionDiscountStatusDto } from './update-subscription-discount-status.dto';
+import { SubscriptionPolicySettingsService, type SubscriptionPolicySettings } from './subscription-policy-settings.service';
 
 @Injectable()
 export class AdminBillingService {
@@ -20,10 +21,12 @@ export class AdminBillingService {
     private readonly prisma: PrismaService,
     private readonly payments: PaymentsService,
     private readonly config: ConfigService,
+    private readonly policySettings: SubscriptionPolicySettingsService,
   ) {}
 
   async overview(user: AuthenticatedUser) {
     this.requireAnyPermission(user, ['billing.read', 'billing.manage']);
+    const policy = await this.policySettings.get();
     const [plans, subscriptions, payments, receipts, statusGroups, reminderGroups, reminders, suppliers, manualRenewals, invoices, discountCodes] = await Promise.all([
       this.prisma.subscriptionPlan.findMany({ orderBy: [{ isActive: 'desc' }, { priceRial: 'asc' }] }),
       this.prisma.subscription.findMany({
@@ -99,7 +102,7 @@ export class AdminBillingService {
     return {
       summary: Object.fromEntries(statusGroups.map((item) => [item.status, item._count._all])),
       reminderSummary: Object.fromEntries(reminderGroups.map((item) => [`${item.channel}:${item.status}`, item._count._all])),
-      reminderDelivery: this.reminderDeliveryReadiness(),
+      reminderDelivery: this.reminderDeliveryReadiness(policy),
       plans,
       subscriptions,
       payments: payments.map((payment) => ({ ...payment, payerOrganization: payment.payerOrganizationId ? payerMap.get(payment.payerOrganizationId) ?? null : null })),
@@ -189,6 +192,7 @@ export class AdminBillingService {
     this.requireAnyPermission(user, ['billing.manage']);
     const trackingNumber = input.trackingNumber.trim().toUpperCase();
     const note = input.note.trim();
+    const policy = await this.policySettings.get();
     const amountRial = BigInt(input.amountRial);
     const paidAt = new Date(input.paidAt);
     if (amountRial <= 0n) throw new BadRequestException('مبلغ پرداخت دستی باید بیشتر از صفر باشد.');
@@ -204,6 +208,7 @@ export class AdminBillingService {
       throw new NotFoundException('سازمان فروشنده فعال پیدا نشد.');
     }
     if (!plan || !plan.isActive || plan.isTrial) throw new NotFoundException('پلن پولی فعال پیدا نشد.');
+    await this.assertFoundingProgramCapacity(organization.id, plan.id, plan.code, policy);
 
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -214,7 +219,7 @@ export class AdminBillingService {
         });
         const startsAt = current?.expiresAt ?? activatedAt;
         const expiresAt = addBillingPeriod(startsAt, plan.durationIso);
-        const graceEndsAt = new Date(expiresAt.getTime() + SUBSCRIPTION_GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000);
+        const graceEndsAt = new Date(expiresAt.getTime() + policy.gracePeriodDays * 24 * 60 * 60 * 1000);
         const subscription = await tx.subscription.create({ data: {
           organizationId: organization.id,
           planId: plan.id,
@@ -270,7 +275,7 @@ export class AdminBillingService {
           data: { status: 'CANCELLED', cancelledAt: activatedAt },
         });
         await tx.subscriptionReminder.createMany({
-          data: buildRenewalReminderSchedule(expiresAt).flatMap(({ offsetDays, scheduledAt }) =>
+          data: buildRenewalReminderSchedule(expiresAt, policy.renewalWarningOffsetsDays).flatMap(({ offsetDays, scheduledAt }) =>
             (['SMS', 'IN_APP'] as const).map((channel) => ({ subscriptionId: subscription.id, offsetDays, scheduledAt, channel }))),
           skipDuplicates: true,
         });
@@ -519,12 +524,37 @@ export class AdminBillingService {
   }
 
   private normalizeEntitlements(value: Record<string, unknown>): Prisma.InputJsonObject {
+    const totalProposalLimit = value.totalProposalLimit;
+    if (totalProposalLimit !== undefined && totalProposalLimit !== null
+      && (!Number.isInteger(totalProposalLimit) || (totalProposalLimit as number) < 0 || (totalProposalLimit as number) > 100_000)) {
+      throw new BadRequestException('سقف کل پیشنهادهای پلن باید عددی صحیح بین صفر تا ۱۰۰٬۰۰۰ باشد.');
+    }
     const serialized = JSON.stringify(value);
     if (serialized.length > 5_000) throw new BadRequestException('تنظیمات امکانات پلن بیش از حد بزرگ است.');
     return JSON.parse(serialized) as Prisma.InputJsonObject;
   }
 
-  private reminderDeliveryReadiness() {
+  private async assertFoundingProgramCapacity(
+    organizationId: string,
+    planId: string,
+    planCode: string,
+    policy: SubscriptionPolicySettings,
+  ): Promise<void> {
+    const founding = policy.foundingProgram;
+    if (planCode !== founding.planCode) return;
+    if (!founding.enabled) throw new ConflictException('برنامه کارخانه‌های مؤسس در حال حاضر غیرفعال است.');
+    const enrolledOrganizations = await this.prisma.subscription.findMany({
+      where: { planId },
+      distinct: ['organizationId'],
+      select: { organizationId: true },
+    });
+    if (!enrolledOrganizations.some((item) => item.organizationId === organizationId)
+      && enrolledOrganizations.length >= founding.capacity) {
+      throw new ConflictException('ظرفیت برنامه کارخانه‌های مؤسس تکمیل شده است.');
+    }
+  }
+
+  private reminderDeliveryReadiness(policy: SubscriptionPolicySettings) {
     const templateKeys = [
       'SMSIR_SUBSCRIPTION_RENEWAL_14_TEMPLATE_ID',
       'SMSIR_SUBSCRIPTION_RENEWAL_7_TEMPLATE_ID',
@@ -547,7 +577,7 @@ export class AdminBillingService {
       provider: provider === 'smsir' ? 'SMSIR' : 'DEBUG',
       templatesConfigured,
       liveReady: enabled && provider === 'smsir' && templatesConfigured,
-      deliveryWindow: '09:00-20:00 Asia/Tehran',
+      deliveryWindow: `${String(policy.sms.startHour).padStart(2, '0')}:00-${String(policy.sms.endHour).padStart(2, '0')}:00 ${policy.sms.timezone}`,
     };
   }
 

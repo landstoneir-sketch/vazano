@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { PrismaService } from '../../shared/prisma/prisma.service';
 import { CreateQuotationDto } from './create-quotation.dto';
-import { calculateProposalFeeCredits, calculateQuotationTotals, PROPOSAL_FEE_POLICY_VERSION, startOfTehranDay } from './quotation-policies';
+import { calculateProposalFeeCredits, calculateQuotationTotals, PROPOSAL_FEE_POLICY_VERSION, startOfTehranDay, totalProposalLimitFromEntitlements } from './quotation-policies';
 import { calculateQualityControlFeeRial } from '../rfqs/rfq-policies';
 
 const categoryDetailsInclude = {
@@ -123,6 +123,19 @@ export class QuotationsService {
         where: { supplierOrganizationId: quotation.supplierOrganizationId, status: { in: ['SUBMITTED', 'ACCEPTED', 'REJECTED', 'REVISED'] }, submittedAt: { gte: startOfTehranDay(now) } },
       });
       if (submittedToday >= subscription.plan.dailyProposalLimit) throw new ConflictException('سقف روزانه ارسال پیشنهاد این پلن تکمیل شده است.');
+      const totalProposalLimit = totalProposalLimitFromEntitlements(subscription.plan.entitlements);
+      if (totalProposalLimit !== null) {
+        const submittedDuringSubscription = await tx.quotation.count({
+          where: {
+            supplierOrganizationId: quotation.supplierOrganizationId,
+            status: { in: ['SUBMITTED', 'ACCEPTED', 'REJECTED', 'REVISED'] },
+            submittedAt: { gte: subscription.startsAt! },
+          },
+        });
+        if (submittedDuringSubscription >= totalProposalLimit) {
+          throw new ConflictException('سقف کل ارسال پیشنهاد این پلن تکمیل شده است.');
+        }
+      }
       const feeCredits = calculateProposalFeeCredits(quotation.finalAmountRial);
       const wallet = await tx.creditWallet.findUnique({ where: { organizationId: quotation.supplierOrganizationId } });
       if (!wallet || wallet.cachedBalanceCredits < feeCredits) throw new ConflictException('اعتبار حساب برای ارسال این پیشنهاد کافی نیست.');

@@ -50,6 +50,12 @@ export function calculateProposalFeeCredits(finalAmountRial: bigint): bigint {
   return variableFee;
 }
 
+export function totalProposalLimitFromEntitlements(entitlements: unknown): number | null {
+  if (typeof entitlements !== 'object' || entitlements === null || Array.isArray(entitlements)) return null;
+  const value = (entitlements as Record<string, unknown>).totalProposalLimit;
+  return Number.isInteger(value) && (value as number) > 0 ? value as number : null;
+}
+
 export function startOfTehranDay(now: Date): Date {
   const tehranOffsetMs = 210 * 60 * 1000;
   const local = new Date(now.getTime() + tehranOffsetMs);
