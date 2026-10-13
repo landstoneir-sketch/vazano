@@ -8,11 +8,11 @@ const permissions = [
   'category.read', 'category.manage', 'rfq.create', 'rfq.create_on_behalf', 'rfq.read', 'rfq.review',
   'rfq.manage', 'quotation.create', 'quotation.read', 'quotation.manage', 'subscription.read',
   'subscription.manage', 'billing.read', 'billing.manage', 'payment.manage', 'content.manage',
-  'support.manage', 'quality_control.manage', 'contract.manage', 'report.read', 'audit.read', 'settings.read', 'settings.manage', 'location.read', 'location.manage',
+  'support.manage', 'quality_control.manage', 'contract.manage', 'report.read', 'audit.read', 'role.manage', 'settings.read', 'settings.manage', 'location.read', 'location.manage',
 ];
 const roles: Record<string, string[]> = {
   SUPER_ADMIN: permissions,
-  ADMIN: permissions.filter((key) => !['settings.manage'].includes(key)),
+  ADMIN: permissions.filter((key) => !['role.manage', 'settings.manage'].includes(key)),
   SUPPORT: ['user.read', 'organization.read', 'rfq.read', 'rfq.create_on_behalf', 'quotation.read', 'support.manage', 'quality_control.manage', 'contract.manage'],
   FINANCE: ['organization.read', 'subscription.read', 'subscription.manage', 'billing.read', 'billing.manage', 'payment.manage', 'report.read'],
   CONTENT_MANAGER: ['category.read', 'category.manage', 'content.manage', 'location.read', 'location.manage'],
@@ -21,6 +21,11 @@ const roles: Record<string, string[]> = {
   SUPPLIER_OWNER: ['organization.read', 'organization.manage', 'category.read', 'rfq.read', 'quotation.create', 'quotation.read', 'subscription.read', 'billing.read'],
   SUPPLIER_MANAGER: ['organization.read', 'category.read', 'rfq.read', 'quotation.create', 'quotation.read', 'subscription.read'],
   SUPPLIER_SALES: ['organization.read', 'category.read', 'rfq.read', 'quotation.create', 'quotation.read'],
+};
+const roleNamesFa: Record<string, string> = {
+  SUPER_ADMIN: 'مدیر ارشد', ADMIN: 'مدیر سامانه', SUPPORT: 'پشتیبانی', FINANCE: 'مالی', CONTENT_MANAGER: 'مدیر محتوا',
+  BUYER_OWNER: 'مالک سازمان خریدار', BUYER_MEMBER: 'عضو سازمان خریدار', SUPPLIER_OWNER: 'مالک سازمان فروشنده',
+  SUPPLIER_MANAGER: 'مدیر فروش', SUPPLIER_SALES: 'کارشناس فروش',
 };
 
 const iranProvinces = [
@@ -281,7 +286,7 @@ async function main(): Promise<void> {
     await prisma.permission.upsert({ where: { key }, create: { key, description: key }, update: {} });
   }
   for (const [key, rolePermissions] of Object.entries(roles)) {
-    const role = await prisma.role.upsert({ where: { key }, create: { key, nameFa: key }, update: {} });
+    const role = await prisma.role.upsert({ where: { key }, create: { key, nameFa: roleNamesFa[key] ?? key }, update: { nameFa: roleNamesFa[key] ?? key } });
     const records = await prisma.permission.findMany({ where: { key: { in: rolePermissions } }, select: { id: true } });
     await prisma.rolePermission.createMany({ data: records.map(({ id }) => ({ roleId: role.id, permissionId: id })), skipDuplicates: true });
   }
