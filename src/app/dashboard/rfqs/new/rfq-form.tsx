@@ -22,9 +22,20 @@ type ProductAttribute = {
   isRequired: boolean;
 };
 type SpecificationValue = string | boolean | string[];
-type CreatedRfq = { id: string; code: string; commitmentStatus: string; commitmentAmountRial: string | null; operationalStatus: string };
+type CreatedRfq = { id: string; code: string; lifecycleState: string; commitmentStatus: string; commitmentAmountRial: string | null; operationalStatus: string };
 type Attachment = { id: string; originalName: string; status: string; sizeBytes: number };
 type UploadIntent = { attachment: Attachment; upload: { url: string; method: 'PUT'; headers: Record<string, string> } };
+type RfqPolicy = {
+  marketCountry: string;
+  marketCoverageMode: 'NATIONWIDE' | 'SELECTED_PROVINCES';
+  displayPricesTaxInclusive: boolean;
+  legalRole: 'INFORMATION_INTERMEDIARY' | 'MARKETPLACE_OPERATOR' | 'CONTRACTING_AGENT';
+  qualityControlEnabled: boolean;
+  qualityControlFeeBps: number;
+  operatorEntryEnabled: boolean;
+  pilotManualReview: boolean;
+  buyerCommitmentAmountRial: string;
+};
 
 export function NewRfqForm({ operatorMode = false }: { operatorMode?: boolean }) {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
@@ -52,6 +63,7 @@ export function NewRfqForm({ operatorMode = false }: { operatorMode?: boolean })
   const [busy, setBusy] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [policy, setPolicy] = useState<RfqPolicy | null>(null);
 
   useEffect(() => {
     void Promise.all([
@@ -60,9 +72,11 @@ export function NewRfqForm({ operatorMode = false }: { operatorMode?: boolean })
       apiRequest<Category[]>('/catalog/categories'),
       apiRequest<Unit[]>('/catalog/units'),
       apiRequest<Province[]>('/locations/provinces'),
-    ]).then(([orgData, industryData, categoryData, unitData, provinceData]) => {
+      apiRequest<RfqPolicy>('/rfqs/active-policy'),
+    ]).then(([orgData, industryData, categoryData, unitData, provinceData, policyData]) => {
       const buyers = operatorMode ? orgData : orgData.filter((item) => item.kind === 'BUYER');
       setOrganizations(buyers); setIndustries(industryData); setCategories(categoryData); setUnits(unitData); setProvinces(provinceData);
+      setPolicy(policyData);
       setOrganizationId(buyers[0]?.id ?? ''); setIndustryId(industryData[0]?.id ?? ''); setUnitId(unitData[0]?.id ?? '');
       setBuyerContactUserId(buyers[0]?.contacts?.[0]?.id ?? '');
     }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'دریافت اطلاعات اولیه انجام نشد.'));
@@ -157,12 +171,16 @@ export function NewRfqForm({ operatorMode = false }: { operatorMode?: boolean })
     ? <div className="card"><p>حساب خریدار فعال و دارای فرد تماس پیدا نشد.</p></div>
     : <div className="card"><p>برای ثبت استعلام ابتدا حساب خریدار ایجاد کنید.</p><Link className="button button-primary" href="/dashboard/organization">ایجاد حساب خریدار</Link></div>;
 
+  if (operatorMode && policy && !policy.operatorEntryEnabled) {
+    return <div className="card"><p>ثبت استعلام توسط اپراتور از تنظیمات سامانه غیرفعال شده است.</p></div>;
+  }
+
   const selectedOrganization = organizations.find((item) => item.id === organizationId);
 
   return <form className="card form-grid" onSubmit={submit}>
     {error && <div className="message message-error">{error}</div>}
-    {created && <div className="message message-success"><strong>{created.operationalStatus === 'UNDER_REVIEW' ? 'استعلام در صف بررسی است.' : 'پیش‌نویس ثبت شد.'}</strong><br />کد استعلام: {created.code}<br />وضعیت تعهد: {created.commitmentStatus}{created.operationalStatus !== 'UNDER_REVIEW' && <><br /><button type="button" className="button button-secondary" onClick={() => void submitForReview()} disabled={busy}>ارسال برای بررسی وازانو</button></>}</div>}
-    {created && created.operationalStatus !== 'UNDER_REVIEW' && <fieldset className="fieldset full"><legend>عکس، نقشه، متره یا مشخصات فنی</legend>
+    {created && <div className="message message-success"><strong>{created.lifecycleState === 'DRAFT' ? 'پیش‌نویس ثبت شد.' : created.operationalStatus === 'UNDER_REVIEW' ? 'استعلام در صف بررسی است.' : created.operationalStatus === 'WAITING_COMMITMENT' ? 'استعلام تأیید شد و منتظر تکمیل تعهد خریدار است.' : 'استعلام تأیید شد و آماده انتشار است.'}</strong><br />کد استعلام: {created.code}<br />وضعیت تعهد: {created.commitmentStatus}{created.lifecycleState === 'DRAFT' && <><br /><button type="button" className="button button-secondary" onClick={() => void submitForReview()} disabled={busy}>{policy?.pilotManualReview === false ? 'ثبت نهایی استعلام' : 'ارسال برای بررسی وازانو'}</button></>}{created.lifecycleState !== 'DRAFT' && <><br /><Link className="button button-secondary" href={`/dashboard/rfqs/${created.id}`}>مشاهده جزئیات و ادامه فرایند</Link></>}</div>}
+    {created && created.lifecycleState === 'DRAFT' && <fieldset className="fieldset full"><legend>عکس، نقشه، متره یا مشخصات فنی</legend>
       <p className="muted">PDF، تصویر، Word یا Excel تا حداکثر ۲۰ مگابایت؛ فایل اجرایی و SVG پذیرفته نمی‌شود.</p>
       <div className="attachment-upload-row">
         <input aria-label="انتخاب فایل پیوست" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.xls,.xlsx,.docx" onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)} />
@@ -196,10 +214,18 @@ export function NewRfqForm({ operatorMode = false }: { operatorMode?: boolean })
     <label className="form-field"><span>استان تحویل</span><select value={provinceId} onChange={(event) => { setProvinceId(event.target.value); setCities([]); setCityId(''); }} required><option value="">انتخاب استان</option>{provinces.map((item) => <option value={item.id} key={item.id}>{item.nameFa}</option>)}</select></label>
     <label className="form-field"><span>شهر تحویل (اختیاری)</span><select value={cityId} onChange={(event) => setCityId(event.target.value)} disabled={!provinceId}><option value="">{provinceId ? 'انتخاب شهر' : 'ابتدا استان را انتخاب کنید'}</option>{cities.map((item) => <option value={item.id} key={item.id}>{item.nameFa}{item.isProvinceCapital ? ' (مرکز استان)' : ''}</option>)}</select></label>
     <label className="check-field"><input type="checkbox" checked={installationRequired} onChange={(event) => setInstallationRequired(event.target.checked)} /><span>نیاز به نصب دارم</span></label>
-    <label className="check-field"><input type="checkbox" checked={qualityControlRequested} onChange={(event) => setQualityControlRequested(event.target.checked)} /><span>کنترل کیفیت توسط وازانو (کارمزد ۳٪ مبلغ خرید)</span></label>
-    <div className="message">وازانو واسط اطلاعات است. مبلغ کالا، حمل، نصب و مالیات مستقیماً میان خریدار و فروشنده تعیین می‌شود.</div>
-    <button className="button button-primary" disabled={busy || !organizationId || !provinceId || (operatorMode && !buyerContactUserId)}>{busy ? 'در حال ثبت…' : operatorMode ? 'ثبت پیش‌نویس از طرف خریدار' : 'ذخیره پیش‌نویس استعلام'}</button>
+    {policy?.qualityControlEnabled !== false
+      ? <label className="check-field"><input type="checkbox" checked={qualityControlRequested} onChange={(event) => setQualityControlRequested(event.target.checked)} /><span>کنترل کیفیت توسط وازانو (کارمزد {((policy?.qualityControlFeeBps ?? 300) / 100).toLocaleString('fa-IR')}٪ مبلغ خرید)</span></label>
+      : <div className="message">خدمت کنترل کیفیت در حال حاضر غیرفعال است.</div>}
+    <div className="message">{legalRoleText(policy?.legalRole)} مبلغ کالا، حمل و نصب مستقیماً میان خریدار و فروشنده تعیین می‌شود. قیمت‌ها {policy?.displayPricesTaxInclusive ? 'با مالیات' : 'بدون مالیات'} نمایش داده می‌شوند.</div>
+    <button className="button button-primary" disabled={busy || Boolean(created) || !organizationId || !provinceId || (operatorMode && !buyerContactUserId)}>{busy ? 'در حال ثبت…' : operatorMode ? 'ثبت پیش‌نویس از طرف خریدار' : 'ذخیره پیش‌نویس استعلام'}</button>
   </form>;
+}
+
+function legalRoleText(role: RfqPolicy['legalRole'] | undefined): string {
+  if (role === 'CONTRACTING_AGENT') return 'وازانو طبق درخواست خریدار می‌تواند نقش نماینده قراردادی داشته باشد.';
+  if (role === 'MARKETPLACE_OPERATOR') return 'وازانو بهره‌بردار بازارگاه است.';
+  return 'وازانو واسط اطلاعات است.';
 }
 
 function attachmentStatusLabel(status: string): string {

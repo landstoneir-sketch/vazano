@@ -7,7 +7,7 @@ import { apiRequest } from '../../../lib/api';
 import { formatProductSpecifications, type ProductAttributeBinding, type ProductSpecifications } from '../../../lib/product-specifications';
 
 type RfqItem = { id: string; title: string; quantity: string; specifications: ProductSpecifications; category: { nameFa: string; attributeBindings: ProductAttributeBinding[] }; unit: { symbolFa: string } };
-type ReviewRfq = { id: string; code: string; title: string; source: string; approvalStatus: string; operationalStatus: string; deliveryProvince: string | null; deliveryCity: string | null; qualityControlRequested: boolean; commitmentStatus: string; buyerOrganization: { displayName: string }; items: RfqItem[] };
+type ReviewRfq = { id: string; code: string; title: string; source: string; approvalStatus: string; operationalStatus: string; deliveryProvince: string | null; deliveryCity: string | null; qualityControlRequested: boolean; qualityControlFeeBps: number | null; commitmentStatus: string; buyerOrganization: { displayName: string }; items: RfqItem[] };
 
 export function ReviewQueue() {
   const [items, setItems] = useState<ReviewRfq[]>([]);
@@ -57,7 +57,7 @@ export function ReviewQueue() {
         const details = formatProductSpecifications(item.specifications, item.category.attributeBindings);
         return <li key={item.id}>{item.category.nameFa} — {item.title} — {item.quantity} {item.unit.symbolFa}{details.length > 0 && <div className="specification-summary">{details.map((detail) => <span key={detail.code}>{detail.label}: {detail.value}</span>)}</div>}</li>;
       })}</ul>
-      <p>کنترل کیفیت: {rfq.qualityControlRequested ? 'درخواست شده با کارمزد ۳٪' : 'درخواست نشده'} · تعهد خریدار: {rfq.commitmentStatus}</p>
+      <p>کنترل کیفیت: {rfq.qualityControlRequested ? `درخواست شده با کارمزد ${((rfq.qualityControlFeeBps ?? 0) / 100).toLocaleString('fa-IR')}٪` : 'درخواست نشده'} · تعهد خریدار: {rfq.commitmentStatus}</p>
       <div className="actions">
         {rfq.approvalStatus === 'PENDING' && <><button className="button button-primary" disabled={busyId === rfq.id} onClick={() => void decide(rfq.id, 'APPROVE')}>تأیید</button><button className="button button-secondary" disabled={busyId === rfq.id} onClick={() => void decide(rfq.id, 'NEEDS_CHANGES')}>بازگشت برای اصلاح</button></>}
         {rfq.approvalStatus === 'APPROVED' && rfq.operationalStatus === 'READY_TO_PUBLISH' && <button className="button button-primary" disabled={busyId === rfq.id} onClick={() => void publish(rfq.id)}>انتشار و توزیع</button>}
