@@ -8,7 +8,7 @@ import { UpdateSystemSettingDto } from './update-system-setting.dto';
 import { evaluateReleaseReadiness } from './release-readiness';
 import { assertValidSubscriptionPolicySetting } from '../subscriptions/subscription-policy-settings.service';
 import { assertValidProposalFeePolicy, assertValidShortageOverrideSetting } from '../quotations/quotation-policies';
-import { assertValidRfqPolicySetting } from '../rfqs/rfq-policy-settings.service';
+import { assertValidRfqPolicySetting, resolveRfqPolicySettings } from '../rfqs/rfq-policy-settings.service';
 
 @Injectable()
 export class AdminConfigService {
@@ -75,6 +75,13 @@ export class AdminConfigService {
     try {
       assertValidSubscriptionPolicySetting(setting.key, input.value);
       assertValidRfqPolicySetting(setting.key, input.value);
+      if (['market.coverage.mode', 'market.coverage.province_codes'].includes(setting.key)) {
+        const coverageRows = await this.prisma.systemSetting.findMany({
+          where: { key: { in: ['market.coverage.mode', 'market.coverage.province_codes'] } },
+          select: { key: true, value: true },
+        });
+        resolveRfqPolicySettings({ ...Object.fromEntries(coverageRows.map((row) => [row.key, row.value])), [setting.key]: input.value });
+      }
       if (setting.key === 'seller.shortage_override') assertValidShortageOverrideSetting(input.value);
       if (setting.key === 'seller.proposal_fee_policy') assertValidProposalFeePolicy(input.value);
     }

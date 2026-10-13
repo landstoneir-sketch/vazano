@@ -93,6 +93,7 @@ const naturalStoneAttributes = [
 const systemSettings = [
   ['market.coverage.country', 'IR', 'کشور بازار اولیه وازانو'],
   ['market.coverage.mode', 'NATIONWIDE', 'پوشش جغرافیایی بازار'],
+  ['market.coverage.province_codes', [], 'استان‌های مجاز در حالت پوشش منتخب'],
   ['pricing.display_tax_inclusive', false, 'نمایش قیمت‌ها بدون مالیات'],
   ['platform.legal_role', 'INFORMATION_INTERMEDIARY', 'نقش حقوقی پایه پلتفرم'],
   ['quality_control.enabled', true, 'فعال بودن خدمت اختیاری کنترل کیفیت'],
