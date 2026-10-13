@@ -6,9 +6,10 @@ import { apiRequest } from '@/lib/api';
 type Receipt = {
   id: string; receiptNumber: string; amountRial: string; taxRial: string; currency: string; paidAt: string; providerReference: string | null;
   organization: { displayName: string; legalName: string; nationalId: string | null };
-  paymentIntent: { provider: string; purpose: string; providerReference: string | null };
+  paymentIntent: { provider: string; purpose: string; providerReference: string | null; referenceType: string; referenceId: string };
   subscription: null | { plan: { code: string; nameFa: string; billingCycle: string } };
   qualityControlRequest: null | { rfq: { code: string; title: string } };
+  rfq?: null | { id: string; code: string; title: string };
 };
 
 function toman(value: string): string {
@@ -29,7 +30,9 @@ export function PaymentReceiptView({ receiptId }: { receiptId: string }) {
 
   if (error) return <div className="message message-error">{error}</div>;
   if (!receipt) return <div className="card">در حال دریافت رسید پرداخت…</div>;
-  const subject = receipt.subscription?.plan.nameFa ?? (receipt.qualityControlRequest ? `خدمت کنترل کیفیت استعلام ${receipt.qualityControlRequest.rfq.code}` : 'خدمت وازانو');
+  const subject = receipt.subscription?.plan.nameFa
+    ?? (receipt.qualityControlRequest ? `خدمت کنترل کیفیت استعلام ${receipt.qualityControlRequest.rfq.code}` : null)
+    ?? (receipt.rfq ? `تعهد خریدار برای استعلام ${receipt.rfq.code}` : 'خدمت وازانو');
 
   return <div className="stack">
     <div className="receipt-actions"><button className="button button-primary" type="button" onClick={() => window.print()}>چاپ یا ذخیره PDF</button></div>
