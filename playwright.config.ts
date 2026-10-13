@@ -1,16 +1,13 @@
 import { defineConfig, devices } from '@playwright/test';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
 function resolveE2eDatabaseUrl(): string {
-  const configured = process.env.DATABASE_URL ?? readFileSync(resolve('apps/api/.env'), 'utf8')
-    .split(/\r?\n/)
-    .find((line) => line.startsWith('DATABASE_URL='))
-    ?.slice('DATABASE_URL='.length)
-    .trim()
-    .replace(/^['"]|['"]$/g, '');
-  if (!configured) throw new Error('DATABASE_URL برای اجرای تست E2E تنظیم نشده است.');
-  return configured.replace('@localhost:', '@127.0.0.1:');
+  const configured = process.env.E2E_DATABASE_URL
+    ?? 'postgresql://vazano:vazano_local_only@127.0.0.1:55432/vazano?schema=public';
+  const parsed = new URL(configured);
+  if (!['127.0.0.1', 'localhost'].includes(parsed.hostname)) {
+    throw new Error('E2E_DATABASE_URL باید به دیتابیس محلی و ایزوله اشاره کند.');
+  }
+  parsed.hostname = '127.0.0.1';
+  return parsed.toString();
 }
 
 const e2eDatabaseUrl = resolveE2eDatabaseUrl();
