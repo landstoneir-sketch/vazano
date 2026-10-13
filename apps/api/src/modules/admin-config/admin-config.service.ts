@@ -18,7 +18,9 @@ export class AdminConfigService {
       this.prisma.subscriptionPlan.count({ where: { isActive: true, isPublic: true, isTrial: false, priceRial: { gt: 0 } } }),
       this.prisma.category.count({ where: { isActive: true, parentId: { not: null } } }),
       this.prisma.province.count({ where: { isActive: true } }),
-      this.prisma.userRole.count({ where: { role: { key: 'SUPER_ADMIN' }, user: { status: 'ACTIVE' } } }),
+      this.prisma.user.count({
+        where: { status: 'ACTIVE', userRoles: { some: { organizationId: null, role: { key: 'SUPER_ADMIN' } } } },
+      }),
     ]);
     const pageStatus = new Map(legalPages.map((page) => [page.slug, page.status]));
     const renewalTemplateKeys = [
