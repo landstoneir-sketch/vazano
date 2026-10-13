@@ -73,7 +73,19 @@ async function cleanupTestData() {
     await prisma.supplierServiceProvince.deleteMany({ where: { supplierProfileId: supplierProfile.id } });
     await prisma.supplierProfile.update({
       where: { id: supplierProfile.id },
-      data: { nationwideCoverage: true, serviceProvinces: [], verificationStatus: 'VERIFIED', verificationReason: null, verifiedAt: new Date() },
+      data: {
+        productionCapacityDescription: 'امکان تأمین سفارش‌های پروژه‌ای در چند نوع سنگ طبیعی و چند مرحله فرآوری',
+        minimumOrderDescription: 'حداقل سفارش براساس نوع سنگ، ابعاد و فرآوری در پیشنهاد قیمت اعلام می‌شود.',
+        leadTimeDescription: 'زمان آماده‌سازی معمول بین ۷ تا ۲۰ روز کاری و وابسته به مشخصات سفارش است.',
+        officialInvoiceAvailable: true,
+        sampleAvailable: true,
+        installationAvailable: false,
+        nationwideCoverage: true,
+        serviceProvinces: [],
+        verificationStatus: 'VERIFIED',
+        verificationReason: null,
+        verifiedAt: new Date(),
+      },
     });
     await prisma.organization.update({ where: { id: SUPPLIER_ORGANIZATION_ID }, data: { status: 'ACTIVE' } });
   }
@@ -140,6 +152,11 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   await page.goto(`/supplier/profile/${SUPPLIER_ORGANIZATION_ID}`);
   await expect(page.getByRole('heading', { name: 'توانمندی و محدوده تأمین' })).toBeVisible();
   await expect(page.getByText('وضعیت تأیید: VERIFIED')).toBeVisible();
+  await page.getByLabel('ظرفیت تولید و تأمین').fill('ظرفیت تأمین ماهانه تا ۵۰۰۰ متر مربع با امکان فرآوری سفارشی');
+  await page.getByLabel('حداقل سفارش').fill('حداقل ۱۰۰ متر مربع');
+  await page.getByLabel('زمان معمول آماده‌سازی').fill('۱۰ تا ۱۵ روز کاری');
+  await page.getByLabel('امکان صدور فاکتور رسمی').check();
+  await page.getByLabel('امکان ارائه نمونه محصول').check();
   await page.getByLabel('امکان تأمین در کل ایران').uncheck();
   await expect(page.getByLabel('امکان تأمین در کل ایران')).not.toBeChecked();
   await page.getByLabel('تهران', { exact: true }).check();
@@ -166,9 +183,17 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   await page.goto('/admin/suppliers');
   const supplierReviewCard = page.locator('article').filter({ hasText: 'سنگ نمونه وازانو' });
   await expect(supplierReviewCard).toContainText('پوشش: تهران');
+  await expect(supplierReviewCard).toContainText('ظرفیت تأمین ماهانه تا ۵۰۰۰ متر مربع');
+  await expect(supplierReviewCard).toContainText('حداقل ۱۰۰ متر مربع');
+  await expect(supplierReviewCard).toContainText('فاکتور رسمی، نمونه محصول');
   await expect(supplierReviewCard).toContainText('مجوز-آزمایشی.pdf');
   await supplierReviewCard.getByRole('button', { name: 'تأیید و فعال‌سازی' }).click();
   await expect(page.getByText('فروشنده تأیید و فعال شد.')).toBeVisible();
+
+  await page.goto(`/suppliers/${SUPPLIER_ORGANIZATION_ID}`);
+  await expect(page.getByText('ظرفیت تأمین ماهانه تا ۵۰۰۰ متر مربع')).toBeVisible();
+  await expect(page.getByText('حداقل سفارش: حداقل ۱۰۰ متر مربع')).toBeVisible();
+  await expect(page.getByText('صدور فاکتور رسمی')).toBeVisible();
 
   await page.goto('/admin/catalog');
   await expect(page.getByRole('heading', { name: 'دسته‌بندی‌ها و ویژگی‌های محصول' })).toBeVisible();
