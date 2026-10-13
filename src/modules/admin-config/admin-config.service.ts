@@ -7,6 +7,7 @@ import { UpdateNotificationTemplateDto } from './update-notification-template.dt
 import { UpdateSystemSettingDto } from './update-system-setting.dto';
 import { evaluateReleaseReadiness } from './release-readiness';
 import { assertValidSubscriptionPolicySetting } from '../subscriptions/subscription-policy-settings.service';
+import { assertValidShortageOverrideSetting } from '../quotations/quotation-policies';
 
 @Injectable()
 export class AdminConfigService {
@@ -72,6 +73,7 @@ export class AdminConfigService {
     if (!setting.isEditable) throw new ForbiddenException('این تنظیم از پنل قابل تغییر نیست.');
     try {
       assertValidSubscriptionPolicySetting(setting.key, input.value);
+      if (setting.key === 'seller.shortage_override') assertValidShortageOverrideSetting(input.value);
     }
     catch (error: unknown) {
       throw new BadRequestException(error instanceof Error ? error.message : 'مقدار تنظیم معتبر نیست.');

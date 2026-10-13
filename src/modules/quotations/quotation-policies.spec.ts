@@ -1,4 +1,4 @@
-import { calculateProposalFeeCredits, calculateQuotationTotals, startOfTehranDay, totalProposalLimitFromEntitlements } from './quotation-policies';
+import { assertValidShortageOverrideSetting, calculateProposalFeeCredits, calculateQuotationTotals, effectiveDailyProposalLimit, startOfTehranDay, totalProposalLimitFromEntitlements } from './quotation-policies';
 
 describe('quotation policies', () => {
   it('calculates monetary totals with integer rial values', () => {
@@ -23,5 +23,17 @@ describe('quotation policies', () => {
     expect(totalProposalLimitFromEntitlements({ totalProposalLimit: 2 })).toBe(2);
     expect(totalProposalLimitFromEntitlements({ totalProposalLimit: 0 })).toBeNull();
     expect(totalProposalLimitFromEntitlements({ totalProposalLimit: '2' })).toBeNull();
+  });
+
+  it('applies a time-limited shortage override without exceeding the plan maximum', () => {
+    const now = new Date('2026-10-13T10:00:00.000Z');
+    const setting = { enabled: true, expiresAt: '2026-10-14T10:00:00.000Z', reason: 'کمبود عرضه در پایلوت' };
+    expect(() => assertValidShortageOverrideSetting(setting, now)).not.toThrow();
+    expect(effectiveDailyProposalLimit(2, 6, setting, now)).toBe(6);
+    expect(effectiveDailyProposalLimit(2, 6, setting, new Date('2026-10-15T10:00:00.000Z'))).toBe(2);
+  });
+
+  it('rejects an unbounded shortage override', () => {
+    expect(() => assertValidShortageOverrideSetting({ enabled: true, expiresAt: null, reason: 'کمبود عرضه' })).toThrow();
   });
 });

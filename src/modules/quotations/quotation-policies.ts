@@ -56,6 +56,32 @@ export function totalProposalLimitFromEntitlements(entitlements: unknown): numbe
   return Number.isInteger(value) && (value as number) > 0 ? value as number : null;
 }
 
+export function effectiveDailyProposalLimit(baseLimit: number, maximumLimit: number, setting: unknown, now: Date): number {
+  if (typeof setting !== 'object' || setting === null || Array.isArray(setting)) return baseLimit;
+  const value = setting as Record<string, unknown>;
+  if (value.enabled !== true || typeof value.expiresAt !== 'string') return baseLimit;
+  const expiresAt = new Date(value.expiresAt);
+  return Number.isFinite(expiresAt.getTime()) && expiresAt > now ? maximumLimit : baseLimit;
+}
+
+export function assertValidShortageOverrideSetting(value: unknown, now = new Date()): void {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new RangeError('تنظیم کمبود عرضه معتبر نیست.');
+  }
+  const setting = value as Record<string, unknown>;
+  if (typeof setting.enabled !== 'boolean' || typeof setting.reason !== 'string' || setting.reason.length > 200) {
+    throw new RangeError('وضعیت و دلیل کمبود عرضه معتبر نیست.');
+  }
+  if (!setting.enabled) {
+    if (setting.expiresAt !== null && typeof setting.expiresAt !== 'string') throw new RangeError('زمان پایان معتبر نیست.');
+    return;
+  }
+  const expiresAt = typeof setting.expiresAt === 'string' ? new Date(setting.expiresAt) : null;
+  if (setting.reason.trim().length < 5 || !expiresAt || !Number.isFinite(expiresAt.getTime()) || expiresAt <= now) {
+    throw new RangeError('فعال‌سازی سقف اضطراری به دلیل حداقل ۵ نویسه و زمان پایان آینده نیاز دارد.');
+  }
+}
+
 export function startOfTehranDay(now: Date): Date {
   const tehranOffsetMs = 210 * 60 * 1000;
   const local = new Date(now.getTime() + tehranOffsetMs);

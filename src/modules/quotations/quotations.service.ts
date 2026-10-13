@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { PrismaService } from '../../shared/prisma/prisma.service';
 import { CreateQuotationDto } from './create-quotation.dto';
-import { calculateProposalFeeCredits, calculateQuotationTotals, PROPOSAL_FEE_POLICY_VERSION, startOfTehranDay, totalProposalLimitFromEntitlements } from './quotation-policies';
+import { calculateProposalFeeCredits, calculateQuotationTotals, effectiveDailyProposalLimit, PROPOSAL_FEE_POLICY_VERSION, startOfTehranDay, totalProposalLimitFromEntitlements } from './quotation-policies';
 import { calculateQualityControlFeeRial } from '../rfqs/rfq-policies';
 
 const categoryDetailsInclude = {
@@ -119,10 +119,17 @@ export class QuotationsService {
         orderBy: { expiresAt: 'desc' },
       });
       if (!subscription) throw new ConflictException('برای ارسال پیشنهاد، اشتراک فعال فروشنده الزامی است.');
+      const shortageOverride = await tx.systemSetting.findUnique({ where: { key: 'seller.shortage_override' }, select: { value: true } });
+      const dailyProposalLimit = effectiveDailyProposalLimit(
+        subscription.plan.dailyProposalLimit,
+        subscription.plan.maxProposalLimit,
+        shortageOverride?.value,
+        now,
+      );
       const submittedToday = await tx.quotation.count({
         where: { supplierOrganizationId: quotation.supplierOrganizationId, status: { in: ['SUBMITTED', 'ACCEPTED', 'REJECTED', 'REVISED'] }, submittedAt: { gte: startOfTehranDay(now) } },
       });
-      if (submittedToday >= subscription.plan.dailyProposalLimit) throw new ConflictException('سقف روزانه ارسال پیشنهاد این پلن تکمیل شده است.');
+      if (submittedToday >= dailyProposalLimit) throw new ConflictException('سقف روزانه ارسال پیشنهاد این پلن تکمیل شده است.');
       const totalProposalLimit = totalProposalLimitFromEntitlements(subscription.plan.entitlements);
       if (totalProposalLimit !== null) {
         const submittedDuringSubscription = await tx.quotation.count({
@@ -166,7 +173,7 @@ export class QuotationsService {
         data: { status: 'RESPONDED', respondedAt: now },
       });
       await tx.rfq.update({ where: { id: quotation.rfqId }, data: { operationalStatus: 'HAS_QUOTES' } });
-      await tx.auditLog.create({ data: { actorUserId: user.id, organizationId: quotation.supplierOrganizationId, action: 'quotation.submit', entityType: 'Quotation', entityId: quotation.id, metadata: { feeCredits: feeCredits.toString(), policyVersion: PROPOSAL_FEE_POLICY_VERSION } } });
+      await tx.auditLog.create({ data: { actorUserId: user.id, organizationId: quotation.supplierOrganizationId, action: 'quotation.submit', entityType: 'Quotation', entityId: quotation.id, metadata: { feeCredits: feeCredits.toString(), policyVersion: PROPOSAL_FEE_POLICY_VERSION, dailyProposalLimit } } });
       await tx.outboxEvent.create({ data: { aggregateType: 'Quotation', aggregateId: quotation.id, eventType: 'ir.vazano.quotation.submitted.v1', payload: { quotationId: quotation.id, rfqId: quotation.rfqId, supplierOrganizationId: quotation.supplierOrganizationId } } });
       return result;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
