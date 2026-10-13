@@ -17,7 +17,7 @@ export class AuthController {
 
   @Post('otp/verify') @HttpCode(200)
   async verifyOtp(@Body() input: VerifyOtpDto, @Req() request: Request, @Res({ passthrough: true }) response: Response) {
-    const result = await this.auth.verifyOtp(input.mobile, input.purpose, input.code, request.ip, request.headers['user-agent']);
+    const result = await this.auth.verifyOtp(input.mobile, input.purpose, input.code, input.legalAccepted, request.ip, request.headers['user-agent']);
     response.cookie('vazano_session', result.token, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', expires: result.expiresAt, path: '/' });
     return { user: result.user, isNewUser: result.isNewUser, expiresAt: result.expiresAt };
   }

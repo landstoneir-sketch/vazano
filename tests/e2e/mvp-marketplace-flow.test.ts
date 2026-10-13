@@ -143,6 +143,7 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   test.setTimeout(240_000);
   await page.goto('/login');
   await page.getByLabel('شماره موبایل').fill(TEST_MOBILE_LOCAL);
+  await page.getByLabel('پذیرش قوانین و حریم خصوصی').check();
   await page.getByRole('button', { name: 'ارسال کد تأیید' }).click();
   await expect(page.getByLabel('کد تأیید')).toBeVisible();
   await page.getByLabel('کد تأیید').fill('11111');

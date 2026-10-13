@@ -79,10 +79,15 @@ test.afterAll(async () => prisma.$disconnect());
 test('کد تخفیف در خرید اشتراک اعمال و پرداخت قطعی ثبت می‌شود', async ({ page }) => {
   await page.goto('/login');
   await page.getByLabel('شماره موبایل').fill(TEST_MOBILE);
+  await page.getByLabel('پذیرش قوانین و حریم خصوصی').check();
   await page.getByRole('button', { name: 'ارسال کد تأیید' }).click();
   await page.getByLabel('کد تأیید').fill('11111');
   await page.getByRole('button', { name: 'ورود' }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
+  const legalAcceptance = await prisma.legalAcceptance.findFirst({ where: { userId: TEST_USER_ID } });
+  expect(legalAcceptance).toMatchObject({ termsVersion: expect.any(Number), privacyVersion: expect.any(Number) });
+  expect(legalAcceptance?.termsContentHash).toMatch(/^[0-9a-f]{64}$/);
+  expect(legalAcceptance?.privacyContentHash).toMatch(/^[0-9a-f]{64}$/);
 
   await page.goto('/supplier/subscription');
   await page.getByLabel('کد تخفیف (اختیاری)').fill(DISCOUNT_CODE);
