@@ -84,6 +84,30 @@ function SettingValueEditor({ settingKey, rawValue, onChange, disabled }: {
     return <div className="form-grid"><label className="check-field full"><input type="checkbox" disabled={disabled} checked={booleanValue(current.enabled, true)} onChange={(event) => setParsed({ ...current, enabled: event.target.checked })} /><span>برنامه فعال باشد</span></label><label className="form-field full"><span>کد پلن مرتبط</span><input dir="ltr" disabled={disabled} value={stringValue(current.planCode, 'SELLER_FOUNDING_P6M_V1')} onChange={(event) => setParsed({ ...current, planCode: event.target.value.toUpperCase() })} /></label><NumberSetting label="ظرفیت کارخانه" value={numberValue(current.capacity, 20)} disabled={disabled} onChange={(capacity) => setParsed({ ...current, capacity })} /><NumberSetting label="تخفیف تمدید (صدم درصد)" value={numberValue(current.renewalDiscountBps, 2000)} disabled={disabled} onChange={(renewalDiscountBps) => setParsed({ ...current, renewalDiscountBps })} /><NumberSetting label="حداقل لید معتبر" value={numberValue(current.minimumValidLeads, 10)} disabled={disabled} onChange={(minimumValidLeads) => setParsed({ ...current, minimumValidLeads })} /><NumberSetting label="تمدید تضمینی (روز)" value={numberValue(current.guaranteeExtensionDays, 90)} disabled={disabled} onChange={(guaranteeExtensionDays) => setParsed({ ...current, guaranteeExtensionDays })} /><label className="check-field full"><input type="checkbox" disabled={disabled} checked={booleanValue(current.managedSalesOnly, true)} onChange={(event) => setParsed({ ...current, managedSalesOnly: event.target.checked })} /><span>فقط توسط تیم فروش مدیریت شود</span></label><p className="muted full">قیمت و مدت این برنامه در صفحه مدیریت اشتراک‌ها و پلن مرتبط تعیین می‌شود.</p></div>;
   }
 
+  if (settingKey === 'quality_control.fee_bps') {
+    const basisPoints = typeof parsed === 'number' ? parsed : 300;
+    return <label className="form-field"><span>کارمزد کنترل کیفیت (درصد)</span><input type="number" min="0" max="100" step="0.01" disabled={disabled} value={basisPoints / 100} onChange={(event) => setParsed(Math.round(Number(event.target.value) * 100))} /><small>برای استعلام‌های جدید ذخیره می‌شود؛ پیش‌فرض مصوب ۳٪ است.</small></label>;
+  }
+
+  if (settingKey === 'rfq.buyer_commitment_amount_rial') {
+    const rial = typeof parsed === 'number' ? parsed : 2_500_000;
+    return <label className="form-field"><span>مبلغ تعهد خریدار جدید (تومان)</span><input type="number" min="0" step="1000" disabled={disabled} value={rial / 10} onChange={(event) => setParsed(Math.round(Number(event.target.value) * 10))} /><small>صفر به معنای بدون مبلغ است؛ تغییر فقط بر استعلام‌های جدید اعمال می‌شود.</small></label>;
+  }
+
+  if (settingKey === 'platform.legal_role') {
+    return <label className="form-field"><span>نقش حقوقی پلتفرم</span><select disabled={disabled} value={stringValue(parsed, 'INFORMATION_INTERMEDIARY')} onChange={(event) => setParsed(event.target.value)}><option value="INFORMATION_INTERMEDIARY">واسط اطلاعات</option><option value="MARKETPLACE_OPERATOR">بهره‌بردار بازارگاه</option><option value="CONTRACTING_AGENT">نماینده قراردادی</option></select><small>تغییر این گزینه به بازبینی متن حقوقی نیاز دارد.</small></label>;
+  }
+
+  if (settingKey === 'market.coverage.mode') {
+    return <label className="form-field"><span>پوشش جغرافیایی</span><select disabled={disabled} value={stringValue(parsed, 'NATIONWIDE')} onChange={(event) => setParsed(event.target.value)}><option value="NATIONWIDE">کل ایران</option><option value="SELECTED_PROVINCES">استان‌های منتخب</option></select></label>;
+  }
+
+  if (settingKey === 'seller.proposal_fee_policy') {
+    const current = asRecord(parsed);
+    const rate = Number(stringValue(current.rate, '0.001')) * 100;
+    return <div className="form-grid"><label className="form-field"><span>نسخه سیاست</span><input dir="ltr" disabled={disabled} value={stringValue(current.version, '1.2')} onChange={(event) => setParsed({ ...current, version: event.target.value })} /></label><label className="form-field"><span>نرخ از مبلغ خرید (درصد)</span><input type="number" min="0" max="100" step="0.0001" disabled={disabled} value={Number.isFinite(rate) ? rate : 0.1} onChange={(event) => setParsed({ ...current, rate: String(Number(event.target.value) / 100) })} /></label><NumberSetting label="حداقل هزینه (تومان)" value={numberValue(current.minToman, 100_000)} disabled={disabled} onChange={(minToman) => setParsed({ ...current, minToman })} /><NumberSetting label="حداکثر هزینه (تومان)" value={numberValue(current.maxToman, 5_000_000)} disabled={disabled} onChange={(maxToman) => setParsed({ ...current, maxToman })} /><label className="form-field full"><span>نسبت بازگشت اعتبار در شرایط مجاز</span><input dir="ltr" disabled={disabled} placeholder="2/3" value={stringValue(current.refundFractionIfEligible, '2/3')} onChange={(event) => setParsed({ ...current, refundFractionIfEligible: event.target.value })} /><small>هزینه به تومان محاسبه و از کیف اعتبار فروشنده کسر می‌شود.</small></label></div>;
+  }
+
   if (settingKey === 'seller.shortage_override') {
     const current = asRecord(parsed);
     const enabled = booleanValue(current.enabled, false);
