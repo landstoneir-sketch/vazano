@@ -109,6 +109,7 @@ const systemSettings = [
   ['notification.sms.renewal_max_per_24h', 1, 'حداکثر پیامک تمدید در ۲۴ ساعت'],
   ['seller.proposal_fee_policy', { version: '1.2', rate: '0.001', minToman: 100_000, maxToman: 5_000_000, refundFractionIfEligible: '2/3' }, 'سیاست هزینه ارسال پیشنهاد فروشنده'],
   ['seller.daily_proposal_limit', { base: 2, shortageOverrideMax: 6 }, 'محدودیت روزانه پیشنهاد موفق'],
+  ['seller.shortage_override', { enabled: false, expiresAt: null, reason: '' }, 'افزایش موقت سقف روزانه پیشنهاد در کمبود عرضه'],
 ] as const;
 
 const inAppNotificationTemplates = [
