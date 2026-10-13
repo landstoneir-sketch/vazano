@@ -523,8 +523,8 @@ async function main(): Promise<void> {
       });
       const supplierProfile = await prisma.supplierProfile.upsert({
         where: { organizationId: supplier.id },
-        create: { organizationId: supplier.id, description: 'داده آزمایشی محیط توسعه برای کنترل جریان کامل استعلام و پیشنهاد', nationwideCoverage: true, verificationStatus: 'VERIFIED', verifiedAt: new Date() },
-        update: { nationwideCoverage: true, verificationStatus: 'VERIFIED', verifiedAt: new Date() },
+        create: { organizationId: supplier.id, description: 'داده آزمایشی محیط توسعه برای کنترل جریان کامل استعلام و پیشنهاد', productionCapacityDescription: 'امکان تأمین سفارش‌های پروژه‌ای در چند نوع سنگ طبیعی و چند مرحله فرآوری', minimumOrderDescription: 'حداقل سفارش براساس نوع سنگ، ابعاد و فرآوری در پیشنهاد قیمت اعلام می‌شود.', leadTimeDescription: 'زمان آماده‌سازی معمول بین ۷ تا ۲۰ روز کاری و وابسته به مشخصات سفارش است.', officialInvoiceAvailable: true, sampleAvailable: true, installationAvailable: false, nationwideCoverage: true, verificationStatus: 'VERIFIED', verifiedAt: new Date() },
+        update: { productionCapacityDescription: 'امکان تأمین سفارش‌های پروژه‌ای در چند نوع سنگ طبیعی و چند مرحله فرآوری', minimumOrderDescription: 'حداقل سفارش براساس نوع سنگ، ابعاد و فرآوری در پیشنهاد قیمت اعلام می‌شود.', leadTimeDescription: 'زمان آماده‌سازی معمول بین ۷ تا ۲۰ روز کاری و وابسته به مشخصات سفارش است.', officialInvoiceAvailable: true, sampleAvailable: true, installationAvailable: false, nationwideCoverage: true, verificationStatus: 'VERIFIED', verifiedAt: new Date() },
       });
       const stoneCategories = await prisma.category.findMany({ where: { parentId: naturalStone.id }, select: { id: true } });
       await prisma.supplierCategory.createMany({ data: stoneCategories.map(({ id }) => ({ supplierProfileId: supplierProfile.id, categoryId: id })), skipDuplicates: true });

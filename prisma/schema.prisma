@@ -911,6 +911,12 @@ model SupplierProfile {
   organizationId       String                     @unique @map("organization_id")
   verificationStatus   SupplierVerificationStatus @default(INCOMPLETE) @map("verification_status")
   description          String?
+  productionCapacityDescription String? @map("production_capacity_description")
+  minimumOrderDescription String? @map("minimum_order_description")
+  leadTimeDescription String? @map("lead_time_description")
+  officialInvoiceAvailable Boolean @default(false) @map("official_invoice_available")
+  sampleAvailable Boolean @default(false) @map("sample_available")
+  installationAvailable Boolean @default(false) @map("installation_available")
   nationwideCoverage   Boolean                    @default(false) @map("nationwide_coverage")
   serviceProvinces     String[]                   @default([]) @map("service_provinces")
   verificationReason   String?                    @map("verification_reason")

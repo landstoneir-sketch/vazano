@@ -12,6 +12,33 @@ export class UpsertSupplierProfileDto {
   @MaxLength(2000)
   description?: string;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  productionCapacityDescription?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  minimumOrderDescription?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  leadTimeDescription?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  officialInvoiceAvailable?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  sampleAvailable?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  installationAvailable?: boolean;
+
   @IsBoolean()
   nationwideCoverage!: boolean;
 
