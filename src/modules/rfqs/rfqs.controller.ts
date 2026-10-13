@@ -27,6 +27,11 @@ export class RfqsController {
     return this.rfqs.listMatchedForSupplier(user);
   }
 
+  @Get('active-policy')
+  activePolicy() {
+    return this.rfqs.getActivePolicy();
+  }
+
   @Get(':id')
   getOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.rfqs.getOne(user, id);

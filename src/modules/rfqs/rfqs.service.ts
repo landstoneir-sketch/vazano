@@ -38,6 +38,21 @@ export class RfqsService {
     });
   }
 
+  async getActivePolicy() {
+    const policy = await this.policySettings.get();
+    return {
+      marketCountry: policy.marketCountry,
+      marketCoverageMode: policy.marketCoverageMode,
+      displayPricesTaxInclusive: policy.displayPricesTaxInclusive,
+      legalRole: policy.legalRole,
+      qualityControlEnabled: policy.qualityControl.enabled,
+      qualityControlFeeBps: policy.qualityControl.feeBps,
+      operatorEntryEnabled: policy.operatorEntryEnabled,
+      pilotManualReview: policy.pilotManualReview,
+      buyerCommitmentAmountRial: policy.buyerCommitment.amountRial.toString(),
+    };
+  }
+
   listMatchedForSupplier(user: AuthenticatedUser) {
     const supplierOrganizationIds = user.memberships
       .filter((membership) => ['SUPPLIER_OWNER', 'SUPPLIER_MANAGER', 'SUPPLIER_SALES'].includes(membership.role))
