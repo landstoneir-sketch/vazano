@@ -14,7 +14,7 @@ export class SuppliersService {
       where: { kind: 'SUPPLIER', status: 'ACTIVE', supplierProfile: { verificationStatus: 'VERIFIED' } },
       select: {
         id: true, displayName: true, province: true, city: true,
-        supplierProfile: { select: { description: true, nationwideCoverage: true, categories: { select: { category: { select: { id: true, nameFa: true, slug: true } } } } } },
+        supplierProfile: { select: { description: true, productionCapacityDescription: true, minimumOrderDescription: true, leadTimeDescription: true, officialInvoiceAvailable: true, sampleAvailable: true, installationAvailable: true, nationwideCoverage: true, categories: { select: { category: { select: { id: true, nameFa: true, slug: true } } } } } },
       },
       orderBy: { displayName: 'asc' },
       take: 100,
@@ -37,7 +37,7 @@ export class SuppliersService {
         id: true, displayName: true, province: true, city: true,
         supplierProfile: {
           select: {
-            description: true, nationwideCoverage: true,
+            description: true, productionCapacityDescription: true, minimumOrderDescription: true, leadTimeDescription: true, officialInvoiceAvailable: true, sampleAvailable: true, installationAvailable: true, nationwideCoverage: true,
             serviceProvinceLinks: { select: { province: { select: { id: true, nameFa: true } } }, orderBy: { province: { sortOrder: 'asc' } } },
             categories: { select: { category: { select: { id: true, nameFa: true, slug: true } } }, orderBy: { category: { sortOrder: 'asc' } } },
           },
@@ -154,19 +154,28 @@ export class SuppliersService {
     const provinces = await this.prisma.province.findMany({ where: { id: { in: serviceProvinceIds }, isActive: true }, select: { id: true, nameFa: true } });
     if (provinces.length !== serviceProvinceIds.length) throw new BadRequestException('یک یا چند استان خدمت‌رسانی معتبر نیست.');
     const serviceProvinceNames = provinces.map((province) => province.nameFa);
+    const capabilityData = {
+      description: input.description?.trim() || null,
+      productionCapacityDescription: input.productionCapacityDescription?.trim() || null,
+      minimumOrderDescription: input.minimumOrderDescription?.trim() || null,
+      leadTimeDescription: input.leadTimeDescription?.trim() || null,
+      officialInvoiceAvailable: input.officialInvoiceAvailable ?? false,
+      sampleAvailable: input.sampleAvailable ?? false,
+      installationAvailable: input.installationAvailable ?? false,
+    };
 
     return this.prisma.$transaction(async (tx) => {
       const profile = await tx.supplierProfile.upsert({
         where: { organizationId },
         create: {
           organizationId,
-          description: input.description,
+          ...capabilityData,
           nationwideCoverage: input.nationwideCoverage,
           serviceProvinces: serviceProvinceNames,
           verificationStatus: 'PENDING',
         },
         update: {
-          description: input.description,
+          ...capabilityData,
           nationwideCoverage: input.nationwideCoverage,
           serviceProvinces: serviceProvinceNames,
           verificationStatus: 'PENDING',

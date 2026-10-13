@@ -9,7 +9,7 @@ type Supplier = {
   legalName: string;
   province: string | null;
   city: string | null;
-  supplierProfile: { verificationStatus: string; description: string | null; nationwideCoverage: boolean; serviceProvinces: string[]; categories: Array<{ category: { nameFa: string } }>; verificationDocuments: Array<{ id: string; originalName: string; status: string }> };
+  supplierProfile: { verificationStatus: string; description: string | null; productionCapacityDescription: string | null; minimumOrderDescription: string | null; leadTimeDescription: string | null; officialInvoiceAvailable: boolean; sampleAvailable: boolean; installationAvailable: boolean; nationwideCoverage: boolean; serviceProvinces: string[]; categories: Array<{ category: { nameFa: string } }>; verificationDocuments: Array<{ id: string; originalName: string; status: string }> };
   members: Array<{ user: { mobile: string; firstName: string | null; lastName: string | null } }>;
 };
 
@@ -54,6 +54,9 @@ export function SupplierVerificationQueue() {
       <div className="eyebrow">{supplier.supplierProfile.verificationStatus}</div><h2>{supplier.displayName}</h2>
       <p>{supplier.legalName} · {supplier.province ?? '—'}، {supplier.city ?? '—'} · تماس مدیر: {supplier.members[0]?.user.mobile ?? '—'}</p>
       <p>{supplier.supplierProfile.description || 'بدون توضیح'}</p>
+      <p><strong>ظرفیت:</strong> {supplier.supplierProfile.productionCapacityDescription || 'ثبت نشده'}</p>
+      <p><strong>حداقل سفارش:</strong> {supplier.supplierProfile.minimumOrderDescription || 'ثبت نشده'} · <strong>زمان آماده‌سازی:</strong> {supplier.supplierProfile.leadTimeDescription || 'ثبت نشده'}</p>
+      <p><strong>توانمندی‌ها:</strong> {[supplier.supplierProfile.officialInvoiceAvailable ? 'فاکتور رسمی' : null, supplier.supplierProfile.sampleAvailable ? 'نمونه محصول' : null, supplier.supplierProfile.installationAvailable ? 'نصب' : null].filter(Boolean).join('، ') || 'ثبت نشده'}</p>
       <p>پوشش: {supplier.supplierProfile.nationwideCoverage ? 'کل ایران' : supplier.supplierProfile.serviceProvinces.join('، ')}</p>
       <p>دسته‌ها: {supplier.supplierProfile.categories.map((item) => item.category.nameFa).join('، ')}</p>
       <div><strong>مدارک احراز:</strong>{supplier.supplierProfile.verificationDocuments.length === 0 ? <p className="muted">مدرکی بارگذاری نشده است.</p> : <ul>{supplier.supplierProfile.verificationDocuments.map((document) => <li key={document.id}>{document.originalName} — {document.status}{document.status === 'READY' && <button className="button button-ghost" type="button" onClick={() => void downloadDocument(document.id)}>مشاهده</button>}</li>)}</ul>}</div>

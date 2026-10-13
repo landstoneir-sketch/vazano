@@ -7,13 +7,34 @@ type Category = { id: string; parentId: string | null; nameFa: string };
 type Province = { id: string; nameFa: string };
 type VerificationDocument = { id: string; originalName: string; status: string; sizeBytes: number };
 type UploadIntent = { attachment: VerificationDocument; upload: { url: string; method: 'PUT'; headers: Record<string, string> } };
-type SupplierProfile = { id: string; verificationStatus: string; description: string | null; nationwideCoverage: boolean; serviceProvinces: string[]; serviceProvinceLinks: Array<{ provinceId: string }>; categories: Array<{ categoryId: string }>; verificationDocuments: VerificationDocument[] };
+type SupplierProfile = {
+  id: string;
+  verificationStatus: string;
+  description: string | null;
+  productionCapacityDescription: string | null;
+  minimumOrderDescription: string | null;
+  leadTimeDescription: string | null;
+  officialInvoiceAvailable: boolean;
+  sampleAvailable: boolean;
+  installationAvailable: boolean;
+  nationwideCoverage: boolean;
+  serviceProvinces: string[];
+  serviceProvinceLinks: Array<{ provinceId: string }>;
+  categories: Array<{ categoryId: string }>;
+  verificationDocuments: VerificationDocument[];
+};
 type ProfileResponse = { displayName: string; supplierProfile: SupplierProfile | null };
 
 export function SupplierProfileForm({ organizationId }: { organizationId: string }) {
   const [name, setName] = useState('');
   const [status, setStatus] = useState('INCOMPLETE');
   const [description, setDescription] = useState('');
+  const [productionCapacityDescription, setProductionCapacityDescription] = useState('');
+  const [minimumOrderDescription, setMinimumOrderDescription] = useState('');
+  const [leadTimeDescription, setLeadTimeDescription] = useState('');
+  const [officialInvoiceAvailable, setOfficialInvoiceAvailable] = useState(false);
+  const [sampleAvailable, setSampleAvailable] = useState(false);
+  const [installationAvailable, setInstallationAvailable] = useState(false);
   const [nationwide, setNationwide] = useState(true);
   const [provinces, setProvinces] = useState<Province[]>([]);
   const [selectedProvinceIds, setSelectedProvinceIds] = useState<string[]>([]);
@@ -34,6 +55,12 @@ export function SupplierProfileForm({ organizationId }: { organizationId: string
         if (profile.supplierProfile) {
           setProfileExists(true); setDocuments(profile.supplierProfile.verificationDocuments);
           setStatus(profile.supplierProfile.verificationStatus); setDescription(profile.supplierProfile.description ?? '');
+          setProductionCapacityDescription(profile.supplierProfile.productionCapacityDescription ?? '');
+          setMinimumOrderDescription(profile.supplierProfile.minimumOrderDescription ?? '');
+          setLeadTimeDescription(profile.supplierProfile.leadTimeDescription ?? '');
+          setOfficialInvoiceAvailable(profile.supplierProfile.officialInvoiceAvailable);
+          setSampleAvailable(profile.supplierProfile.sampleAvailable);
+          setInstallationAvailable(profile.supplierProfile.installationAvailable);
           setNationwide(profile.supplierProfile.nationwideCoverage);
           setSelectedProvinceIds(profile.supplierProfile.serviceProvinceLinks.length > 0
             ? profile.supplierProfile.serviceProvinceLinks.map((item) => item.provinceId)
@@ -48,7 +75,16 @@ export function SupplierProfileForm({ organizationId }: { organizationId: string
     event.preventDefault(); setBusy(true); setMessage('');
     try {
       const result = await apiRequest<SupplierProfile>(`/suppliers/organizations/${organizationId}/profile`, { method: 'PUT', body: JSON.stringify({
-        description, nationwideCoverage: nationwide, serviceProvinceIds: nationwide ? [] : selectedProvinceIds, categories: selected.map((categoryId) => ({ categoryId })),
+        description,
+        productionCapacityDescription,
+        minimumOrderDescription,
+        leadTimeDescription,
+        officialInvoiceAvailable,
+        sampleAvailable,
+        installationAvailable,
+        nationwideCoverage: nationwide,
+        serviceProvinceIds: nationwide ? [] : selectedProvinceIds,
+        categories: selected.map((categoryId) => ({ categoryId })),
       }) });
       setProfileExists(true); setDocuments(result.verificationDocuments); setStatus(result.verificationStatus); setMessage('پروفایل برای بررسی وازانو ارسال شد. اکنون مدارک هویتی یا مجوز فعالیت را بارگذاری کنید.');
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : 'ثبت پروفایل انجام نشد.'); }
@@ -81,6 +117,14 @@ export function SupplierProfileForm({ organizationId }: { organizationId: string
   return <form className="card form-grid" onSubmit={submit}>
     {message && <div className="message">{message}</div>}<div className="full"><h2>{name}</h2><p>وضعیت تأیید: {status}</p></div>
     <label className="form-field full"><span>معرفی مجموعه و توان تولید</span><textarea rows={4} value={description} onChange={(event) => setDescription(event.target.value)} /></label>
+    <label className="form-field full"><span>ظرفیت تولید و تأمین</span><textarea rows={3} maxLength={1000} value={productionCapacityDescription} onChange={(event) => setProductionCapacityDescription(event.target.value)} placeholder="مثلاً ظرفیت تقریبی، خطوط فرآوری، شیفت کاری یا امکان تأمین سفارش پروژه‌ای" /><small>اطلاعات را به‌صورت واقعی و قابل بررسی بنویسید؛ واحد و دوره زمانی را داخل متن مشخص کنید.</small></label>
+    <label className="form-field"><span>حداقل سفارش</span><input maxLength={300} value={minimumOrderDescription} onChange={(event) => setMinimumOrderDescription(event.target.value)} placeholder="مثلاً وابسته به نوع محصول و ابعاد" /></label>
+    <label className="form-field"><span>زمان معمول آماده‌سازی</span><input maxLength={300} value={leadTimeDescription} onChange={(event) => setLeadTimeDescription(event.target.value)} placeholder="مثلاً ۷ تا ۲۰ روز کاری" /></label>
+    <fieldset className="fieldset full"><legend>توانمندی‌های تجاری و خدماتی</legend><div className="check-grid">
+      <label className="check-field"><input type="checkbox" checked={officialInvoiceAvailable} onChange={(event) => setOfficialInvoiceAvailable(event.target.checked)} /><span>امکان صدور فاکتور رسمی</span></label>
+      <label className="check-field"><input type="checkbox" checked={sampleAvailable} onChange={(event) => setSampleAvailable(event.target.checked)} /><span>امکان ارائه نمونه محصول</span></label>
+      <label className="check-field"><input type="checkbox" checked={installationAvailable} onChange={(event) => setInstallationAvailable(event.target.checked)} /><span>امکان ارائه خدمات نصب</span></label>
+    </div></fieldset>
     <label className="check-field full"><input type="checkbox" checked={nationwide} onChange={(event) => setNationwide(event.target.checked)} /><span>امکان تأمین در کل ایران</span></label>
     {!nationwide && <fieldset className="fieldset full"><legend>استان‌های تحت پوشش</legend><p className="muted">فقط استان‌هایی را انتخاب کنید که امکان تأمین و تحویل واقعی در آن‌ها دارید.</p><div className="check-grid">{provinces.map((province) => <label className="check-field" key={province.id}><input type="checkbox" checked={selectedProvinceIds.includes(province.id)} onChange={(event) => setSelectedProvinceIds((current) => event.target.checked ? [...current, province.id] : current.filter((id) => id !== province.id))} /><span>{province.nameFa}</span></label>)}</div></fieldset>}
     <fieldset className="fieldset full"><legend>انواع سنگ قابل تأمین</legend><div className="check-grid">{categories.map((category) => <label className="check-field" key={category.id}><input type="checkbox" checked={selected.includes(category.id)} onChange={(event) => setSelected((current) => event.target.checked ? [...current, category.id] : current.filter((id) => id !== category.id))} /><span>{category.nameFa}</span></label>)}</div></fieldset>

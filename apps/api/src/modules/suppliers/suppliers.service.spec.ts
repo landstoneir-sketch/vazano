@@ -1,7 +1,25 @@
 import { BadRequestException } from '@nestjs/common';
+import { validate } from 'class-validator';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { PrismaService } from '../../shared/prisma/prisma.service';
 import { SuppliersService } from './suppliers.service';
+import { UpsertSupplierProfileDto } from './upsert-supplier-profile.dto';
+
+describe('UpsertSupplierProfileDto', () => {
+  it('rejects an overlong capacity description and non-boolean capability flag', async () => {
+    const input = Object.assign(new UpsertSupplierProfileDto(), {
+      productionCapacityDescription: 'الف'.repeat(1001),
+      officialInvoiceAvailable: 'yes',
+      nationwideCoverage: true,
+      serviceProvinceIds: [],
+      categories: [{ categoryId: 'category-1' }],
+    });
+
+    const errors = await validate(input);
+
+    expect(errors.map((error) => error.property)).toEqual(expect.arrayContaining(['productionCapacityDescription', 'officialInvoiceAvailable']));
+  });
+});
 
 describe('SuppliersService verification', () => {
   it('rejects approval when no clean verification document exists', async () => {
@@ -27,7 +45,7 @@ describe('SuppliersService public directory', () => {
   it('returns only the explicitly selected public profile fields with published rating summary', async () => {
     const organization = {
       id: 'supplier-organization-1', displayName: 'سنگ نمونه', province: 'اصفهان', city: 'اصفهان',
-      supplierProfile: { description: 'تولیدکننده سنگ ساختمانی', nationwideCoverage: true, categories: [] },
+      supplierProfile: { description: 'تولیدکننده سنگ ساختمانی', productionCapacityDescription: 'ظرفیت پروژه‌ای', minimumOrderDescription: null, leadTimeDescription: '۱۰ روز کاری', officialInvoiceAvailable: true, sampleAvailable: true, installationAvailable: false, nationwideCoverage: true, categories: [] },
     };
     const organizationFindMany = jest.fn().mockResolvedValue([organization]);
     const prisma = {
