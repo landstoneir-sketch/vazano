@@ -1,0 +1,85 @@
+name: Publish release images
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+concurrency:
+  group: release-images-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Prepare immutable image names
+        shell: bash
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "API_IMAGE=ghcr.io/${owner}/vazano-api" >> "$GITHUB_ENV"
+          echo "WEB_IMAGE=ghcr.io/${owner}/vazano-web" >> "$GITHUB_ENV"
+          echo "MIGRATION_IMAGE=ghcr.io/${owner}/vazano-migration" >> "$GITHUB_ENV"
+
+      - name: Authenticate to GitHub Container Registry
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+
+      - name: Initialize BuildKit builder
+        run: docker buildx create --name vazano-release --driver docker-container --use
+
+      - name: Publish API image
+        run: >-
+          docker buildx build
+          --platform linux/amd64
+          --target api-runner
+          --tag "${API_IMAGE}:${GITHUB_SHA}"
+          --tag "${API_IMAGE}:${GITHUB_REF_NAME}"
+          --provenance=mode=max
+          --sbom=true
+          --push .
+
+      - name: Publish web image
+        run: >-
+          docker buildx build
+          --platform linux/amd64
+          --target web-runner
+          --tag "${WEB_IMAGE}:${GITHUB_SHA}"
+          --tag "${WEB_IMAGE}:${GITHUB_REF_NAME}"
+          --provenance=mode=max
+          --sbom=true
+          --push .
+
+      - name: Publish migration image
+        run: >-
+          docker buildx build
+          --platform linux/amd64
+          --target migration-runner
+          --tag "${MIGRATION_IMAGE}:${GITHUB_SHA}"
+          --tag "${MIGRATION_IMAGE}:${GITHUB_REF_NAME}"
+          --provenance=mode=max
+          --sbom=true
+          --push .
+
+      - name: Summarize immutable release references
+        shell: bash
+        run: |
+          {
+            echo "## Vazano ${GITHUB_REF_NAME} images"
+            echo
+            echo "Use the Git SHA references below in the production environment file:"
+            echo
+            echo "- VAZANO_API_IMAGE=${API_IMAGE}:${GITHUB_SHA}"
+            echo "- VAZANO_WEB_IMAGE=${WEB_IMAGE}:${GITHUB_SHA}"
+            echo "- VAZANO_MIGRATION_IMAGE=${MIGRATION_IMAGE}:${GITHUB_SHA}"
+          } >> "$GITHUB_STEP_SUMMARY"
