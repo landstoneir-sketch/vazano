@@ -9,6 +9,7 @@ import { canPublishRfq } from './rfq-policies';
 import { RfqReviewDecision, ReviewRfqDto } from './review-rfq.dto';
 import { PaymentsService } from '../payments/payments.service';
 import { isProvinceWithinMarketCoverage, RfqPolicySettingsService } from './rfq-policy-settings.service';
+import { buildPaymentReceiptSnapshot } from '../subscriptions/payment-receipt-policy';
 
 const categoryDetailsInclude = {
   attributeBindings: {
@@ -262,7 +263,20 @@ export class RfqsService {
   async handleCommitmentCallback(authority: string, callbackStatus: string) {
     const intent = await this.prisma.paymentIntent.findFirst({ where: { authority, provider: this.payments.provider, purpose: 'BUYER_COMMITMENT' } });
     if (!intent) throw new NotFoundException('تراکنش پرداخت پیدا نشد.');
-    if (intent.status === 'SUCCEEDED') return { success: true, alreadyVerified: true, referenceId: intent.providerReference, rfqId: intent.referenceId };
+    if (intent.status === 'SUCCEEDED') {
+      const receipt = await this.prisma.paymentReceipt.findUnique({
+        where: { paymentIntentId: intent.id },
+        select: { id: true, receiptNumber: true },
+      });
+      return {
+        success: true,
+        alreadyVerified: true,
+        referenceId: intent.providerReference,
+        rfqId: intent.referenceId,
+        receiptId: receipt?.id,
+        receiptNumber: receipt?.receiptNumber,
+      };
+    }
     if (intent.status === 'CANCELLED') return { success: false, cancelled: true, rfqId: intent.referenceId };
     if (intent.status === 'FAILED') return { success: false, failed: true, rfqId: intent.referenceId };
     if (intent.status !== 'REDIRECT_PENDING') return { success: false, processing: intent.status === 'VERIFY_PENDING', rfqId: intent.referenceId };
@@ -285,7 +299,20 @@ export class RfqsService {
       const claim = await tx.paymentIntent.updateMany({ where: { id: intent.id, status: 'REDIRECT_PENDING' }, data: { status: 'VERIFY_PENDING' } });
       if (claim.count === 0) {
         const completed = await tx.paymentIntent.findUniqueOrThrow({ where: { id: intent.id } });
-        if (completed.status === 'SUCCEEDED') return { success: true, alreadyVerified: true, referenceId: completed.providerReference, rfqId: intent.referenceId };
+        if (completed.status === 'SUCCEEDED') {
+          const receipt = await tx.paymentReceipt.findUnique({
+            where: { paymentIntentId: intent.id },
+            select: { id: true, receiptNumber: true },
+          });
+          return {
+            success: true,
+            alreadyVerified: true,
+            referenceId: completed.providerReference,
+            rfqId: intent.referenceId,
+            receiptId: receipt?.id,
+            receiptNumber: receipt?.receiptNumber,
+          };
+        }
         return {
           success: false,
           cancelled: completed.status === 'CANCELLED',
@@ -294,12 +321,21 @@ export class RfqsService {
           rfqId: intent.referenceId,
         };
       }
-      await tx.paymentIntent.update({ where: { id: intent.id }, data: { status: 'SUCCEEDED', providerReference: verification.referenceId, verifiedAt: new Date(), callbackPayload: { status: callbackStatus, code: verification.code } } });
+      if (!intent.payerOrganizationId) throw new ConflictException('سازمان پرداخت‌کننده برای این تراکنش ثبت نشده است.');
+      const paidAt = new Date();
+      const receiptSnapshot = buildPaymentReceiptSnapshot(intent.id, intent.amountRial, paidAt);
+      const receipt = await tx.paymentReceipt.create({ data: {
+        ...receiptSnapshot,
+        organizationId: intent.payerOrganizationId,
+        paymentIntentId: intent.id,
+        providerReference: verification.referenceId,
+      } });
+      await tx.paymentIntent.update({ where: { id: intent.id }, data: { status: 'SUCCEEDED', providerReference: verification.referenceId, verifiedAt: paidAt, callbackPayload: { status: callbackStatus, code: verification.code } } });
       await tx.rfq.update({ where: { id: intent.referenceId }, data: { commitmentStatus: 'HELD', operationalStatus: 'READY_TO_PUBLISH' } });
-      await tx.auditLog.create({ data: { organizationId: intent.payerOrganizationId, action: 'rfq.commitment.held', entityType: 'Rfq', entityId: intent.referenceId, metadata: { paymentIntentId: intent.id, providerReference: verification.referenceId } } });
-      await tx.outboxEvent.create({ data: { aggregateType: 'Rfq', aggregateId: intent.referenceId, eventType: 'ir.vazano.buyer.commitment.held.v1', payload: { rfqId: intent.referenceId, paymentIntentId: intent.id } } });
-      return { ...verification, rfqId: intent.referenceId };
-    });
+      await tx.auditLog.create({ data: { organizationId: intent.payerOrganizationId, action: 'rfq.commitment.held', entityType: 'Rfq', entityId: intent.referenceId, metadata: { paymentIntentId: intent.id, providerReference: verification.referenceId, receiptNumber: receipt.receiptNumber } } });
+      await tx.outboxEvent.create({ data: { aggregateType: 'Rfq', aggregateId: intent.referenceId, eventType: 'ir.vazano.buyer.commitment.held.v1', payload: { rfqId: intent.referenceId, paymentIntentId: intent.id, receiptNumber: receipt.receiptNumber } } });
+      return { ...verification, rfqId: intent.referenceId, receiptId: receipt.id, receiptNumber: receipt.receiptNumber };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
   private async create(user: AuthenticatedUser, input: CreateRfqDto, source: RfqSource) {

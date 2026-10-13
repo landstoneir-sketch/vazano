@@ -197,15 +197,24 @@ export class QuotationsService {
 
   async comparison(user: AuthenticatedUser, rfqId: string) {
     const rfq = await this.findBuyerRfq(user, rfqId);
-    const quotations = await this.prisma.quotation.findMany({
-      where: { rfqId, status: { in: ['SUBMITTED', 'ACCEPTED', 'REJECTED'] } },
-      include: {
-        supplierOrganization: { select: { id: true, displayName: true, province: true, city: true } },
-        items: { include: { rfqItem: { include: { category: { include: categoryDetailsInclude }, unit: true } } }, orderBy: { createdAt: 'asc' } },
-      },
-      orderBy: [{ finalAmountRial: 'asc' }, { submittedAt: 'asc' }],
-    });
-    return { rfq, quotations };
+    const [quotations, commitmentReceipt] = await Promise.all([
+      this.prisma.quotation.findMany({
+        where: { rfqId, status: { in: ['SUBMITTED', 'ACCEPTED', 'REJECTED'] } },
+        include: {
+          supplierOrganization: { select: { id: true, displayName: true, province: true, city: true } },
+          items: { include: { rfqItem: { include: { category: { include: categoryDetailsInclude }, unit: true } } }, orderBy: { createdAt: 'asc' } },
+        },
+        orderBy: [{ finalAmountRial: 'asc' }, { submittedAt: 'asc' }],
+      }),
+      this.prisma.paymentReceipt.findFirst({
+        where: {
+          organizationId: rfq.buyerOrganizationId,
+          paymentIntent: { is: { purpose: 'BUYER_COMMITMENT', referenceType: 'Rfq', referenceId: rfqId, status: 'SUCCEEDED' } },
+        },
+        select: { id: true, receiptNumber: true, providerReference: true, paidAt: true },
+      }),
+    ]);
+    return { rfq: { ...rfq, commitmentReceipt }, quotations };
   }
 
   async accept(user: AuthenticatedUser, quotationId: string) {

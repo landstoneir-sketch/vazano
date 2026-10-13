@@ -31,6 +31,7 @@ describe('RfqsService commitment payment callbacks', () => {
       rfq: { update: jest.fn() },
       auditLog: { create: jest.fn() },
       outboxEvent: { create: jest.fn() },
+      paymentReceipt: { findUnique: jest.fn(), create: jest.fn() },
     };
     const prisma = {
       paymentIntent: { findFirst: jest.fn().mockResolvedValue(intent) },
@@ -46,6 +47,48 @@ describe('RfqsService commitment payment callbacks', () => {
     expect(tx.rfq.update).not.toHaveBeenCalled();
     expect(tx.auditLog.create).not.toHaveBeenCalled();
     expect(tx.outboxEvent.create).not.toHaveBeenCalled();
+    expect(tx.paymentReceipt.create).not.toHaveBeenCalled();
+  });
+
+  it('issues exactly one receipt while confirming a buyer commitment', async () => {
+    const intent = {
+      id: 'payment-1', status: 'REDIRECT_PENDING', referenceId: 'rfq-1', payerOrganizationId: 'buyer-1',
+      provider: 'TEST_GATEWAY', purpose: 'BUYER_COMMITMENT', amountRial: 5_000_000n,
+    };
+    let receiptCreateInput: { data: Record<string, unknown> } | undefined;
+    let paymentUpdateInput: { where: { id: string }; data: Record<string, unknown> } | undefined;
+    const tx = {
+      paymentIntent: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: jest.fn((input: { where: { id: string }; data: Record<string, unknown> }) => {
+          paymentUpdateInput = input;
+          return Promise.resolve();
+        }),
+      },
+      paymentReceipt: {
+        create: jest.fn((input: { data: Record<string, unknown> }) => {
+          receiptCreateInput = input;
+          return Promise.resolve({ id: 'receipt-1', receiptNumber: 'VZ-2026-PAYMENT-1' });
+        }),
+      },
+      rfq: { update: jest.fn() },
+      auditLog: { create: jest.fn() },
+      outboxEvent: { create: jest.fn() },
+    };
+    const prisma = {
+      paymentIntent: { findFirst: jest.fn().mockResolvedValue(intent) },
+      $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
+    };
+    const payments = { provider: 'TEST_GATEWAY', verify: jest.fn().mockResolvedValue({ success: true, alreadyVerified: false, referenceId: 'ref-1', code: 100 }) };
+    const service = new RfqsService(prisma as never, payments as never, {} as never, {} as never);
+
+    await expect(service.handleCommitmentCallback('authority-1', 'OK')).resolves.toMatchObject({
+      success: true, rfqId: 'rfq-1', receiptId: 'receipt-1', receiptNumber: 'VZ-2026-PAYMENT-1',
+    });
+    expect(receiptCreateInput?.data).toMatchObject({
+      organizationId: 'buyer-1', paymentIntentId: 'payment-1', amountRial: 5_000_000n, taxRial: 0n, currency: 'IRR', providerReference: 'ref-1',
+    });
+    expect(paymentUpdateInput).toMatchObject({ where: { id: 'payment-1' }, data: { status: 'SUCCEEDED', providerReference: 'ref-1' } });
   });
 
   it('requires a fresh idempotency key after a terminal commitment attempt', async () => {

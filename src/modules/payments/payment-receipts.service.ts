@@ -11,7 +11,7 @@ export class PaymentReceiptsService {
       where: { id: receiptId },
       include: {
         organization: { select: { id: true, displayName: true, legalName: true, nationalId: true } },
-        paymentIntent: { select: { provider: true, purpose: true, providerReference: true } },
+        paymentIntent: { select: { provider: true, purpose: true, providerReference: true, referenceType: true, referenceId: true } },
         subscription: { select: { plan: { select: { code: true, nameFa: true, billingCycle: true } } } },
         qualityControlRequest: { select: { rfq: { select: { code: true, title: true } } } },
       },
@@ -20,6 +20,13 @@ export class PaymentReceiptsService {
     const isMember = user.memberships.some((membership) => membership.organizationId === receipt.organizationId);
     const canReadFinance = user.permissions.some((permission) => ['billing.read', 'billing.manage'].includes(permission));
     if (!isMember && !canReadFinance) throw new ForbiddenException('دسترسی به این رسید مجاز نیست.');
+    if (receipt.paymentIntent?.purpose === 'BUYER_COMMITMENT' && receipt.paymentIntent.referenceType === 'Rfq') {
+      const rfq = await this.prisma.rfq.findFirst({
+        where: { id: receipt.paymentIntent.referenceId, buyerOrganizationId: receipt.organizationId },
+        select: { id: true, code: true, title: true },
+      });
+      return { ...receipt, rfq };
+    }
     return receipt;
   }
 }
