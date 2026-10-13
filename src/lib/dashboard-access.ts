@@ -17,6 +17,7 @@ const MANAGEMENT_LINKS: Array<DashboardLink & { permissions: string[] }> = [
   { href: '/admin/reviews', label: 'نظرات فروشندگان', permissions: ['support.manage'] },
   { href: '/admin/reports', label: 'گزارش مدیریتی', permissions: ['report.read'] },
   { href: '/admin/billing', label: 'اشتراک‌ها و پرداخت‌ها', permissions: ['billing.read', 'billing.manage'] },
+  { href: '/admin/readiness' as Route, label: 'آمادگی انتشار', permissions: ['settings.read', 'settings.manage'] },
   { href: '/admin/settings', label: 'تنظیمات کسب‌وکار', permissions: ['settings.read', 'settings.manage'] },
   { href: '/admin/content', label: 'مدیریت محتوا', permissions: ['content.manage'] },
   { href: '/admin/users', label: 'مدیریت کاربران', permissions: ['user.read', 'user.manage'] },
