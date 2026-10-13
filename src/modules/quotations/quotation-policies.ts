@@ -1,8 +1,20 @@
 import { Prisma } from '@prisma/client';
 
-export const PROPOSAL_FEE_POLICY_VERSION = '1.2';
-export const PROPOSAL_FEE_MIN_CREDITS = 100_000n;
-export const PROPOSAL_FEE_MAX_CREDITS = 5_000_000n;
+export type ProposalFeePolicy = {
+  version: string;
+  rate: string;
+  minToman: number;
+  maxToman: number;
+  refundFractionIfEligible: string;
+};
+
+export const DEFAULT_PROPOSAL_FEE_POLICY: ProposalFeePolicy = {
+  version: '1.2',
+  rate: '0.001',
+  minToman: 100_000,
+  maxToman: 5_000_000,
+  refundFractionIfEligible: '2/3',
+};
 
 export type QuotationLineInput = {
   quantity: string;
@@ -43,11 +55,53 @@ export function calculateQuotationTotals(input: QuotationCostInput) {
   return { items, subtotalRial, discountRial, taxRial, packagingRial, loadingRial, shippingRial, otherCostsRial, finalAmountRial };
 }
 
-export function calculateProposalFeeCredits(finalAmountRial: bigint): bigint {
-  const variableFee = (finalAmountRial + 9_999n) / 10_000n;
-  if (variableFee < PROPOSAL_FEE_MIN_CREDITS) return PROPOSAL_FEE_MIN_CREDITS;
-  if (variableFee > PROPOSAL_FEE_MAX_CREDITS) return PROPOSAL_FEE_MAX_CREDITS;
+export function calculateProposalFeeCredits(finalAmountRial: bigint, policy = DEFAULT_PROPOSAL_FEE_POLICY): bigint {
+  const { numerator, scale } = decimalFraction(policy.rate);
+  const denominator = 10n * scale;
+  const variableFee = (finalAmountRial * numerator + denominator - 1n) / denominator;
+  const minimum = BigInt(policy.minToman);
+  const maximum = BigInt(policy.maxToman);
+  if (variableFee < minimum) return minimum;
+  if (variableFee > maximum) return maximum;
   return variableFee;
+}
+
+export function resolveProposalFeePolicy(value: unknown): ProposalFeePolicy {
+  if (value === undefined || value === null) return DEFAULT_PROPOSAL_FEE_POLICY;
+  assertValidProposalFeePolicy(value);
+  return value as ProposalFeePolicy;
+}
+
+export function assertValidProposalFeePolicy(value: unknown): void {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new RangeError('سیاست هزینه ارسال پیشنهاد معتبر نیست.');
+  }
+  const policy = value as Record<string, unknown>;
+  if (typeof policy.version !== 'string' || !/^[A-Z0-9._-]{1,32}$/i.test(policy.version)) {
+    throw new RangeError('نسخه سیاست هزینه پیشنهاد معتبر نیست.');
+  }
+  if (typeof policy.rate !== 'string' || !/^0(?:\.\d{1,6})?$|^1(?:\.0{1,6})?$/.test(policy.rate)) {
+    throw new RangeError('نرخ هزینه پیشنهاد باید عددی بین صفر و یک با حداکثر شش رقم اعشار باشد.');
+  }
+  if (!Number.isSafeInteger(policy.minToman) || !Number.isSafeInteger(policy.maxToman)) {
+    throw new RangeError('حداقل و حداکثر هزینه پیشنهاد باید عدد صحیح تومان باشد.');
+  }
+  const minimum = policy.minToman as number;
+  const maximum = policy.maxToman as number;
+  if (minimum < 0 || maximum < minimum || maximum > 1_000_000_000) {
+    throw new RangeError('بازه هزینه پیشنهاد معتبر نیست.');
+  }
+  if (typeof policy.refundFractionIfEligible !== 'string' || !/^[0-9]+\/[1-9][0-9]*$/.test(policy.refundFractionIfEligible)) {
+    throw new RangeError('نسبت بازگشت اعتبار باید مانند ۲/۳ وارد شود.');
+  }
+  const [refundNumerator, refundDenominator] = policy.refundFractionIfEligible.split('/').map(Number);
+  if (refundNumerator! > refundDenominator!) throw new RangeError('نسبت بازگشت اعتبار نمی‌تواند بیشتر از یک باشد.');
+}
+
+function decimalFraction(value: string): { numerator: bigint; scale: bigint } {
+  const [integerPart = '0', fractionPart = ''] = value.split('.');
+  const scale = 10n ** BigInt(fractionPart.length);
+  return { numerator: BigInt(integerPart) * scale + BigInt(fractionPart || '0'), scale };
 }
 
 export function totalProposalLimitFromEntitlements(entitlements: unknown): number | null {

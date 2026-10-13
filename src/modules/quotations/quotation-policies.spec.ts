@@ -1,4 +1,4 @@
-import { assertValidShortageOverrideSetting, calculateProposalFeeCredits, calculateQuotationTotals, effectiveDailyProposalLimit, startOfTehranDay, totalProposalLimitFromEntitlements } from './quotation-policies';
+import { assertValidProposalFeePolicy, assertValidShortageOverrideSetting, calculateProposalFeeCredits, calculateQuotationTotals, effectiveDailyProposalLimit, resolveProposalFeePolicy, startOfTehranDay, totalProposalLimitFromEntitlements } from './quotation-policies';
 
 describe('quotation policies', () => {
   it('calculates monetary totals with integer rial values', () => {
@@ -13,6 +13,12 @@ describe('quotation policies', () => {
   it('applies the proposal fee floor and cap', () => {
     expect(calculateProposalFeeCredits(100_000_000n)).toBe(100_000n);
     expect(calculateProposalFeeCredits(100_000_000_000n)).toBe(5_000_000n);
+  });
+
+  it('calculates proposal fees from a configurable exact decimal policy', () => {
+    const policy = resolveProposalFeePolicy({ version: '2.0', rate: '0.0025', minToman: 50_000, maxToman: 8_000_000, refundFractionIfEligible: '1/2' });
+    expect(calculateProposalFeeCredits(1_000_000_000n, policy)).toBe(250_000n);
+    expect(() => assertValidProposalFeePolicy({ ...policy, minToman: 9_000_000 })).toThrow();
   });
 
   it('uses the Tehran calendar day boundary', () => {
