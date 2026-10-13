@@ -10,7 +10,7 @@ import { displayedQuotationAmountRial } from '../../../../lib/quotation-display'
 type RfqItem = { id: string; title: string; quantity: string; specifications: ProductSpecifications; category: { nameFa: string; attributeBindings: ProductAttributeBinding[] }; unit: { symbolFa: string } };
 type QualityControlRequest = { status: string; purchaseAmountRial: string | null; feeBps: number; feeAmountRial: string | null; acceptedAt: string | null; paymentReceipt: null | { id: string; receiptNumber: string; providerReference: string | null; paidAt: string } };
 type ContractRequest = { id: string; code: string; status: 'REQUESTED' | 'UNDER_REVIEW' | 'TERMS_PREPARED' | 'ACCEPTED' | 'COMPLETED' | 'CANCELLED'; termsSummary: string | null; cancellationReason: string | null; acceptedAt: string | null };
-type Rfq = { id: string; code: string; title: string; operationalStatus: string; deliveryProvince: string | null; deliveryCity: string | null; displayPricesTaxInclusive: boolean; qualityControlRequested: boolean; qualityControlRequest: QualityControlRequest | null; contractRequest: ContractRequest | null; items: RfqItem[] };
+type Rfq = { id: string; code: string; title: string; operationalStatus: string; commitmentStatus: string; commitmentAmountRial: string | null; deliveryProvince: string | null; deliveryCity: string | null; displayPricesTaxInclusive: boolean; qualityControlRequested: boolean; qualityControlRequest: QualityControlRequest | null; contractRequest: ContractRequest | null; items: RfqItem[] };
 type QuotationItem = { id: string; quantity: string; unitPriceRial: string; lineNetRial: string; isAlternative: boolean; offeredDescription: string | null; rfqItem: RfqItem };
 type Quotation = { id: string; code: string; status: string; finalAmountRial: string; taxRial: string; shippingRial: string; preparationDays: number | null; validUntil: string | null; supplierOrganization: { id: string; displayName: string; province: string | null; city: string | null }; items: QuotationItem[] };
 type Attachment = { id: string; originalName: string; status: string; sizeBytes: number };
@@ -23,7 +23,7 @@ const contractStatusLabels: Record<ContractRequest['status'], string> = {
   REQUESTED: 'ثبت‌شده', UNDER_REVIEW: 'در حال بررسی', TERMS_PREPARED: 'شرایط آماده تأیید', ACCEPTED: 'تأییدشده', COMPLETED: 'تکمیل‌شده', CANCELLED: 'لغوشده',
 };
 
-export function RfqDetail({ rfqId, qualityPaymentResult }: { rfqId: string; qualityPaymentResult?: string }) {
+export function RfqDetail({ rfqId, qualityPaymentResult, commitmentPaymentResult }: { rfqId: string; qualityPaymentResult?: string; commitmentPaymentResult?: string }) {
   const [rfq, setRfq] = useState<Rfq | null>(null);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -56,9 +56,14 @@ export function RfqDetail({ rfqId, qualityPaymentResult }: { rfqId: string; qual
   }, [rfqId]);
 
   useEffect(() => {
-    if (qualityPaymentResult !== 'success') return;
+    if (!qualityPaymentResult || qualityPaymentResult === 'processing') return;
     sessionStorage.removeItem(`vazano:quality-control-checkout:${rfqId}`);
   }, [qualityPaymentResult, rfqId]);
+
+  useEffect(() => {
+    if (!commitmentPaymentResult || commitmentPaymentResult === 'processing') return;
+    sessionStorage.removeItem(`vazano:buyer-commitment-checkout:${rfqId}`);
+  }, [commitmentPaymentResult, rfqId]);
 
   async function accept(id: string) {
     if (!window.confirm('انتخاب این فروشنده را تأیید می‌کنید؟')) return;
@@ -81,6 +86,21 @@ export function RfqDetail({ rfqId, qualityPaymentResult }: { rfqId: string; qual
       const result = await apiRequest<CheckoutResult>(`/quality-control/rfqs/${rfqId}/checkout`, { method: 'POST', body: JSON.stringify({ idempotencyKey }) });
       window.location.assign(result.redirectUrl);
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : 'شروع پرداخت کنترل کیفیت انجام نشد.'); setBusyId(''); }
+  }
+
+  async function payBuyerCommitment() {
+    if (!window.confirm('برای پرداخت مبلغ تعهد استعلام به درگاه امن زرین‌پال منتقل می‌شوید. ادامه می‌دهید؟')) return;
+    setBusyId('buyer-commitment'); setMessage('');
+    try {
+      const storageKey = `vazano:buyer-commitment-checkout:${rfqId}`;
+      let idempotencyKey = sessionStorage.getItem(storageKey);
+      if (!idempotencyKey) {
+        idempotencyKey = `buyer-commitment:${rfqId}:${crypto.randomUUID()}`;
+        sessionStorage.setItem(storageKey, idempotencyKey);
+      }
+      const result = await apiRequest<CheckoutResult>(`/rfqs/${rfqId}/commitment/payment`, { method: 'POST', body: JSON.stringify({ idempotencyKey }) });
+      window.location.assign(result.redirectUrl);
+    } catch (reason) { setMessage(reason instanceof Error ? reason.message : 'شروع پرداخت تعهد انجام نشد.'); setBusyId(''); }
   }
 
   async function requestContract() {
@@ -130,11 +150,16 @@ export function RfqDetail({ rfqId, qualityPaymentResult }: { rfqId: string; qual
     {qualityPaymentResult === 'success' && <div className="message message-success">پرداخت کنترل کیفیت تأیید شد و درخواست وارد صف عملیات وازانو شده است.</div>}
     {qualityPaymentResult === 'cancelled' && <div className="message message-error">پرداخت کنترل کیفیت لغو شد و درخواست هنوز فعال نشده است.</div>}
     {qualityPaymentResult === 'failed' && <div className="message message-error">تأیید پرداخت کنترل کیفیت انجام نشد. در صورت کسر وجه، شماره پیگیری را برای پشتیبانی ارسال کنید.</div>}
+    {commitmentPaymentResult === 'success' && <div className="message message-success">پرداخت تعهد خریدار تأیید شد. استعلام اکنون آماده انتشار توسط وازانو است.</div>}
+    {commitmentPaymentResult === 'cancelled' && <div className="message message-error">پرداخت تعهد لغو شد؛ می‌توانید با یک تلاش تازه دوباره اقدام کنید.</div>}
+    {commitmentPaymentResult === 'failed' && <div className="message message-error">تأیید پرداخت تعهد انجام نشد. در صورت کسر وجه، شماره پیگیری را برای پشتیبانی ارسال کنید.</div>}
+    {commitmentPaymentResult === 'processing' && <div className="message">نتیجه پرداخت در حال پردازش است؛ چند لحظه بعد وضعیت صفحه را بررسی کنید.</div>}
     {message && <div className="message message-success">{message}</div>}
     <article className="card"><h2>اقلام درخواستی</h2><ul>{rfq.items.map((item) => {
       const details = formatProductSpecifications(item.specifications, item.category.attributeBindings);
       return <li key={item.id}>{item.category.nameFa} — {item.title} — {item.quantity} {item.unit.symbolFa}{details.length > 0 && <div className="specification-summary">{details.map((detail) => <span key={detail.code}>{detail.label}: {detail.value}</span>)}</div>}</li>;
     })}</ul></article>
+    {rfq.commitmentStatus !== 'NOT_REQUIRED' && <article className="card stack"><div><h2>تعهد خریدار</h2><p className="muted">این مبلغ برای تکمیل گیت انتشار استعلام ثبت می‌شود و وضعیت آن در سوابق مالی قابل پیگیری است.</p></div>{rfq.commitmentAmountRial && <p className="price">مبلغ تعهد: {toman(rfq.commitmentAmountRial)}</p>}{rfq.commitmentStatus === 'REQUIRED' && <button className="button button-primary" type="button" disabled={busyId === 'buyer-commitment'} onClick={() => void payBuyerCommitment()}>{busyId === 'buyer-commitment' ? 'در حال اتصال به زرین‌پال…' : 'پرداخت تعهد و ادامه فرایند'}</button>}{rfq.commitmentStatus === 'PAYMENT_PENDING' && <div className="message">پرداخت ایجاد شده و در انتظار تأیید درگاه است.</div>}{rfq.commitmentStatus === 'HELD' && <div className="message message-success">تعهد پرداخت و تأیید شده است.</div>}</article>}
     <article className="card"><h2>پیوست‌ها</h2>
       {attachments.length === 0 && <p>فایلی به این استعلام پیوست نشده است.</p>}
       <div className="stack">{attachments.map((attachment) => <div className="list-card" key={attachment.id}>
