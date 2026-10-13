@@ -41,7 +41,11 @@ export class ObjectStorageService implements OnModuleInit {
       await this.client.send(new HeadBucketCommand({ Bucket: this.bucket }));
     } catch (error: unknown) {
       if (this.config.get<string>('NODE_ENV') === 'production') throw error;
-      await this.client.send(new CreateBucketCommand({ Bucket: this.bucket }));
+      try {
+        await this.client.send(new CreateBucketCommand({ Bucket: this.bucket }));
+      } catch (createError: unknown) {
+        if (!isBucketAlreadyOwnedError(createError)) throw createError;
+      }
     }
   }
 
@@ -75,4 +79,10 @@ export class ObjectStorageService implements OnModuleInit {
   async remove(storageKey: string): Promise<void> {
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: storageKey }));
   }
+}
+
+export function isBucketAlreadyOwnedError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as { name?: unknown; Code?: unknown; code?: unknown };
+  return [candidate.name, candidate.Code, candidate.code].some((value) => value === 'BucketAlreadyOwnedByYou');
 }

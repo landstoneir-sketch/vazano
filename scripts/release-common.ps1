@@ -69,6 +69,15 @@ function Wait-VazanoGatewayReadiness {
   throw "Release readiness check failed: $readinessUrl"
 }
 
+function Get-VazanoResponseData {
+  param([object]$Response)
+
+  if ($null -ne $Response -and $Response.PSObject.Properties.Name -contains 'data') {
+    return $Response.data
+  }
+  return $Response
+}
+
 function Invoke-VazanoReleaseSmokeChecks {
   param([string]$GatewayUrl)
 
@@ -85,13 +94,16 @@ function Invoke-VazanoReleaseSmokeChecks {
     }
   }
 
-  $categories = @(Invoke-RestMethod -Uri "$gatewayBaseUrl/v1/catalog/categories" -Method Get -TimeoutSec 10)
+  $categoriesResponse = Invoke-RestMethod -Uri "$gatewayBaseUrl/v1/catalog/categories" -Method Get -TimeoutSec 10
+  $categories = @(Get-VazanoResponseData -Response $categoriesResponse)
   if ($categories.Count -lt 1) { throw 'Post-deployment smoke check found no active product category.' }
 
-  $units = @(Invoke-RestMethod -Uri "$gatewayBaseUrl/v1/catalog/units" -Method Get -TimeoutSec 10)
+  $unitsResponse = Invoke-RestMethod -Uri "$gatewayBaseUrl/v1/catalog/units" -Method Get -TimeoutSec 10
+  $units = @(Get-VazanoResponseData -Response $unitsResponse)
   if ($units.Count -lt 1) { throw 'Post-deployment smoke check found no active unit of measure.' }
 
-  $provinces = @(Invoke-RestMethod -Uri "$gatewayBaseUrl/v1/locations/provinces" -Method Get -TimeoutSec 10)
+  $provincesResponse = Invoke-RestMethod -Uri "$gatewayBaseUrl/v1/locations/provinces" -Method Get -TimeoutSec 10
+  $provinces = @(Get-VazanoResponseData -Response $provincesResponse)
   if ($provinces.Count -lt 31) {
     throw "Post-deployment smoke check found only $($provinces.Count) active provinces."
   }
