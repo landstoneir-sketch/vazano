@@ -42,6 +42,9 @@ describe('route access policy', () => {
     expect(canAccessRoute('/admin/billing', financeManager)).toBe(true);
     expect(canAccessRoute('/admin/settings', financeManager)).toBe(false);
 
+    const settingsReader = { ...contentManager, permissions: ['settings.read'], globalRoles: ['ADMIN'] };
+    expect(canAccessRoute('/admin/readiness', settingsReader)).toBe(true);
+
     const operator = { ...buyer, permissions: ['rfq.create_on_behalf'], globalRoles: ['SUPPORT'] };
     expect(canAccessRoute('/admin/rfqs/new', operator)).toBe(true);
     expect(canAccessRoute('/admin/rfqs', operator)).toBe(false);

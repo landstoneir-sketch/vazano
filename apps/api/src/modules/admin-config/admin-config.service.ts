@@ -1,13 +1,61 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { PrismaService } from '../../shared/prisma/prisma.service';
 import { UpdateNotificationTemplateDto } from './update-notification-template.dto';
 import { UpdateSystemSettingDto } from './update-system-setting.dto';
+import { evaluateReleaseReadiness } from './release-readiness';
 
 @Injectable()
 export class AdminConfigService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly environment: ConfigService) {}
+
+  async releaseReadiness(user: AuthenticatedUser) {
+    this.requireAnyPermission(user, ['settings.read', 'settings.manage']);
+    const [legalPages, paidPlanCount, activeCategoryCount, activeProvinceCount, activeSuperAdminCount] = await Promise.all([
+      this.prisma.cmsPage.findMany({ where: { slug: { in: ['terms', 'privacy'] } }, select: { slug: true, status: true } }),
+      this.prisma.subscriptionPlan.count({ where: { isActive: true, isPublic: true, isTrial: false, priceRial: { gt: 0 } } }),
+      this.prisma.category.count({ where: { isActive: true, parentId: { not: null } } }),
+      this.prisma.province.count({ where: { isActive: true } }),
+      this.prisma.userRole.count({ where: { role: { key: 'SUPER_ADMIN' }, user: { status: 'ACTIVE' } } }),
+    ]);
+    const pageStatus = new Map(legalPages.map((page) => [page.slug, page.status]));
+    const renewalTemplateKeys = [
+      'SMSIR_SUBSCRIPTION_RENEWAL_14_TEMPLATE_ID', 'SMSIR_SUBSCRIPTION_RENEWAL_7_TEMPLATE_ID', 'SMSIR_SUBSCRIPTION_RENEWAL_3_TEMPLATE_ID',
+      'SMSIR_SUBSCRIPTION_EXPIRED_TEMPLATE_ID', 'SMSIR_SUBSCRIPTION_GRACE_ENDED_TEMPLATE_ID', 'SMSIR_SUBSCRIPTION_TRIAL_7_TEMPLATE_ID',
+      'SMSIR_SUBSCRIPTION_TRIAL_3_TEMPLATE_ID', 'SMSIR_SUBSCRIPTION_TRIAL_1_TEMPLATE_ID', 'SMSIR_SUBSCRIPTION_TRIAL_ENDED_TEMPLATE_ID',
+    ];
+    const smsConfigured = this.environment.get<string>('SMS_PROVIDER') === 'smsir'
+      && Boolean(this.environment.get<string>('SMSIR_API_KEY'))
+      && Boolean(this.environment.get<string>('SMSIR_TEMPLATE_ID'));
+    const subscriptionSmsConfigured = this.environment.get<string>('SUBSCRIPTION_SMS_ENABLED') === 'true'
+      && renewalTemplateKeys.every((key) => Boolean(this.environment.get<string>(key)));
+    const paymentConfigured = this.environment.get<string>('PAYMENT_PROVIDER', 'zarinpal') === 'zarinpal'
+      && this.environment.get<string>('ZARINPAL_ENABLED') === 'true'
+      && this.environment.get<string>('ZARINPAL_SANDBOX') === 'false'
+      && Boolean(this.environment.get<string>('ZARINPAL_MERCHANT_ID'));
+
+    return {
+      generatedAt: new Date().toISOString(),
+      ...evaluateReleaseReadiness({
+        nodeEnvironment: this.environment.get<string>('NODE_ENV', 'development'),
+        otpDebugEnabled: this.environment.get<string>('OTP_DEBUG_ENABLED') === 'true',
+        smsConfigured,
+        subscriptionSmsConfigured,
+        paymentConfigured,
+        fileScanningConfigured: this.environment.get<string>('FILE_SCAN_MODE') === 'clamav',
+        notificationWorkerEnabled: this.environment.get<string>('NOTIFICATION_WORKER_ENABLED', 'true') === 'true',
+        subscriptionWorkerEnabled: this.environment.get<string>('SUBSCRIPTION_LIFECYCLE_WORKER_ENABLED', 'true') === 'true',
+        termsPublished: pageStatus.get('terms') === 'PUBLISHED',
+        privacyPublished: pageStatus.get('privacy') === 'PUBLISHED',
+        paidPlanCount,
+        activeCategoryCount,
+        activeProvinceCount,
+        activeSuperAdminCount,
+      }),
+    };
+  }
 
   listSettings(user: AuthenticatedUser) {
     this.requireAnyPermission(user, ['settings.read', 'settings.manage']);

@@ -22,5 +22,6 @@ describe('dashboard access', () => {
     const links = dashboardManagementLinks(identity({ globalRoles: ['SUPER_ADMIN'] }));
     expect(links.length).toBeGreaterThan(10);
     expect(links).toContainEqual({ href: '/admin/audit-logs', label: 'ممیزی و امنیت' });
+    expect(links).toContainEqual({ href: '/admin/readiness', label: 'آمادگی انتشار' });
   });
 });
