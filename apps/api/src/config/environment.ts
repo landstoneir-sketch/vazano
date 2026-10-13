@@ -25,6 +25,10 @@ export function validateEnvironment(environment: Environment): Environment {
   }
 
   if (nodeEnv === 'production') {
+    requireReleaseImage(environment, 'VAZANO_API_IMAGE');
+    requireReleaseImage(environment, 'VAZANO_WEB_IMAGE');
+    requireReleaseImage(environment, 'VAZANO_MIGRATION_IMAGE');
+    requireDigestImage(environment, 'VAZANO_GATEWAY_IMAGE');
     assertNotPlaceholder('DATABASE_URL', environment.DATABASE_URL!);
     const webOrigin = new URL(environment.WEB_ORIGIN!);
     if (webOrigin.protocol !== 'https:') throw new Error('WEB_ORIGIN must use HTTPS in production.');
@@ -94,4 +98,23 @@ function requireIranianMobile(environment: Environment, key: string): string {
       : value.startsWith('98') && value.length === 12 ? `0${value.slice(2)}` : value;
   if (!/^09\d{9}$/.test(localValue)) throw new Error(`${key} must be a valid Iranian mobile number.`);
   return localValue;
+}
+
+function requireReleaseImage(environment: Environment, key: string): string {
+  const value = requireValue(environment, key);
+  assertNotPlaceholder(key, value);
+  if (/(?:^|:)latest(?:$|@)/i.test(value)) throw new Error(`${key} must not use the mutable latest tag.`);
+  const hasGitShaTag = /:[0-9a-f]{40}$/i.test(value);
+  const hasDigest = /@sha256:[0-9a-f]{64}$/i.test(value);
+  if (!hasGitShaTag && !hasDigest) {
+    throw new Error(`${key} must use a full Git SHA tag or sha256 digest.`);
+  }
+  return value;
+}
+
+function requireDigestImage(environment: Environment, key: string): string {
+  const value = requireValue(environment, key);
+  assertNotPlaceholder(key, value);
+  if (!/@sha256:[0-9a-f]{64}$/i.test(value)) throw new Error(`${key} must use an immutable sha256 digest.`);
+  return value;
 }
