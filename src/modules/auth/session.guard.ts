@@ -19,7 +19,10 @@ export class SessionGuard implements CanActivate {
         user: {
           include: {
             memberships: { where: { status: 'ACTIVE' }, select: { organizationId: true, role: true } },
-            userRoles: { include: { role: { include: { permissions: { include: { permission: true } } } } } },
+            userRoles: {
+              where: { organizationId: null },
+              include: { role: { include: { permissions: { include: { permission: true } } } } },
+            },
           },
         },
       },
@@ -32,7 +35,7 @@ export class SessionGuard implements CanActivate {
       mobile: session.user.mobile,
       status: session.user.status,
       permissions: [...permissions],
-      globalRoles: session.user.userRoles.filter((item) => item.organizationId === null).map((item) => item.role.key),
+      globalRoles: session.user.userRoles.map((item) => item.role.key),
       memberships: session.user.memberships,
     };
     request.sessionToken = token;
