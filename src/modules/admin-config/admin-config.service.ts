@@ -30,9 +30,9 @@ export class AdminConfigService {
     ] = await Promise.all([
       this.prisma.cmsPage.findMany({ where: { slug: { in: ['terms', 'privacy'] } }, select: { slug: true, status: true } }),
       this.prisma.subscriptionPlan.count({ where: { isActive: true, isPublic: true, isTrial: false, priceRial: { gt: 0 } } }),
-      this.prisma.category.findMany({ where: { isActive: true, parentId: { not: null } }, select: { id: true } }),
+      this.prisma.category.findMany({ where: { isActive: true, parentId: { not: null } }, select: { id: true, nameFa: true } }),
       this.prisma.unitOfMeasure.count({ where: { isActive: true } }),
-      this.prisma.province.findMany({ where: { isActive: true }, select: { id: true, code: true } }),
+      this.prisma.province.findMany({ where: { isActive: true }, select: { id: true, code: true, nameFa: true } }),
       this.prisma.organization.count({
         where: {
           kind: 'BUYER',
@@ -70,7 +70,6 @@ export class AdminConfigService {
     ]);
     const pageStatus = new Map(legalPages.map((page) => [page.slug, page.status]));
     const activeProvinceCodes = new Set(activeProvinces.map((province) => province.code));
-    const activeCategoryIds = new Set(activeCategories.map((category) => category.id));
     let marketCoverageConfigured = false;
     let requiredProvinceIds = new Set(activeProvinces.map((province) => province.id));
     try {
@@ -89,10 +88,10 @@ export class AdminConfigService {
     const coveredCategoryIds = new Set(eligibleSuppliers.flatMap((supplier) => supplier.categories.map((category) => category.categoryId)));
     const hasNationwideSupplier = eligibleSuppliers.some((supplier) => supplier.nationwideCoverage);
     const coveredProvinceIds = new Set(eligibleSuppliers.flatMap((supplier) => supplier.serviceProvinceLinks.map((link) => link.provinceId)));
-    const uncoveredCategoryCount = [...activeCategoryIds].filter((categoryId) => !coveredCategoryIds.has(categoryId)).length;
-    const uncoveredProvinceCount = hasNationwideSupplier
-      ? 0
-      : [...requiredProvinceIds].filter((provinceId) => !coveredProvinceIds.has(provinceId)).length;
+    const uncoveredCategories = activeCategories.filter((category) => !coveredCategoryIds.has(category.id));
+    const uncoveredProvinces = hasNationwideSupplier
+      ? []
+      : activeProvinces.filter((province) => requiredProvinceIds.has(province.id) && !coveredProvinceIds.has(province.id));
     const renewalTemplateKeys = [
       'SMSIR_SUBSCRIPTION_RENEWAL_14_TEMPLATE_ID', 'SMSIR_SUBSCRIPTION_RENEWAL_7_TEMPLATE_ID', 'SMSIR_SUBSCRIPTION_RENEWAL_3_TEMPLATE_ID',
       'SMSIR_SUBSCRIPTION_EXPIRED_TEMPLATE_ID', 'SMSIR_SUBSCRIPTION_GRACE_ENDED_TEMPLATE_ID', 'SMSIR_SUBSCRIPTION_TRIAL_7_TEMPLATE_ID',
@@ -128,8 +127,10 @@ export class AdminConfigService {
         marketCoverageConfigured,
         activeBuyerOrganizationCount,
         eligibleSupplierCount: eligibleSuppliers.length,
-        uncoveredCategoryCount,
-        uncoveredProvinceCount,
+        uncoveredCategoryCount: uncoveredCategories.length,
+        uncoveredProvinceCount: uncoveredProvinces.length,
+        uncoveredCategoryNames: uncoveredCategories.map((category) => category.nameFa),
+        uncoveredProvinceNames: uncoveredProvinces.map((province) => province.nameFa),
         activeSuperAdminCount,
       }),
     };
