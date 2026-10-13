@@ -19,6 +19,11 @@ const categoryDetailsInclude = {
 export class QuotationsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async getActivePolicy() {
+    const setting = await this.prisma.systemSetting.findUnique({ where: { key: 'seller.proposal_fee_policy' }, select: { value: true } });
+    return resolveProposalFeePolicy(setting?.value);
+  }
+
   async createDraft(user: AuthenticatedUser, input: CreateQuotationDto) {
     this.assertSupplierMembership(user, input.supplierOrganizationId);
     const now = new Date();

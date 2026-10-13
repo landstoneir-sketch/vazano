@@ -30,6 +30,11 @@ export class QuotationsController {
     return this.quotations.listForSupplier(user, organizationId);
   }
 
+  @Get('active-policy')
+  activePolicy() {
+    return this.quotations.getActivePolicy();
+  }
+
   @Get('rfqs/:rfqId/comparison')
   comparison(@CurrentUser() user: AuthenticatedUser, @Param('rfqId') rfqId: string) {
     return this.quotations.comparison(user, rfqId);
