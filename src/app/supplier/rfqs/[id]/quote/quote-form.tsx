@@ -9,6 +9,7 @@ type Organization = { id: string; displayName: string; kind: string; status: str
 type RfqItem = { id: string; title: string; quantity: string; specifications: ProductSpecifications; category: { nameFa: string; attributeBindings: ProductAttributeBinding[] }; unit: { symbolFa: string } };
 type Rfq = { id: string; code: string; title: string; responseDeadline: string | null; items: RfqItem[] };
 type CreatedQuotation = { id: string; code: string; status: string; finalAmountRial: string };
+type ProposalFeePolicy = { version: string; rate: string; minToman: number; maxToman: number; refundFractionIfEligible: string };
 
 const toRial = (toman: string) => Math.round(Number(toman || '0') * 10).toString();
 const dateAfterDays = (days: number) => new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -26,14 +27,15 @@ export function QuoteForm({ rfqId, initialOrganizationId }: { rfqId: string; ini
   const [created, setCreated] = useState<CreatedQuotation | null>(null);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [feePolicy, setFeePolicy] = useState<ProposalFeePolicy | null>(null);
 
   useEffect(() => {
     let active = true;
-    void Promise.all([apiRequest<Rfq>(`/rfqs/${rfqId}`), apiRequest<Organization[]>('/organizations/mine')])
-      .then(([rfqData, orgData]) => {
+    void Promise.all([apiRequest<Rfq>(`/rfqs/${rfqId}`), apiRequest<Organization[]>('/organizations/mine'), apiRequest<ProposalFeePolicy>('/quotations/active-policy')])
+      .then(([rfqData, orgData, policyData]) => {
         if (!active) return;
         const suppliers = orgData.filter((item) => item.kind === 'SUPPLIER');
-        setRfq(rfqData); setOrganizations(suppliers);
+        setRfq(rfqData); setOrganizations(suppliers); setFeePolicy(policyData);
         setOrganizationId((current) => suppliers.some((item) => item.id === current) ? current : suppliers[0]?.id ?? '');
       })
       .catch((reason: unknown) => { if (active) setMessage(reason instanceof Error ? reason.message : 'دریافت اطلاعات انجام نشد.'); });
@@ -93,7 +95,7 @@ export function QuoteForm({ rfqId, initialOrganizationId }: { rfqId: string; ini
     <label className="form-field"><span>بسته‌بندی (تومان)</span><input inputMode="numeric" pattern="\d+" value={packagingToman} onChange={(event) => setPackagingToman(event.target.value)} /></label>
     <label className="form-field"><span>حمل (تومان)</span><input inputMode="numeric" pattern="\d+" value={shippingToman} onChange={(event) => setShippingToman(event.target.value)} /></label>
     <label className="form-field"><span>مالیات، جداگانه (تومان)</span><input inputMode="numeric" pattern="\d+" value={taxToman} onChange={(event) => setTaxToman(event.target.value)} /></label>
-    <div className="card summary-card"><span>جمع برآوردی</span><strong>{estimatedTotalToman.toLocaleString('fa-IR')} تومان</strong><small>هزینه ارسال پیشنهاد براساس سیاست ۱.۲ هنگام ارسال محاسبه می‌شود.</small></div>
+    <div className="card summary-card"><span>جمع برآوردی</span><strong>{estimatedTotalToman.toLocaleString('fa-IR')} تومان</strong><small>{feePolicy ? `هزینه ارسال پیشنهاد براساس سیاست ${feePolicy.version}: ${(Number(feePolicy.rate) * 100).toLocaleString('fa-IR')}٪ مبلغ، حداقل ${feePolicy.minToman.toLocaleString('fa-IR')} و حداکثر ${feePolicy.maxToman.toLocaleString('fa-IR')} تومان.` : 'هزینه ارسال پیشنهاد هنگام ارسال نهایی محاسبه می‌شود.'}</small></div>
     {!created && <button className="button button-primary" disabled={busy || !organizationId}>{busy ? 'در حال ذخیره…' : 'ذخیره پیش‌نویس'}</button>}
     {created?.status === 'DRAFT' && <button type="button" className="button button-primary" disabled={busy} onClick={() => void submit()}>{busy ? 'در حال ارسال…' : 'ارسال نهایی پیشنهاد'}</button>}
     {created?.status === 'SUBMITTED' && <Link className="button button-secondary" href="/supplier">بازگشت به فرصت‌های فروش</Link>}
