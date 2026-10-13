@@ -11,7 +11,7 @@ import { ResponseInterceptor } from './common/response.interceptor';
 import { requestContext, sessionOriginGuard } from './common/request-security';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const config = app.get(ConfigService);
   const trustProxyHops = Number(config.get<string>('TRUST_PROXY_HOPS', '0'));
   if (Number.isInteger(trustProxyHops) && trustProxyHops > 0) app.set('trust proxy', trustProxyHops);
