@@ -119,6 +119,7 @@ export function SubscriptionManager({ paymentResult, trialResult }: { paymentRes
     {trialResult === 'success' && <div className="message message-success">دوره آزمایشی با موفقیت فعال شد و نیازی به پرداخت ندارد.</div>}
     {paymentResult === 'cancelled' && <div className="message message-error">پرداخت لغو شد و مبلغی از حساب شما کسر نشده است.</div>}
     {paymentResult === 'failed' && <div className="message message-error">تأیید پرداخت انجام نشد. در صورت کسر وجه، وضعیت تراکنش را با پشتیبانی پیگیری کنید.</div>}
+    {paymentResult === 'processing' && <div className="message">نتیجه پرداخت در حال پردازش است؛ چند لحظه بعد این صفحه را تازه‌سازی کنید.</div>}
     {error && <div className="message message-error">{error}</div>}
     {organizations.length === 0 && !error && <div className="card">برای خرید اشتراک، ابتدا یک حساب فروشنده ایجاد و تأیید کنید.</div>}
     {organizations.length > 0 && <label className="form-field card"><span>حساب فروشنده</span><select value={organizationId} onChange={(event) => setOrganizationId(event.target.value)}>{organizations.map((item) => <option value={item.id} key={item.id}>{item.displayName} · {item.status}</option>)}</select></label>}
