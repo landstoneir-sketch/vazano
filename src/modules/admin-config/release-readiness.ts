@@ -17,6 +17,7 @@ export type ReleaseReadinessInput = {
   fileScanningConfigured: boolean;
   notificationWorkerEnabled: boolean;
   subscriptionWorkerEnabled: boolean;
+  rfqLifecycleWorkerEnabled: boolean;
   termsPublished: boolean;
   privacyPublished: boolean;
   paidPlanCount: number;
@@ -43,6 +44,7 @@ export function evaluateReleaseReadiness(input: ReleaseReadinessInput): { ready:
     check('security.file-scan', 'اسکن امنیتی فایل‌ها', input.fileScanningConfigured, 'فایل‌ها با ClamAV بررسی می‌شوند.', 'اسکن ClamAV فعال نیست؛ بارگذاری فایل در Production نباید بدون آن منتشر شود.'),
     check('worker.notifications', 'پردازش اعلان‌ها', input.notificationWorkerEnabled, 'Worker اعلان‌ها فعال است.', 'Worker اعلان‌ها غیرفعال است.'),
     check('worker.subscriptions', 'چرخه عمر اشتراک', input.subscriptionWorkerEnabled, 'Worker انقضا و تمدید اشتراک فعال است.', 'Worker چرخه عمر اشتراک غیرفعال است.'),
+    check('worker.rfq-lifecycle', 'چرخه مهلت استعلام', input.rfqLifecycleWorkerEnabled, 'Worker پایان مهلت دریافت پیشنهاد فعال است.', 'Worker پایان مهلت استعلام غیرفعال است.'),
     check('content.terms', 'قوانین و شرایط استفاده', input.termsPublished, 'صفحه قوانین منتشر شده است.', 'صفحه قوانین هنوز پیش‌نویس است و باید پس از تأیید مالک/حقوقی منتشر شود.', '/admin/content'),
     check('content.privacy', 'سیاست حریم خصوصی', input.privacyPublished, 'صفحه حریم خصوصی منتشر شده است.', 'صفحه حریم خصوصی هنوز پیش‌نویس است و باید پس از تأیید مالک/حقوقی منتشر شود.', '/admin/content'),
     check('billing.plan', 'پلن پولی قابل خرید', input.paidPlanCount > 0, `${input.paidPlanCount.toLocaleString('fa-IR')} پلن پولی فعال و عمومی وجود دارد.`, 'هیچ پلن پولی فعال و عمومی برای خرید وجود ندارد.', '/admin/billing'),

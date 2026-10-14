@@ -118,6 +118,7 @@ export class AdminConfigService {
         fileScanningConfigured: this.environment.get<string>('FILE_SCAN_MODE') === 'clamav',
         notificationWorkerEnabled: this.environment.get<string>('NOTIFICATION_WORKER_ENABLED', 'true') === 'true',
         subscriptionWorkerEnabled: this.environment.get<string>('SUBSCRIPTION_LIFECYCLE_WORKER_ENABLED', 'true') === 'true',
+        rfqLifecycleWorkerEnabled: this.environment.get<string>('RFQ_LIFECYCLE_WORKER_ENABLED', 'true') === 'true',
         termsPublished: pageStatus.get('terms') === 'PUBLISHED',
         privacyPublished: pageStatus.get('privacy') === 'PUBLISHED',
         paidPlanCount,
