@@ -138,6 +138,68 @@ export class RfqsService implements OnApplicationBootstrap, OnApplicationShutdow
     });
   }
 
+  async declineInvitation(user: AuthenticatedUser, invitationId: string) {
+    const invitation = await this.prisma.rfqInvitation.findUnique({
+      where: { id: invitationId },
+      include: { rfq: { select: { id: true, lifecycleState: true, operationalStatus: true, responseDeadline: true } } },
+    });
+    if (!invitation) throw new NotFoundException('دعوت استعلام پیدا نشد.');
+    const hasSupplierAccess = user.memberships.some((membership) =>
+      membership.organizationId === invitation.supplierOrganizationId
+      && ['SUPPLIER_OWNER', 'SUPPLIER_MANAGER', 'SUPPLIER_SALES'].includes(membership.role));
+    if (!hasSupplierAccess) throw new ForbiddenException('دسترسی به این دعوت استعلام مجاز نیست.');
+    if (invitation.status === 'DECLINED') return invitation;
+    if (!['INVITED', 'VIEWED'].includes(invitation.status)) {
+      throw new ConflictException('این دعوت پس از ثبت پاسخ قابل ردکردن نیست.');
+    }
+    const now = new Date();
+    if (invitation.rfq.lifecycleState !== 'PUBLISHED'
+      || !['OPEN_FOR_QUOTES', 'HAS_QUOTES'].includes(invitation.rfq.operationalStatus)
+      || (invitation.rfq.responseDeadline && invitation.rfq.responseDeadline <= now)) {
+      throw new ConflictException('مهلت پاسخ‌گویی به این استعلام پایان یافته است.');
+    }
+    const activeQuotation = await this.prisma.quotation.findFirst({
+      where: {
+        rfqId: invitation.rfqId,
+        supplierOrganizationId: invitation.supplierOrganizationId,
+        status: { in: ['DRAFT', 'SUBMITTED', 'REVISED', 'ACCEPTED'] },
+      },
+      select: { id: true },
+    });
+    if (activeQuotation) throw new ConflictException('برای این استعلام پیشنهاد فعال دارید و دعوت قابل ردکردن نیست.');
+
+    return this.prisma.$transaction(async (tx) => {
+      const changed = await tx.rfqInvitation.updateMany({
+        where: { id: invitation.id, status: { in: ['INVITED', 'VIEWED'] } },
+        data: { status: 'DECLINED', declinedAt: now },
+      });
+      if (changed.count !== 1) {
+        const current = await tx.rfqInvitation.findUniqueOrThrow({ where: { id: invitation.id } });
+        if (current.status === 'DECLINED') return current;
+        throw new ConflictException('وضعیت دعوت هم‌زمان تغییر کرده است؛ صفحه را تازه‌سازی کنید.');
+      }
+      await tx.auditLog.create({
+        data: {
+          actorUserId: user.id,
+          organizationId: invitation.supplierOrganizationId,
+          action: 'rfq.invitation.decline',
+          entityType: 'RfqInvitation',
+          entityId: invitation.id,
+          metadata: { rfqId: invitation.rfqId },
+        },
+      });
+      await tx.outboxEvent.create({
+        data: {
+          aggregateType: 'RfqInvitation',
+          aggregateId: invitation.id,
+          eventType: 'ir.vazano.rfq.invitation.declined.v1',
+          payload: { invitationId: invitation.id, rfqId: invitation.rfqId, supplierOrganizationId: invitation.supplierOrganizationId },
+        },
+      });
+      return tx.rfqInvitation.findUniqueOrThrow({ where: { id: invitation.id } });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
   async getOne(user: AuthenticatedUser, rfqId: string) {
     const rfq = await this.prisma.rfq.findUnique({
       where: { id: rfqId },
