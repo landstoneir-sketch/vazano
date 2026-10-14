@@ -171,6 +171,13 @@ const inAppNotificationTemplates = [
     actionPathTemplate: '/supplier',
   },
   {
+    code: 'IN_APP_QUOTATION_WITHDRAWN_FA_V1',
+    eventType: 'ir.vazano.quotation.withdrawn.v1',
+    titleTemplate: 'پیشنهاد قیمت پس گرفته شد',
+    bodyTemplate: '{{supplierName}} پیشنهاد {{quotationCode}} را برای استعلام {{rfqCode}} پس گرفت.',
+    actionPathTemplate: '/dashboard/rfqs/{{rfqId}}',
+  },
+  {
     code: 'IN_APP_CONTRACT_REQUESTED_FA_V1',
     eventType: 'ir.vazano.contract.requested.v1',
     titleTemplate: 'درخواست قرارداد جدید {{contractCode}}',
