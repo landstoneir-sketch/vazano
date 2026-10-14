@@ -24,6 +24,7 @@ import { ContractsModule } from './modules/contracts/contracts.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { validateEnvironment } from './config/environment';
+import { RedisRuntime } from './common/request-security';
 
 @Module({
   imports: [
@@ -54,5 +55,6 @@ import { validateEnvironment } from './config/environment';
     ReviewsModule,
   ],
   controllers: [HealthController],
+  providers: [RedisRuntime],
 })
 export class AppModule {}
