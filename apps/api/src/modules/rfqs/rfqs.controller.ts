@@ -32,6 +32,11 @@ export class RfqsController {
     return this.rfqs.getActivePolicy();
   }
 
+  @Post('invitations/:invitationId/decline')
+  declineInvitation(@CurrentUser() user: AuthenticatedUser, @Param('invitationId') invitationId: string) {
+    return this.rfqs.declineInvitation(user, invitationId);
+  }
+
   @Get(':id')
   getOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.rfqs.getOne(user, id);

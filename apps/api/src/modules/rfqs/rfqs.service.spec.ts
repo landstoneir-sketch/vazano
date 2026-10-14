@@ -133,3 +133,54 @@ describe('RfqsService response deadlines', () => {
     expect(tx.outboxEvent.create).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('RfqsService supplier invitation decisions', () => {
+  const supplierUser = {
+    id: 'supplier-user-1',
+    memberships: [{ organizationId: 'supplier-1', role: 'SUPPLIER_MANAGER' }],
+  };
+
+  it('declines an open invitation atomically and records operational evidence', async () => {
+    const invitation = {
+      id: 'invitation-1', rfqId: 'rfq-1', supplierOrganizationId: 'supplier-1', status: 'INVITED',
+      rfq: { id: 'rfq-1', lifecycleState: 'PUBLISHED', operationalStatus: 'OPEN_FOR_QUOTES', responseDeadline: null },
+    };
+    const declined = { ...invitation, status: 'DECLINED' };
+    let invitationUpdateInput: { data: { status: string; declinedAt: Date } } | undefined;
+    const tx = {
+      rfqInvitation: {
+        updateMany: jest.fn((input: { data: { status: string; declinedAt: Date } }) => {
+          invitationUpdateInput = input;
+          return Promise.resolve({ count: 1 });
+        }),
+        findUniqueOrThrow: jest.fn().mockResolvedValue(declined),
+      },
+      auditLog: { create: jest.fn().mockResolvedValue({}) },
+      outboxEvent: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const prisma = {
+      rfqInvitation: { findUnique: jest.fn().mockResolvedValue(invitation) },
+      quotation: { findFirst: jest.fn().mockResolvedValue(null) },
+      $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
+    };
+    const service = new RfqsService(prisma as never, {} as never, {} as never, {} as never);
+
+    await expect(service.declineInvitation(supplierUser as never, invitation.id)).resolves.toEqual(declined);
+    expect(invitationUpdateInput?.data.status).toBe('DECLINED');
+    expect(tx.auditLog.create).toHaveBeenCalledTimes(1);
+    expect(tx.outboxEvent.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not decline an invitation when an active quotation exists', async () => {
+    const prisma = {
+      rfqInvitation: { findUnique: jest.fn().mockResolvedValue({
+        id: 'invitation-1', rfqId: 'rfq-1', supplierOrganizationId: 'supplier-1', status: 'VIEWED',
+        rfq: { lifecycleState: 'PUBLISHED', operationalStatus: 'HAS_QUOTES', responseDeadline: null },
+      }) },
+      quotation: { findFirst: jest.fn().mockResolvedValue({ id: 'quotation-1' }) },
+    };
+    const service = new RfqsService(prisma as never, {} as never, {} as never, {} as never);
+
+    await expect(service.declineInvitation(supplierUser as never, 'invitation-1')).rejects.toBeInstanceOf(ConflictException);
+  });
+});
