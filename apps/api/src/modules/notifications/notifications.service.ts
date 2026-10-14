@@ -10,6 +10,7 @@ const SUPPORTED_EVENT_TYPES = [
   'ir.vazano.rfq.distributed.v1',
   'ir.vazano.quotation.submitted.v1',
   'ir.vazano.quotation.accepted.v1',
+  'ir.vazano.quotation.rejected.v1',
   'ir.vazano.contract.requested.v1',
   'ir.vazano.contract.terms_prepared.v1',
   'ir.vazano.contract.accepted.v1',
@@ -42,6 +43,7 @@ type SupportedOutboxEvent = {
   eventType: string;
   aggregateType: string;
   aggregateId: string;
+  payload: Prisma.JsonValue;
 };
 
 @Injectable()
@@ -96,7 +98,7 @@ export class NotificationsService {
         availableAt: { lte: new Date() },
         notificationDispatches: { none: { channel: 'IN_APP' } },
       },
-      select: { id: true, eventType: true, aggregateType: true, aggregateId: true },
+      select: { id: true, eventType: true, aggregateType: true, aggregateId: true, payload: true },
       orderBy: { createdAt: 'asc' },
       take: Math.min(Math.max(limit, 1), 100),
     });
@@ -296,6 +298,25 @@ export class NotificationsService {
             variables,
           })),
         ]);
+      }
+      case 'ir.vazano.quotation.rejected.v1': {
+        const quotation = await tx.quotation.findUnique({
+          where: { id: event.aggregateId },
+          select: {
+            code: true,
+            supplierOrganizationId: true,
+            supplierOrganization: { select: { members: { where: { status: 'ACTIVE' }, select: { userId: true } } } },
+            rfq: { select: { code: true } },
+          },
+        });
+        if (!quotation) return [];
+        const refundCredits = jsonStringField(event.payload, 'refundCredits') ?? '0';
+        return this.uniqueTargets(quotation.supplierOrganization.members.map((member) => ({
+          userId: member.userId,
+          organizationId: quotation.supplierOrganizationId,
+          actionPath: '/supplier',
+          variables: { quotationCode: quotation.code, rfqCode: quotation.rfq.code, refundCredits },
+        })));
       }
       case 'ir.vazano.contract.requested.v1': {
         const [request, operators] = await Promise.all([
@@ -602,4 +623,10 @@ export class NotificationsService {
       QUALITY_CONTROL: 'خدمت کنترل کیفیت',
     } as Record<string, string>)[purpose] ?? 'خدمت وازانو';
   }
+}
+
+function jsonStringField(value: unknown, key: string): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const field = (value as Record<string, unknown>)[key];
+  return typeof field === 'string' ? field : null;
 }

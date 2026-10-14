@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { PrismaService } from '../../shared/prisma/prisma.service';
 import { CreateQuotationDto } from './create-quotation.dto';
-import { calculateProposalFeeCredits, calculateQuotationTotals, effectiveDailyProposalLimit, resolveProposalFeePolicy, startOfTehranDay, totalProposalLimitFromEntitlements } from './quotation-policies';
+import { calculateProposalFeeCredits, calculateProposalRefundCredits, calculateQuotationTotals, effectiveDailyProposalLimit, resolveProposalFeePolicy, startOfTehranDay, totalProposalLimitFromEntitlements } from './quotation-policies';
 import { calculateQualityControlFeeRial } from '../rfqs/rfq-policies';
 
 const categoryDetailsInclude = {
@@ -167,7 +167,7 @@ export class QuotationsService {
           referenceId: quotation.id,
           idempotencyKey: `quotation:${quotation.id}:submit:v1`,
           reasonCode: 'QUOTATION_SUBMISSION_FEE',
-          metadata: { policyVersion: feePolicy.version, finalAmountRial: quotation.finalAmountRial.toString(), rate: feePolicy.rate },
+          metadata: { policyVersion: feePolicy.version, finalAmountRial: quotation.finalAmountRial.toString(), rate: feePolicy.rate, refundFractionIfEligible: feePolicy.refundFractionIfEligible },
         },
       });
       await tx.quotation.updateMany({
@@ -227,7 +227,42 @@ export class QuotationsService {
     return this.prisma.$transaction(async (tx) => {
       const alreadyAccepted = await tx.quotation.findFirst({ where: { rfqId: quotation.rfqId, status: 'ACCEPTED' } });
       if (alreadyAccepted) throw new ConflictException('برای این استعلام قبلاً فروشنده انتخاب شده است.');
+      const rejectedQuotations = await tx.quotation.findMany({
+        where: { rfqId: quotation.rfqId, status: 'SUBMITTED', id: { not: quotation.id } },
+        select: { id: true, supplierOrganizationId: true },
+      });
+      const feeEntries = rejectedQuotations.length === 0 ? [] : await tx.creditLedgerEntry.findMany({
+        where: { idempotencyKey: { in: rejectedQuotations.map((item) => `quotation:${item.id}:submit:v1`) } },
+        select: { walletId: true, amountCredits: true, idempotencyKey: true, referenceId: true, metadata: true },
+      });
+      const feeEntryByQuotationId = new Map(feeEntries.map((entry) => [entry.referenceId, entry]));
       await tx.quotation.updateMany({ where: { rfqId: quotation.rfqId, status: 'SUBMITTED', id: { not: quotation.id } }, data: { status: 'REJECTED' } });
+      for (const rejected of rejectedQuotations) {
+        const feeEntry = feeEntryByQuotationId.get(rejected.id);
+        const fraction = proposalRefundFraction(feeEntry?.metadata);
+        const refundCredits = feeEntry && feeEntry.amountCredits < 0n && fraction
+          ? calculateProposalRefundCredits(-feeEntry.amountCredits, fraction)
+          : 0n;
+        if (feeEntry && fraction && refundCredits > 0n) {
+          await tx.creditWallet.update({ where: { id: feeEntry.walletId }, data: { cachedBalanceCredits: { increment: refundCredits } } });
+          await tx.creditLedgerEntry.create({
+            data: {
+              walletId: feeEntry.walletId,
+              type: 'REFUND',
+              amountCredits: refundCredits,
+              referenceType: 'Quotation',
+              referenceId: rejected.id,
+              idempotencyKey: `quotation:${rejected.id}:not-selected-refund:v1`,
+              reasonCode: 'QUOTATION_NOT_SELECTED_REFUND',
+              metadata: { fraction, originalDebitIdempotencyKey: feeEntry.idempotencyKey },
+            },
+          });
+          await tx.auditLog.create({
+            data: { actorUserId: user.id, organizationId: rejected.supplierOrganizationId, action: 'quotation.credit.refund', entityType: 'Quotation', entityId: rejected.id, metadata: { refundCredits: refundCredits.toString(), fraction } },
+          });
+        }
+        await tx.outboxEvent.create({ data: { aggregateType: 'Quotation', aggregateId: rejected.id, eventType: 'ir.vazano.quotation.rejected.v1', payload: { quotationId: rejected.id, rfqId: quotation.rfqId, refundCredits: refundCredits.toString() } } });
+      }
       const result = await tx.quotation.update({ where: { id: quotation.id }, data: { status: 'ACCEPTED' } });
       await tx.rfq.update({ where: { id: quotation.rfqId }, data: { operationalStatus: 'SELLER_SELECTED', lifecycleState: 'CLOSED', closedAt: new Date() } });
       if (quotation.rfq.qualityControlRequested) {
@@ -273,4 +308,10 @@ export class QuotationsService {
     if (!isMember && !user.permissions.includes('quotation.manage')) throw new ForbiddenException('دسترسی به پیشنهادهای این استعلام مجاز نیست.');
     return rfq;
   }
+}
+
+function proposalRefundFraction(metadata: Prisma.JsonValue | null | undefined): string | null {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
+  const value = metadata.refundFractionIfEligible;
+  return typeof value === 'string' && /^\d+\/[1-9]\d*$/.test(value) ? value : null;
 }
