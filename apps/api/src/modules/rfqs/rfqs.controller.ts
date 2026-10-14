@@ -1,8 +1,8 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { SessionGuard } from '../auth/session.guard';
-import { CreateRfqDto } from './create-rfq.dto';
+import { CreateRfqDto, UpdateRfqDto } from './create-rfq.dto';
 import { RfqsService } from './rfqs.service';
 import { CancelRfqDto, MarkRfqInvitationViewedDto, ReviewRfqDto } from './review-rfq.dto';
 import { CreateCommitmentPaymentDto } from './create-commitment-payment.dto';
@@ -55,6 +55,11 @@ export class RfqsController {
   @Post('on-behalf')
   createOnBehalf(@CurrentUser() user: AuthenticatedUser, @Body() input: CreateRfqDto) {
     return this.rfqs.createOnBehalf(user, input);
+  }
+
+  @Put(':id')
+  updateDraft(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() input: UpdateRfqDto) {
+    return this.rfqs.updateDraft(user, id, input);
   }
 
   @Post(':id/submit')

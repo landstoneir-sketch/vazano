@@ -109,3 +109,8 @@ export class CreateRfqDto {
   @Type(() => CreateRfqItemDto)
   items!: CreateRfqItemDto[];
 }
+
+export class UpdateRfqDto extends CreateRfqDto {
+  @IsDateString()
+  expectedUpdatedAt!: string;
+}

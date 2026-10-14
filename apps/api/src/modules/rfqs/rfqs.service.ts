@@ -4,7 +4,7 @@ import { Prisma, RfqSource } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { PrismaService } from '../../shared/prisma/prisma.service';
-import { CreateRfqDto } from './create-rfq.dto';
+import { CreateRfqDto, UpdateRfqDto } from './create-rfq.dto';
 import { canPublishRfq } from './rfq-policies';
 import { RfqReviewDecision, ReviewRfqDto } from './review-rfq.dto';
 import { PaymentsService } from '../payments/payments.service';
@@ -362,6 +362,114 @@ export class RfqsService implements OnApplicationBootstrap, OnApplicationShutdow
       throw new BadRequestException('انتخاب کاربر خریدار برای ثبت توسط اپراتور الزامی است.');
     }
     return this.create(user, input, RfqSource.PLATFORM_OPERATOR);
+  }
+
+  async updateDraft(user: AuthenticatedUser, rfqId: string, input: UpdateRfqDto) {
+    const rfq = await this.findAuthorizedRfq(user, rfqId);
+    if (rfq.lifecycleState !== 'DRAFT' || !['DRAFT_INCOMPLETE', 'NEEDS_CHANGES'].includes(rfq.operationalStatus)) {
+      throw new ConflictException('فقط پیش‌نویس قابل ویرایش است.');
+    }
+    if (input.buyerOrganizationId !== rfq.buyerOrganizationId
+      || (input.buyerContactUserId && input.buyerContactUserId !== rfq.buyerContactUserId)) {
+      throw new BadRequestException('حساب خریدار و فرد تماس پس از ایجاد پیش‌نویس قابل تغییر نیستند.');
+    }
+    const expectedUpdatedAt = new Date(input.expectedUpdatedAt);
+    if (expectedUpdatedAt.getTime() !== rfq.updatedAt.getTime()) {
+      throw new ConflictException('این پیش‌نویس در جای دیگری تغییر کرده است؛ صفحه را تازه‌سازی کنید.');
+    }
+
+    const policy = await this.policySettings.get();
+    if (input.qualityControlRequested && !policy.qualityControl.enabled) {
+      throw new ConflictException('خدمت کنترل کیفیت در حال حاضر غیرفعال است.');
+    }
+    const domain = await this.prisma.industry.findFirst({ where: { id: input.primaryDomainId, isActive: true } });
+    if (!domain) throw new BadRequestException('حوزه اصلی معتبر نیست.');
+    await this.validateItems(input.primaryDomainId, input);
+    const deliveryLocation = await this.resolveDeliveryLocation(input);
+    if (!isProvinceWithinMarketCoverage(policy, deliveryLocation.provinceCode)) {
+      throw new BadRequestException('استان تحویل خارج از محدوده جغرافیایی فعال وازانو است.');
+    }
+    const responseDeadline = input.responseDeadline ? new Date(input.responseDeadline) : rfq.responseDeadline;
+    if (responseDeadline && responseDeadline <= new Date()) throw new BadRequestException('مهلت پاسخ باید در آینده باشد.');
+    const qualityControlRequest = await this.prisma.qualityControlRequest.findUnique({ where: { rfqId } });
+    if (!input.qualityControlRequested && qualityControlRequest && qualityControlRequest.status !== 'REQUESTED') {
+      throw new ConflictException('پس از شروع فرایند کنترل کیفیت، لغو آن فقط توسط پشتیبانی امکان‌پذیر است.');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updatedAt = new Date();
+      const changed = await tx.rfq.updateMany({
+        where: {
+          id: rfq.id,
+          lifecycleState: 'DRAFT',
+          operationalStatus: rfq.operationalStatus,
+          updatedAt: expectedUpdatedAt,
+        },
+        data: {
+          primaryDomainId: input.primaryDomainId,
+          title: input.title,
+          description: input.description === undefined ? rfq.description : input.description,
+          entryMethod: input.entryMethod ?? rfq.entryMethod,
+          deliveryProvinceId: deliveryLocation.provinceId,
+          deliveryCityId: deliveryLocation.cityId,
+          deliveryProvince: deliveryLocation.provinceName,
+          deliveryCity: deliveryLocation.cityName,
+          requiredAt: input.requiredAt === undefined ? rfq.requiredAt : new Date(input.requiredAt),
+          responseDeadline,
+          installationRequired: input.installationRequired ?? false,
+          qualityControlRequested: input.qualityControlRequested ?? false,
+          qualityControlFeeBps: input.qualityControlRequested ? policy.qualityControl.feeBps : null,
+          updatedAt,
+        },
+      });
+      if (changed.count !== 1) {
+        throw new ConflictException('این پیش‌نویس هم‌زمان تغییر کرده است؛ صفحه را تازه‌سازی کنید.');
+      }
+      await tx.rfqItem.deleteMany({ where: { rfqId: rfq.id } });
+      await tx.rfqItem.createMany({
+        data: input.items.map((item, index) => ({
+          rfqId: rfq.id,
+          categoryId: item.categoryId,
+          unitId: item.unitId,
+          title: item.title,
+          quantity: new Prisma.Decimal(item.quantity),
+          specifications: item.specifications ?? {},
+          estimatedLineValueRial: item.estimatedLineValueRial ? BigInt(item.estimatedLineValueRial) : null,
+          sortOrder: index,
+        })),
+      });
+      if (input.qualityControlRequested) {
+        await tx.qualityControlRequest.upsert({
+          where: { rfqId: rfq.id },
+          create: { rfqId: rfq.id, feeBps: policy.qualityControl.feeBps },
+          update: { feeBps: policy.qualityControl.feeBps },
+        });
+      } else {
+        await tx.qualityControlRequest.deleteMany({ where: { rfqId: rfq.id, status: 'REQUESTED' } });
+      }
+      await tx.auditLog.create({
+        data: {
+          actorUserId: user.id,
+          organizationId: rfq.buyerOrganizationId,
+          action: 'rfq.draft.update',
+          entityType: 'Rfq',
+          entityId: rfq.id,
+          metadata: { previousUpdatedAt: rfq.updatedAt.toISOString(), itemCount: input.items.length },
+        },
+      });
+      await tx.outboxEvent.create({
+        data: {
+          aggregateType: 'Rfq',
+          aggregateId: rfq.id,
+          eventType: 'ir.vazano.rfq.draft.updated.v1',
+          payload: { rfqId: rfq.id, buyerOrganizationId: rfq.buyerOrganizationId },
+        },
+      });
+      return tx.rfq.findUniqueOrThrow({
+        where: { id: rfq.id },
+        include: { items: true, qualityControlRequest: true },
+      });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
   async submit(user: AuthenticatedUser, rfqId: string) {

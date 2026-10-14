@@ -266,3 +266,64 @@ describe('RfqsService buyer cancellation', () => {
     await expect(service.cancel(buyerUser as never, 'rfq-1', 'تغییر نیاز پروژه')).rejects.toBeInstanceOf(ConflictException);
   });
 });
+
+describe('RfqsService draft editing', () => {
+  const buyerUser = {
+    id: 'buyer-user-1', permissions: [], memberships: [{ organizationId: 'buyer-1', role: 'BUYER_OWNER' }],
+  };
+  const originalUpdatedAt = new Date('2026-10-14T08:00:00.000Z');
+  const draft = {
+    id: 'rfq-1', buyerOrganizationId: 'buyer-1', buyerContactUserId: 'buyer-user-1',
+    lifecycleState: 'DRAFT', operationalStatus: 'DRAFT_INCOMPLETE', updatedAt: originalUpdatedAt,
+    description: null, entryMethod: 'STANDARD', requiredAt: null, responseDeadline: null, items: [],
+  };
+  const input = {
+    expectedUpdatedAt: originalUpdatedAt.toISOString(), buyerOrganizationId: 'buyer-1', primaryDomainId: 'stone',
+    title: 'سنگ نمای پروژه', deliveryProvinceId: 'province-1', deliveryCityId: 'city-1',
+    installationRequired: false, qualityControlRequested: true,
+    items: [{ categoryId: 'category-1', unitId: 'unit-1', title: 'تراورتن کرم', quantity: '120', specifications: {} }],
+  };
+
+  it('replaces draft items atomically and records the edit', async () => {
+    const updated = { ...draft, title: input.title, updatedAt: new Date('2026-10-14T08:05:00.000Z') };
+    const tx = {
+      rfq: { updateMany: jest.fn().mockResolvedValue({ count: 1 }), findUniqueOrThrow: jest.fn().mockResolvedValue(updated) },
+      rfqItem: { deleteMany: jest.fn().mockResolvedValue({ count: 1 }), createMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      qualityControlRequest: { upsert: jest.fn().mockResolvedValue({}), deleteMany: jest.fn() },
+      auditLog: { create: jest.fn().mockResolvedValue({}) },
+      outboxEvent: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const prisma = {
+      industry: { findFirst: jest.fn().mockResolvedValue({ id: 'stone' }) },
+      qualityControlRequest: { findUnique: jest.fn().mockResolvedValue(null) },
+      $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
+    };
+    const policy = { qualityControl: { enabled: true, feeBps: 300 }, marketCoverageMode: 'NATIONWIDE' };
+    const service = new RfqsService(prisma as never, {} as never, {} as never, { get: jest.fn().mockResolvedValue(policy) } as never);
+    const internals = service as unknown as {
+      findAuthorizedRfq: jest.Mock; validateItems: jest.Mock; resolveDeliveryLocation: jest.Mock;
+    };
+    internals.findAuthorizedRfq = jest.fn().mockResolvedValue(draft);
+    internals.validateItems = jest.fn().mockResolvedValue(undefined);
+    internals.resolveDeliveryLocation = jest.fn().mockResolvedValue({ provinceId: 'province-1', provinceCode: 'tehran', cityId: 'city-1', provinceName: 'تهران', cityName: 'تهران' });
+
+    await expect(service.updateDraft(buyerUser as never, draft.id, input as never)).resolves.toEqual(updated);
+    expect(tx.rfq.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: draft.id, updatedAt: originalUpdatedAt }),
+    }));
+    expect(tx.rfqItem.deleteMany).toHaveBeenCalledWith({ where: { rfqId: draft.id } });
+    expect(tx.rfqItem.createMany).toHaveBeenCalledTimes(1);
+    expect(tx.qualityControlRequest.upsert).toHaveBeenCalledTimes(1);
+    expect(tx.auditLog.create).toHaveBeenCalledTimes(1);
+    expect(tx.outboxEvent.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a stale browser copy before changing data', async () => {
+    const service = new RfqsService({} as never, {} as never, {} as never, {} as never);
+    (service as unknown as { findAuthorizedRfq: jest.Mock }).findAuthorizedRfq = jest.fn().mockResolvedValue(draft);
+
+    await expect(service.updateDraft(buyerUser as never, draft.id, {
+      ...input, expectedUpdatedAt: '2026-10-14T07:59:00.000Z',
+    } as never)).rejects.toBeInstanceOf(ConflictException);
+  });
+});
