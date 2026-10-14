@@ -8,6 +8,7 @@ const SUPPORTED_EVENT_TYPES = [
   'ir.vazano.rfq.submitted.v1',
   'ir.vazano.rfq.reviewed.v1',
   'ir.vazano.rfq.distributed.v1',
+  'ir.vazano.rfq.cancelled.v1',
   'ir.vazano.rfq.quote_window_closed.v1',
   'ir.vazano.quotation.submitted.v1',
   'ir.vazano.quotation.accepted.v1',
@@ -253,6 +254,24 @@ export class NotificationsService {
         return this.uniqueTargets(rfq.invitations.flatMap((invitation) => invitation.supplierOrganization.members.map((member) => ({
           userId: member.userId,
           organizationId: invitation.supplierOrganizationId,
+          actionPath: '/supplier',
+          variables: { rfqCode: rfq.code, rfqTitle: rfq.title },
+        }))));
+      }
+      case 'ir.vazano.rfq.cancelled.v1': {
+        const supplierOrganizationIds = jsonStringArrayField(event.payload, 'supplierOrganizationIds');
+        if (supplierOrganizationIds.length === 0) return [];
+        const [rfq, organizations] = await Promise.all([
+          tx.rfq.findUnique({ where: { id: event.aggregateId }, select: { code: true, title: true } }),
+          tx.organization.findMany({
+            where: { id: { in: supplierOrganizationIds } },
+            select: { id: true, members: { where: { status: 'ACTIVE' }, select: { userId: true } } },
+          }),
+        ]);
+        if (!rfq) return [];
+        return this.uniqueTargets(organizations.flatMap((organization) => organization.members.map((member) => ({
+          userId: member.userId,
+          organizationId: organization.id,
           actionPath: '/supplier',
           variables: { rfqCode: rfq.code, rfqTitle: rfq.title },
         }))));
@@ -668,4 +687,10 @@ function jsonStringField(value: unknown, key: string): string | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const field = (value as Record<string, unknown>)[key];
   return typeof field === 'string' ? field : null;
+}
+
+function jsonStringArrayField(value: unknown, key: string): string[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+  const field = (value as Record<string, unknown>)[key];
+  return Array.isArray(field) ? field.filter((item): item is string => typeof item === 'string') : [];
 }

@@ -11,7 +11,7 @@ type RfqItem = { id: string; title: string; quantity: string; specifications: Pr
 type QualityControlRequest = { status: string; purchaseAmountRial: string | null; feeBps: number; feeAmountRial: string | null; acceptedAt: string | null; paymentReceipt: null | { id: string; receiptNumber: string; providerReference: string | null; paidAt: string } };
 type PaymentReceiptSummary = { id: string; receiptNumber: string; providerReference: string | null; paidAt: string };
 type ContractRequest = { id: string; code: string; status: 'REQUESTED' | 'UNDER_REVIEW' | 'TERMS_PREPARED' | 'ACCEPTED' | 'COMPLETED' | 'CANCELLED'; termsSummary: string | null; cancellationReason: string | null; acceptedAt: string | null };
-type Rfq = { id: string; code: string; title: string; operationalStatus: string; commitmentStatus: string; commitmentAmountRial: string | null; commitmentReceipt: PaymentReceiptSummary | null; deliveryProvince: string | null; deliveryCity: string | null; displayPricesTaxInclusive: boolean; qualityControlRequested: boolean; qualityControlRequest: QualityControlRequest | null; contractRequest: ContractRequest | null; items: RfqItem[] };
+type Rfq = { id: string; code: string; title: string; lifecycleState: string; operationalStatus: string; commitmentStatus: string; commitmentAmountRial: string | null; commitmentReceipt: PaymentReceiptSummary | null; deliveryProvince: string | null; deliveryCity: string | null; displayPricesTaxInclusive: boolean; qualityControlRequested: boolean; qualityControlRequest: QualityControlRequest | null; contractRequest: ContractRequest | null; items: RfqItem[] };
 type QuotationItem = { id: string; quantity: string; unitPriceRial: string; lineNetRial: string; isAlternative: boolean; offeredDescription: string | null; rfqItem: RfqItem };
 type Quotation = { id: string; code: string; status: string; finalAmountRial: string; taxRial: string; shippingRial: string; preparationDays: number | null; validUntil: string | null; supplierOrganization: { id: string; displayName: string; province: string | null; city: string | null }; items: QuotationItem[] };
 type Attachment = { id: string; originalName: string; status: string; sizeBytes: number };
@@ -145,9 +145,24 @@ export function RfqDetail({ rfqId, qualityPaymentResult, qualityReceiptId, commi
     }
   }
 
+  async function cancelRfq() {
+    const reason = window.prompt('دلیل لغو استعلام را وارد کنید. اگر پیشنهادی ثبت شده باشد، اعتبار مصرف‌شده فروشنده به‌طور کامل بازمی‌گردد.')?.trim();
+    if (!reason) return;
+    if (reason.length < 5) { setMessage('دلیل لغو باید حداقل ۵ نویسه باشد.'); return; }
+    setBusyId('cancel-rfq'); setMessage('');
+    try {
+      const result = await apiRequest<{ refundedCredits: string }>(`/rfqs/${rfqId}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) });
+      const refund = BigInt(result.refundedCredits);
+      setMessage(refund > BigInt(0) ? `استعلام لغو شد و ${refund.toLocaleString('fa-IR')} اعتبار به فروشندگان بازگشت.` : 'استعلام لغو شد.');
+      await load();
+    }
+    catch (reasonValue: unknown) { setMessage(reasonValue instanceof Error ? reasonValue.message : 'لغو استعلام انجام نشد.'); }
+    finally { setBusyId(''); }
+  }
+
   if (!rfq) return <div className="card">{message || 'در حال دریافت اطلاعات…'}</div>;
   return <div className="stack">
-    <div><div className="eyebrow">{rfq.code}</div><h1>{rfq.title}</h1><p className="muted">{rfq.deliveryProvince ?? 'استان نامشخص'}، {rfq.deliveryCity ?? 'شهر نامشخص'} · {rfq.operationalStatus}</p></div>
+    <div><div className="eyebrow">{rfq.code}</div><h1>{rfq.title}</h1><p className="muted">{rfq.deliveryProvince ?? 'استان نامشخص'}، {rfq.deliveryCity ?? 'شهر نامشخص'} · {rfq.operationalStatus}</p>{['DRAFT', 'SUBMITTED', 'PUBLISHED'].includes(rfq.lifecycleState) && !['PAYMENT_PENDING', 'HELD', 'REFUND_PENDING'].includes(rfq.commitmentStatus) && <button className="button button-danger" type="button" disabled={busyId === 'cancel-rfq'} onClick={() => void cancelRfq()}>{busyId === 'cancel-rfq' ? 'در حال لغو…' : 'لغو استعلام'}</button>}</div>
     {qualityPaymentResult === 'success' && <div className="message message-success">پرداخت کنترل کیفیت تأیید شد و درخواست وارد صف عملیات وازانو شده است.{qualityReceiptId && <> <Link href={`/dashboard/receipts/${qualityReceiptId}` as Route}>مشاهده رسید</Link></>}</div>}
     {qualityPaymentResult === 'cancelled' && <div className="message message-error">پرداخت کنترل کیفیت لغو شد و درخواست هنوز فعال نشده است.</div>}
     {qualityPaymentResult === 'failed' && <div className="message message-error">تأیید پرداخت کنترل کیفیت انجام نشد. در صورت کسر وجه، شماره پیگیری را برای پشتیبانی ارسال کنید.</div>}

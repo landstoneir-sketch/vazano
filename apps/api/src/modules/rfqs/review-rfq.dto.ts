@@ -16,3 +16,10 @@ export class ReviewRfqDto {
   @IsOptional()
   reason?: string;
 }
+
+export class CancelRfqDto {
+  @IsString()
+  @MinLength(5)
+  @MaxLength(1000)
+  reason!: string;
+}
