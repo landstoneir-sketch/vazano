@@ -4,9 +4,13 @@ export function validateEnvironment(environment: Environment): Environment {
   const nodeEnv = environment.NODE_ENV ?? 'development';
   if (!['development', 'test', 'production'].includes(nodeEnv)) throw new Error('NODE_ENV must be development, test or production.');
   requireValue(environment, 'DATABASE_URL');
+  requireUrl(environment, 'REDIS_URL');
   requireUrl(environment, 'WEB_ORIGIN');
   requireValue(environment, 'OTP_PEPPER', 32);
   if (environment.OTP_IP_REQUESTS_PER_MINUTE) requirePositiveInteger(environment, 'OTP_IP_REQUESTS_PER_MINUTE');
+  for (const key of ['API_RATE_LIMIT_REQUESTS_PER_MINUTE', 'API_MUTATION_RATE_LIMIT_REQUESTS_PER_MINUTE', 'PAYMENT_CALLBACK_RATE_LIMIT_REQUESTS_PER_MINUTE']) {
+    if (environment[key]) requirePositiveInteger(environment, key);
+  }
   const paymentProvider = environment.PAYMENT_PROVIDER ?? 'zarinpal';
   const smsProvider = environment.SMS_PROVIDER ?? 'debug';
   if (!['zarinpal', 'mock'].includes(paymentProvider)) throw new Error('PAYMENT_PROVIDER must be zarinpal or mock.');
@@ -30,6 +34,7 @@ export function validateEnvironment(environment: Environment): Environment {
     requireReleaseImage(environment, 'VAZANO_MIGRATION_IMAGE');
     requireDigestImage(environment, 'VAZANO_GATEWAY_IMAGE');
     assertNotPlaceholder('DATABASE_URL', environment.DATABASE_URL!);
+    assertNotPlaceholder('REDIS_URL', environment.REDIS_URL!);
     const webOrigin = new URL(environment.WEB_ORIGIN!);
     if (webOrigin.protocol !== 'https:') throw new Error('WEB_ORIGIN must use HTTPS in production.');
     if (environment.OTP_DEBUG_ENABLED === 'true') throw new Error('OTP debug mode must be disabled in production.');
