@@ -2,7 +2,7 @@ import { evaluateReleaseReadiness, type ReleaseReadinessInput } from './release-
 
 const readyInput: ReleaseReadinessInput = {
   nodeEnvironment: 'production', otpDebugEnabled: false, smsConfigured: true, subscriptionSmsConfigured: true,
-  paymentConfigured: true, fileScanningConfigured: true, notificationWorkerEnabled: true, subscriptionWorkerEnabled: true,
+  paymentConfigured: true, fileScanningConfigured: true, notificationWorkerEnabled: true, subscriptionWorkerEnabled: true, rfqLifecycleWorkerEnabled: true,
   termsPublished: true, privacyPublished: true, paidPlanCount: 2, activeCategoryCount: 15, activeUnitCount: 6,
   activeProvinceCount: 31, marketCoverageConfigured: true, activeBuyerOrganizationCount: 2, eligibleSupplierCount: 5,
   uncoveredCategoryCount: 0, uncoveredProvinceCount: 0,
@@ -29,6 +29,12 @@ describe('release readiness', () => {
     const result = evaluateReleaseReadiness({ ...readyInput, activeSuperAdminCount: 1 });
     expect(result.ready).toBe(false);
     expect(result.checks.find((item) => item.key === 'access.super-admin')).toMatchObject({ status: 'BLOCKED', actionPath: '/admin/users' });
+  });
+
+  it('blocks launch when RFQ deadline processing is disabled', () => {
+    const result = evaluateReleaseReadiness({ ...readyInput, rfqLifecycleWorkerEnabled: false });
+    expect(result.ready).toBe(false);
+    expect(result.checks.find((item) => item.key === 'worker.rfq-lifecycle')?.status).toBe('BLOCKED');
   });
 
   it('blocks launch when marketplace reference data or pilot liquidity is missing', () => {
