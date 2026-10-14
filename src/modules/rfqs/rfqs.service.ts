@@ -389,8 +389,14 @@ export class RfqsService implements OnApplicationBootstrap, OnApplicationShutdow
     if (!isProvinceWithinMarketCoverage(policy, deliveryLocation.provinceCode)) {
       throw new BadRequestException('استان تحویل خارج از محدوده جغرافیایی فعال وازانو است.');
     }
+    const now = new Date();
+    const requiredAt = input.requiredAt ? new Date(input.requiredAt) : rfq.requiredAt;
     const responseDeadline = input.responseDeadline ? new Date(input.responseDeadline) : rfq.responseDeadline;
-    if (responseDeadline && responseDeadline <= new Date()) throw new BadRequestException('مهلت پاسخ باید در آینده باشد.');
+    if (requiredAt && requiredAt <= now) throw new BadRequestException('زمان موردنیاز باید در آینده باشد.');
+    if (responseDeadline && responseDeadline <= now) throw new BadRequestException('مهلت پاسخ باید در آینده باشد.');
+    if (requiredAt && responseDeadline && responseDeadline >= requiredAt) {
+      throw new BadRequestException('مهلت دریافت پیشنهاد باید پیش از زمان موردنیاز باشد.');
+    }
     const qualityControlRequest = await this.prisma.qualityControlRequest.findUnique({ where: { rfqId } });
     if (!input.qualityControlRequested && qualityControlRequest && qualityControlRequest.status !== 'REQUESTED') {
       throw new ConflictException('پس از شروع فرایند کنترل کیفیت، لغو آن فقط توسط پشتیبانی امکان‌پذیر است.');
@@ -414,7 +420,7 @@ export class RfqsService implements OnApplicationBootstrap, OnApplicationShutdow
           deliveryCityId: deliveryLocation.cityId,
           deliveryProvince: deliveryLocation.provinceName,
           deliveryCity: deliveryLocation.cityName,
-          requiredAt: input.requiredAt === undefined ? rfq.requiredAt : new Date(input.requiredAt),
+          requiredAt,
           responseDeadline,
           installationRequired: input.installationRequired ?? false,
           qualityControlRequested: input.qualityControlRequested ?? false,
@@ -705,8 +711,14 @@ export class RfqsService implements OnApplicationBootstrap, OnApplicationShutdow
       throw new BadRequestException('استان تحویل خارج از محدوده جغرافیایی فعال وازانو است.');
     }
 
+    const now = new Date();
+    const requiredAt = input.requiredAt ? new Date(input.requiredAt) : undefined;
     const responseDeadline = input.responseDeadline ? new Date(input.responseDeadline) : undefined;
-    if (responseDeadline && responseDeadline <= new Date()) throw new BadRequestException('مهلت پاسخ باید در آینده باشد.');
+    if (requiredAt && requiredAt <= now) throw new BadRequestException('زمان موردنیاز باید در آینده باشد.');
+    if (responseDeadline && responseDeadline <= now) throw new BadRequestException('مهلت پاسخ باید در آینده باشد.');
+    if (requiredAt && responseDeadline && responseDeadline >= requiredAt) {
+      throw new BadRequestException('مهلت دریافت پیشنهاد باید پیش از زمان موردنیاز باشد.');
+    }
 
     const previousPublishedCount = await this.prisma.rfq.count({
       where: { buyerOrganizationId: input.buyerOrganizationId, lifecycleState: { in: ['PUBLISHED', 'CLOSED'] } },
@@ -735,7 +747,7 @@ export class RfqsService implements OnApplicationBootstrap, OnApplicationShutdow
           deliveryCityId: deliveryLocation.cityId,
           deliveryProvince: deliveryLocation.provinceName,
           deliveryCity: deliveryLocation.cityName,
-          requiredAt: input.requiredAt ? new Date(input.requiredAt) : undefined,
+          requiredAt,
           responseDeadline,
           installationRequired: input.installationRequired ?? false,
           qualityControlRequested: input.qualityControlRequested ?? false,

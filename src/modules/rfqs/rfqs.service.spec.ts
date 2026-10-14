@@ -281,7 +281,10 @@ describe('RfqsService draft editing', () => {
     expectedUpdatedAt: originalUpdatedAt.toISOString(), buyerOrganizationId: 'buyer-1', primaryDomainId: 'stone',
     title: 'سنگ نمای پروژه', deliveryProvinceId: 'province-1', deliveryCityId: 'city-1',
     installationRequired: false, qualityControlRequested: true,
-    items: [{ categoryId: 'category-1', unitId: 'unit-1', title: 'تراورتن کرم', quantity: '120', specifications: {} }],
+    items: [
+      { categoryId: 'category-1', unitId: 'unit-1', title: 'تراورتن کرم', quantity: '120', specifications: {} },
+      { categoryId: 'category-2', unitId: 'unit-1', title: 'گرانیت طوسی', quantity: '80', specifications: {} },
+    ],
   };
 
   it('replaces draft items atomically and records the edit', async () => {
@@ -312,7 +315,10 @@ describe('RfqsService draft editing', () => {
       where: expect.objectContaining({ id: draft.id, updatedAt: originalUpdatedAt }),
     }));
     expect(tx.rfqItem.deleteMany).toHaveBeenCalledWith({ where: { rfqId: draft.id } });
-    expect(tx.rfqItem.createMany).toHaveBeenCalledTimes(1);
+    expect(tx.rfqItem.createMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.arrayContaining([
+      expect.objectContaining({ title: 'تراورتن کرم', sortOrder: 0 }),
+      expect.objectContaining({ title: 'گرانیت طوسی', sortOrder: 1 }),
+    ]) }));
     expect(tx.qualityControlRequest.upsert).toHaveBeenCalledTimes(1);
     expect(tx.auditLog.create).toHaveBeenCalledTimes(1);
     expect(tx.outboxEvent.create).toHaveBeenCalledTimes(1);
