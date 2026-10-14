@@ -22,6 +22,7 @@ type ProductAttribute = {
   isRequired: boolean;
 };
 type SpecificationValue = string | number | boolean | string[] | null;
+type RfqItemDraft = { categoryId: string; unitId: string; title: string; quantity: string; specifications: Record<string, SpecificationValue> };
 type CreatedRfq = {
   id: string;
   code: string;
@@ -34,8 +35,11 @@ type CreatedRfq = {
   buyerContactUserId: string;
   primaryDomainId: string;
   title: string;
+  description: string | null;
   deliveryProvinceId: string | null;
   deliveryCityId: string | null;
+  requiredAt: string | null;
+  responseDeadline: string | null;
   installationRequired: boolean;
   qualityControlRequested: boolean;
   items: Array<{ categoryId: string; unitId: string; title: string; quantity: string; specifications: Record<string, SpecificationValue> }>;
@@ -68,12 +72,16 @@ export function NewRfqForm({ operatorMode = false, draftId }: { operatorMode?: b
   const [categoryId, setCategoryId] = useState('');
   const [unitId, setUnitId] = useState('');
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [itemTitle, setItemTitle] = useState('');
   const [quantity, setQuantity] = useState('');
   const [provinceId, setProvinceId] = useState('');
   const [cityId, setCityId] = useState('');
   const [installationRequired, setInstallationRequired] = useState(false);
   const [qualityControlRequested, setQualityControlRequested] = useState(false);
+  const [requiredAt, setRequiredAt] = useState('');
+  const [responseDeadline, setResponseDeadline] = useState('');
+  const [savedItems, setSavedItems] = useState<RfqItemDraft[]>([]);
   const [productAttributes, setProductAttributes] = useState<ProductAttribute[]>([]);
   const [specifications, setSpecifications] = useState<Record<string, SpecificationValue>>({});
   const [created, setCreated] = useState<CreatedRfq | null>(null);
@@ -104,9 +112,11 @@ export function NewRfqForm({ operatorMode = false, draftId }: { operatorMode?: b
           throw new Error('این استعلام دیگر یک پیش‌نویس قابل ویرایش نیست.');
         }
         setCreated(draftData); setAttachments(attachmentData); setOrganizationId(draftData.buyerOrganizationId);
-        setBuyerContactUserId(draftData.buyerContactUserId); setIndustryId(draftData.primaryDomainId); setTitle(draftData.title);
+        setBuyerContactUserId(draftData.buyerContactUserId); setIndustryId(draftData.primaryDomainId); setTitle(draftData.title); setDescription(draftData.description ?? '');
         setCategoryId(firstItem.categoryId); setUnitId(firstItem.unitId); setItemTitle(firstItem.title); setQuantity(firstItem.quantity);
         setSpecifications(firstItem.specifications ?? {}); setProvinceId(draftData.deliveryProvinceId ?? ''); setCityId(draftData.deliveryCityId ?? '');
+        setRequiredAt(toLocalDateTime(draftData.requiredAt)); setResponseDeadline(toLocalDateTime(draftData.responseDeadline));
+        setSavedItems(draftData.items.slice(1).map((item) => ({ ...item, specifications: item.specifications ?? {} })));
         setInstallationRequired(draftData.installationRequired); setQualityControlRequested(draftData.qualityControlRequested); setDraftDirty(false);
       } else {
         setOrganizationId(buyers[0]?.id ?? ''); setIndustryId(industryData[0]?.id ?? ''); setUnitId(unitData[0]?.id ?? '');
@@ -146,19 +156,64 @@ export function NewRfqForm({ operatorMode = false, draftId }: { operatorMode?: b
     });
   }
 
+  function currentItem(): RfqItemDraft | null {
+    const hasAnyValue = Boolean(categoryId || itemTitle.trim() || quantity.trim());
+    if (!hasAnyValue) return null;
+    if (!categoryId || !unitId || itemTitle.trim().length < 2 || !quantity.trim()) {
+      throw new Error('ردیف محصول در حال ویرایش ناقص است. دسته، شرح، مقدار و واحد را کامل کنید.');
+    }
+    return { categoryId, unitId, title: itemTitle.trim(), quantity, specifications };
+  }
+
+  function addAnotherItem() {
+    setError('');
+    try {
+      const item = currentItem();
+      if (!item) throw new Error('ابتدا مشخصات ردیف محصول را وارد کنید.');
+      setSavedItems((current) => [...current, item]);
+      setCategoryId(''); setItemTitle(''); setQuantity(''); setSpecifications({}); setProductAttributes([]);
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : 'افزودن ردیف انجام نشد.');
+    }
+  }
+
+  function editSavedItem(index: number) {
+    setError('');
+    try {
+      const activeItem = currentItem();
+      setSavedItems((current) => {
+        const selected = current[index];
+        if (!selected) return current;
+        const next = current.filter((_, itemIndex) => itemIndex !== index);
+        if (activeItem) next.push(activeItem);
+        setCategoryId(selected.categoryId); setUnitId(selected.unitId); setItemTitle(selected.title);
+        setQuantity(selected.quantity); setSpecifications(selected.specifications); setProductAttributes([]);
+        return next;
+      });
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : 'ویرایش ردیف انجام نشد.');
+    }
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError('');
     try {
+      const activeItem = currentItem();
+      const items = [...savedItems, ...(activeItem ? [activeItem] : [])];
+      if (items.length === 0) throw new Error('استعلام باید حداقل یک ردیف محصول داشته باشد.');
       const payload = {
         buyerOrganizationId: organizationId,
         ...(operatorMode ? { buyerContactUserId } : {}),
         primaryDomainId: industryId,
         title,
+        description,
         deliveryProvinceId: provinceId,
         deliveryCityId: cityId,
+        ...(requiredAt ? { requiredAt: new Date(requiredAt).toISOString() } : {}),
+        ...(responseDeadline ? { responseDeadline: new Date(responseDeadline).toISOString() } : {}),
         installationRequired,
         qualityControlRequested,
-        items: [{ categoryId, unitId, title: itemTitle, quantity, specifications }],
+        items,
         ...(created ? { expectedUpdatedAt: created.updatedAt } : {}),
       };
       const rfq = await apiRequest<CreatedRfq>(created ? `/rfqs/${created.id}` : (operatorMode ? '/rfqs/on-behalf' : '/rfqs'), {
@@ -232,12 +287,14 @@ export function NewRfqForm({ operatorMode = false, draftId }: { operatorMode?: b
     {operatorMode && <label className="form-field"><span>فرد تماس خریدار</span><select value={buyerContactUserId} disabled={Boolean(created)} onChange={(event) => setBuyerContactUserId(event.target.value)} required><option value="">انتخاب کنید</option>{selectedOrganization?.contacts?.map((contact) => <option value={contact.id} key={contact.id}>{contact.displayName} — {contact.mobileMasked}</option>)}</select></label>}
     <label className="form-field"><span>حوزه اصلی</span><select value={industryId} onChange={(event) => { setIndustryId(event.target.value); setCategoryId(''); setProductAttributes([]); setSpecifications({}); }} required>{industries.map((item) => <option value={item.id} key={item.id}>{item.nameFa}</option>)}</select></label>
     <label className="form-field full"><span>عنوان استعلام</span><input value={title} onChange={(event) => setTitle(event.target.value)} required minLength={3} placeholder="مثلاً تأمین سنگ نمای پروژه مسکونی" /></label>
+    <label className="form-field full"><span>توضیحات تکمیلی (اختیاری)</span><textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={2000} rows={4} placeholder="شرایط پروژه، کیفیت مورد انتظار یا توضیحاتی که فروشندگان باید بدانند" /></label>
+    {savedItems.length > 0 && <fieldset className="fieldset full"><legend>ردیف‌های افزوده‌شده</legend><div className="stack">{savedItems.map((item, index) => <div className="list-card" key={`${item.categoryId}-${index}`}><div><strong>{item.title}</strong><p className="muted">{categories.find((category) => category.id === item.categoryId)?.nameFa ?? 'محصول'} · {item.quantity} {units.find((unit) => unit.id === item.unitId)?.symbolFa ?? ''}</p></div><div className="list-card-actions"><button className="button button-secondary" type="button" onClick={() => editSavedItem(index)}>ویرایش این ردیف</button><button className="button button-ghost" type="button" onClick={() => setSavedItems((current) => current.filter((_, itemIndex) => itemIndex !== index))}>حذف</button></div></div>)}</div></fieldset>}
     <fieldset className="fieldset full"><legend>ردیف محصول</legend><div className="form-columns">
-      <label className="form-field"><span>نوع سنگ</span><select value={categoryId} onChange={(event) => { setCategoryId(event.target.value); setProductAttributes([]); setSpecifications({}); }} required><option value="">انتخاب کنید</option>{selectableCategories.map((item) => <option value={item.id} key={item.id}>{item.nameFa}</option>)}</select></label>
-      <label className="form-field"><span>شرح محصول</span><input value={itemTitle} onChange={(event) => setItemTitle(event.target.value)} required minLength={2} placeholder="سنگ تراورتن کرم، ضخامت ۲ سانتی‌متر" /></label>
-      <label className="form-field"><span>مقدار</span><input value={quantity} onChange={(event) => setQuantity(event.target.value)} required inputMode="decimal" dir="ltr" /></label>
-      <label className="form-field"><span>واحد</span><select value={unitId} onChange={(event) => setUnitId(event.target.value)} required>{units.map((item) => <option value={item.id} key={item.id}>{item.nameFa} ({item.symbolFa})</option>)}</select></label>
-    </div></fieldset>
+      <label className="form-field"><span>نوع سنگ</span><select value={categoryId} onChange={(event) => { setCategoryId(event.target.value); setProductAttributes([]); setSpecifications({}); }} required={savedItems.length === 0}><option value="">انتخاب کنید</option>{selectableCategories.map((item) => <option value={item.id} key={item.id}>{item.nameFa}</option>)}</select></label>
+      <label className="form-field"><span>شرح محصول</span><input value={itemTitle} onChange={(event) => setItemTitle(event.target.value)} required={savedItems.length === 0} minLength={2} placeholder="سنگ تراورتن کرم، ضخامت ۲ سانتی‌متر" /></label>
+      <label className="form-field"><span>مقدار</span><input value={quantity} onChange={(event) => setQuantity(event.target.value)} required={savedItems.length === 0} inputMode="decimal" dir="ltr" /></label>
+      <label className="form-field"><span>واحد</span><select value={unitId} onChange={(event) => setUnitId(event.target.value)} required={savedItems.length === 0}>{units.map((item) => <option value={item.id} key={item.id}>{item.nameFa} ({item.symbolFa})</option>)}</select></label>
+    </div><div className="actions"><button className="button button-secondary" type="button" onClick={addAnotherItem}>افزودن ردیف دیگر</button></div></fieldset>
     {productAttributes.length > 0 && <fieldset className="fieldset full"><legend>مشخصات فنی محصول</legend><div className="form-columns">
       {productAttributes.map((attribute) => {
         const label = attributeLabel(attribute);
@@ -251,6 +308,8 @@ export function NewRfqForm({ operatorMode = false, draftId }: { operatorMode?: b
         return <label className="form-field" key={attribute.id}><span>{label}{attribute.isRequired ? ' *' : ''}</span><input aria-label={label} type={attribute.dataType === 'NUMBER' ? 'number' : 'text'} min={minimum} max={maximum} maxLength={maxLength} value={typeof value === 'string' || typeof value === 'number' ? String(value) : ''} required={attribute.isRequired} onChange={(event) => setSpecifications((current) => ({ ...current, [attribute.code]: event.target.value }))} /></label>;
       })}
     </div></fieldset>}
+    <label className="form-field"><span>زمان موردنیاز (اختیاری)</span><input type="datetime-local" value={requiredAt} onChange={(event) => setRequiredAt(event.target.value)} /></label>
+    <label className="form-field"><span>مهلت دریافت پیشنهاد (اختیاری)</span><input type="datetime-local" value={responseDeadline} onChange={(event) => setResponseDeadline(event.target.value)} /></label>
     <label className="form-field"><span>استان تحویل</span><select value={provinceId} onChange={(event) => { setProvinceId(event.target.value); setCities([]); setCityId(''); }} required><option value="">انتخاب استان</option>{provinces.filter((item) => policy?.marketCoverageMode !== 'SELECTED_PROVINCES' || policy.marketCoverageProvinceCodes.includes(item.code)).map((item) => <option value={item.id} key={item.id}>{item.nameFa}</option>)}</select></label>
     <label className="form-field"><span>شهر تحویل (اختیاری)</span><select value={cityId} onChange={(event) => setCityId(event.target.value)} disabled={!provinceId}><option value="">{provinceId ? 'انتخاب شهر' : 'ابتدا استان را انتخاب کنید'}</option>{cities.map((item) => <option value={item.id} key={item.id}>{item.nameFa}{item.isProvinceCapital ? ' (مرکز استان)' : ''}</option>)}</select></label>
     <label className="check-field"><input type="checkbox" checked={installationRequired} onChange={(event) => setInstallationRequired(event.target.checked)} /><span>نیاز به نصب دارم</span></label>
@@ -273,4 +332,11 @@ function attachmentStatusLabel(status: string): string {
   if (status === 'QUARANTINED') return 'قرنطینه‌شده؛ این فایل قابل استفاده نیست';
   if (status === 'REJECTED') return 'ردشده';
   return 'در انتظار بررسی امنیتی';
+}
+
+function toLocalDateTime(value: string | null): string {
+  if (!value) return '';
+  const date = new Date(value);
+  const offsetMs = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
 }
