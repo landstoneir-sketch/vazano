@@ -157,6 +157,13 @@ const inAppNotificationTemplates = [
     actionPathTemplate: '/supplier',
   },
   {
+    code: 'IN_APP_QUOTATION_REJECTED_FA_V1',
+    eventType: 'ir.vazano.quotation.rejected.v1',
+    titleTemplate: 'نتیجه انتخاب پیشنهاد قیمت',
+    bodyTemplate: 'پیشنهاد {{quotationCode}} برای استعلام {{rfqCode}} انتخاب نشد و {{refundCredits}} اعتبار به کیف شما بازگشت.',
+    actionPathTemplate: '/supplier',
+  },
+  {
     code: 'IN_APP_CONTRACT_REQUESTED_FA_V1',
     eventType: 'ir.vazano.contract.requested.v1',
     titleTemplate: 'درخواست قرارداد جدید {{contractCode}}',

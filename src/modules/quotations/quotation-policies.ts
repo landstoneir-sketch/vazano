@@ -66,6 +66,15 @@ export function calculateProposalFeeCredits(finalAmountRial: bigint, policy = DE
   return variableFee;
 }
 
+export function calculateProposalRefundCredits(feeCredits: bigint, fraction: string): bigint {
+  const match = /^(\d+)\/([1-9]\d*)$/.exec(fraction);
+  if (!match) throw new RangeError('Proposal refund fraction is invalid.');
+  const numerator = BigInt(match[1]!);
+  const denominator = BigInt(match[2]!);
+  if (numerator > denominator) throw new RangeError('Proposal refund fraction exceeds one.');
+  return feeCredits * numerator / denominator;
+}
+
 export function resolveProposalFeePolicy(value: unknown): ProposalFeePolicy {
   if (value === undefined || value === null) return DEFAULT_PROPOSAL_FEE_POLICY;
   assertValidProposalFeePolicy(value);

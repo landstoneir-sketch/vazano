@@ -1,4 +1,4 @@
-import { assertValidProposalFeePolicy, assertValidShortageOverrideSetting, calculateProposalFeeCredits, calculateQuotationTotals, effectiveDailyProposalLimit, resolveProposalFeePolicy, startOfTehranDay, totalProposalLimitFromEntitlements } from './quotation-policies';
+import { assertValidProposalFeePolicy, assertValidShortageOverrideSetting, calculateProposalFeeCredits, calculateProposalRefundCredits, calculateQuotationTotals, effectiveDailyProposalLimit, resolveProposalFeePolicy, startOfTehranDay, totalProposalLimitFromEntitlements } from './quotation-policies';
 
 describe('quotation policies', () => {
   it('calculates monetary totals with integer rial values', () => {
@@ -19,6 +19,12 @@ describe('quotation policies', () => {
     const policy = resolveProposalFeePolicy({ version: '2.0', rate: '0.0025', minToman: 50_000, maxToman: 8_000_000, refundFractionIfEligible: '1/2' });
     expect(calculateProposalFeeCredits(1_000_000_000n, policy)).toBe(250_000n);
     expect(() => assertValidProposalFeePolicy({ ...policy, minToman: 9_000_000 })).toThrow();
+  });
+
+  it('calculates the configured refund without creating fractional credits', () => {
+    expect(calculateProposalRefundCredits(100_000n, '2/3')).toBe(66_666n);
+    expect(calculateProposalRefundCredits(100_000n, '0/3')).toBe(0n);
+    expect(() => calculateProposalRefundCredits(100_000n, '4/3')).toThrow();
   });
 
   it('uses the Tehran calendar day boundary', () => {
