@@ -4,7 +4,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { SessionGuard } from '../auth/session.guard';
 import { CreateRfqDto } from './create-rfq.dto';
 import { RfqsService } from './rfqs.service';
-import { CancelRfqDto, ReviewRfqDto } from './review-rfq.dto';
+import { CancelRfqDto, MarkRfqInvitationViewedDto, ReviewRfqDto } from './review-rfq.dto';
 import { CreateCommitmentPaymentDto } from './create-commitment-payment.dto';
 
 @Controller('rfqs')
@@ -35,6 +35,11 @@ export class RfqsController {
   @Post('invitations/:invitationId/decline')
   declineInvitation(@CurrentUser() user: AuthenticatedUser, @Param('invitationId') invitationId: string) {
     return this.rfqs.declineInvitation(user, invitationId);
+  }
+
+  @Post(':id/invitations/view')
+  markInvitationViewed(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() input: MarkRfqInvitationViewedDto) {
+    return this.rfqs.markInvitationViewed(user, id, input.supplierOrganizationId);
   }
 
   @Get(':id')

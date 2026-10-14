@@ -23,3 +23,10 @@ export class CancelRfqDto {
   @MaxLength(1000)
   reason!: string;
 }
+
+export class MarkRfqInvitationViewedDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  supplierOrganizationId!: string;
+}
