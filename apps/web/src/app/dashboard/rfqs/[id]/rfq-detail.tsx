@@ -24,7 +24,7 @@ const contractStatusLabels: Record<ContractRequest['status'], string> = {
   REQUESTED: 'ثبت‌شده', UNDER_REVIEW: 'در حال بررسی', TERMS_PREPARED: 'شرایط آماده تأیید', ACCEPTED: 'تأییدشده', COMPLETED: 'تکمیل‌شده', CANCELLED: 'لغوشده',
 };
 
-export function RfqDetail({ rfqId, qualityPaymentResult, commitmentPaymentResult, commitmentReceiptId }: { rfqId: string; qualityPaymentResult?: string; commitmentPaymentResult?: string; commitmentReceiptId?: string }) {
+export function RfqDetail({ rfqId, qualityPaymentResult, qualityReceiptId, commitmentPaymentResult, commitmentReceiptId }: { rfqId: string; qualityPaymentResult?: string; qualityReceiptId?: string; commitmentPaymentResult?: string; commitmentReceiptId?: string }) {
   const [rfq, setRfq] = useState<Rfq | null>(null);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -148,9 +148,10 @@ export function RfqDetail({ rfqId, qualityPaymentResult, commitmentPaymentResult
   if (!rfq) return <div className="card">{message || 'در حال دریافت اطلاعات…'}</div>;
   return <div className="stack">
     <div><div className="eyebrow">{rfq.code}</div><h1>{rfq.title}</h1><p className="muted">{rfq.deliveryProvince ?? 'استان نامشخص'}، {rfq.deliveryCity ?? 'شهر نامشخص'} · {rfq.operationalStatus}</p></div>
-    {qualityPaymentResult === 'success' && <div className="message message-success">پرداخت کنترل کیفیت تأیید شد و درخواست وارد صف عملیات وازانو شده است.</div>}
+    {qualityPaymentResult === 'success' && <div className="message message-success">پرداخت کنترل کیفیت تأیید شد و درخواست وارد صف عملیات وازانو شده است.{qualityReceiptId && <> <Link href={`/dashboard/receipts/${qualityReceiptId}` as Route}>مشاهده رسید</Link></>}</div>}
     {qualityPaymentResult === 'cancelled' && <div className="message message-error">پرداخت کنترل کیفیت لغو شد و درخواست هنوز فعال نشده است.</div>}
     {qualityPaymentResult === 'failed' && <div className="message message-error">تأیید پرداخت کنترل کیفیت انجام نشد. در صورت کسر وجه، شماره پیگیری را برای پشتیبانی ارسال کنید.</div>}
+    {qualityPaymentResult === 'processing' && <div className="message">نتیجه پرداخت کنترل کیفیت در حال پردازش است؛ چند لحظه بعد وضعیت صفحه را بررسی کنید.</div>}
     {commitmentPaymentResult === 'success' && <div className="message message-success">پرداخت تعهد خریدار تأیید شد. استعلام اکنون آماده انتشار توسط وازانو است.{commitmentReceiptId && <> <Link href={`/dashboard/receipts/${commitmentReceiptId}` as Route}>مشاهده رسید</Link></>}</div>}
     {commitmentPaymentResult === 'cancelled' && <div className="message message-error">پرداخت تعهد لغو شد؛ می‌توانید با یک تلاش تازه دوباره اقدام کنید.</div>}
     {commitmentPaymentResult === 'failed' && <div className="message message-error">تأیید پرداخت تعهد انجام نشد. در صورت کسر وجه، شماره پیگیری را برای پشتیبانی ارسال کنید.</div>}
