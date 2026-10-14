@@ -42,7 +42,7 @@ export function MatchedRfqs() {
     {error && <div className="message message-error">{error}</div>}
     {message && <div className="message message-success">{message}</div>}
     {items.length === 0 && !error && <div className="card">فعلاً استعلام متناسبی برای حساب‌های فروشنده شما وجود ندارد.</div>}
-    {items.map((invitation) => <article className="card" key={invitation.id}>
+    {items.map((invitation) => <article className="card opportunity-card" key={invitation.id}>
       <div className="eyebrow">{invitation.rfq.code} · برای {invitation.supplierOrganization.displayName}</div><h2>{invitation.rfq.title}</h2>
       <p>{invitation.rfq.deliveryProvince ?? '—'}، {invitation.rfq.deliveryCity ?? '—'} · مهلت: {invitation.rfq.responseDeadline ? new Date(invitation.rfq.responseDeadline).toLocaleDateString('fa-IR') : 'تعیین نشده'}</p>
       <ul>{invitation.rfq.items.map((item) => {

@@ -175,6 +175,22 @@ button, input, select, textarea { font: inherit; }
 .quote-line:last-child { border-bottom: 0; }
 .summary-card { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; background: #f8fafc; box-shadow: none; }
 .summary-card strong { color: var(--primary); font-size: 1.25rem; }
+.quote-completion-guide { grid-template-columns: repeat(4,minmax(0,1fr)); }
+.quote-form { padding: 30px; box-shadow: 0 16px 48px rgba(59,45,23,.08); }
+.quote-rfq-summary { padding: 20px; border: 1px solid #e3d1af; border-radius: 16px; background: #fff9e9; }
+.quote-rfq-summary h2 { margin: 5px 0; }
+.quote-items .quote-line { padding: 22px 4px; }
+.quote-items .quote-line > div:first-child > span { color: var(--muted); font-size: .9rem; }
+.quote-total { border-color: #d6b66f; background: linear-gradient(135deg,#fff8e5,#fffdf9); }
+.quote-total strong { font-size: 1.6rem; }
+.quote-total small { flex-basis: 100%; color: var(--muted); }
+.quote-actions { display: flex; justify-content: flex-end; gap: 12px; flex-wrap: wrap; padding-top: 18px; border-top: 1px solid var(--border); }
+.opportunity-card { border-top: 4px solid var(--accent); box-shadow: 0 10px 34px rgba(59,45,23,.07); }
+.opportunity-card h2 { margin: 7px 0; }
+.supplier-performance-list { margin: 22px 0; }
+.supplier-performance-card { border-color: #e4d3b4; box-shadow: 0 13px 38px rgba(59,45,23,.07); }
+.supplier-performance-card > .dashboard-grid { margin: 20px 0; padding: 18px; border-radius: 16px; background: #faf5eb; }
+.supplier-performance-card > .dashboard-grid > div { padding: 10px; }
 .notification-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .notification-card { display: flex; align-items: center; justify-content: space-between; gap: 24px; box-shadow: none; }
 .notification-card h2 { margin: 4px 0; font-size: 1.1rem; }
@@ -297,5 +313,6 @@ button, input, select, textarea { font: inherit; }
 @media (max-width: 760px) { .form-grid, .form-columns, .comparison-grid, .check-grid, .quote-line, .settings-grid, .message-center, .organization-invite-form, .content-item-list, .catalog-binding-grid, .receipt-grid, .payment-resolution-form { grid-template-columns: 1fr; } .list-card, .notification-card, .conversation-header, .admin-user-card, .admin-card-title, .invitation-row, .organization-member-row, .site-footer-content { align-items: stretch; flex-direction: column; } .message-thread-list { border-left: 0; border-bottom: 1px solid var(--border); max-height: 280px; } .message-center { min-height: 700px; } .message-bubble { max-width: 92%; } .admin-card-title time { white-space: normal; } }
 @media (max-width: 760px) { .auth-shell { padding: 28px 16px; } .auth-layout { grid-template-columns: 1fr; } .auth-intro { padding: 30px 24px; } .auth-intro h1 { font-size: 1.75rem; } .auth-card { padding: 30px 24px; } }
 @media (max-width: 760px) { .dashboard-page-heading { align-items: stretch; flex-direction: column; gap: 16px; } .dashboard-page-heading aside { max-width: none; } .rfq-completion-guide { grid-template-columns: repeat(5,max-content); justify-content: start; overflow-x: auto; scrollbar-width: none; } .rfq-completion-guide::-webkit-scrollbar { display: none; } .rfq-completion-guide li { padding: 0 12px; } .rfq-form { padding: 20px 16px; } .rfq-section { padding: 14px 12px; } .rfq-submit { width: 100%; min-width: 0; justify-self: stretch; } }
+@media (max-width: 760px) { .quote-completion-guide { grid-template-columns: repeat(4,max-content); } .quote-form { padding: 20px 16px; } .quote-actions { align-items: stretch; flex-direction: column; } .quote-actions .button { width: 100%; } .supplier-performance-card > .dashboard-grid { padding: 10px; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *,*::before,*::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; } }
 @media print { body { background: white; } .site-header, .receipt-actions { display: none !important; } .receipt-page { width: 100%; max-width: none; padding: 0; } .receipt-sheet { border: 0; padding: 0; } }

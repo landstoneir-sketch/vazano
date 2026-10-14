@@ -88,7 +88,7 @@ export function SupplierPerformance() {
     finally { setBusyQuotationId(''); }
   }
 
-  return <div className="stack">{items.map((item) => <article className="card" key={item.organizationId}>
+  return <div className="stack supplier-performance-list">{items.map((item) => <article className="card supplier-performance-card" key={item.organizationId}>
     <div className="admin-card-title"><div><div className="eyebrow">عملکرد فروشنده</div><h2>{item.organizationName}</h2></div><div><strong>{verificationLabels[item.verificationStatus] ?? item.verificationStatus}</strong><p className="muted">{item.subscription ? `${item.subscription.plan.nameFa} · ${item.subscription.status}` : 'بدون اشتراک فعال'}</p></div></div>
     <div className="dashboard-grid">
       <div><span className="muted">فرصت‌های دریافت‌شده</span><h3>{item.invitations.toLocaleString('fa-IR')}</h3><small>{item.recentInvitations.toLocaleString('fa-IR')} مورد در ۳۰ روز اخیر</small></div>
