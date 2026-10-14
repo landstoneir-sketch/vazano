@@ -33,6 +33,6 @@ describe('SubscriptionsService receipt access', () => {
 
     void service.listReceiptsForOrganization(member, 'organization-a');
 
-    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { organizationId: 'organization-a' } }));
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { organizationId: 'organization-a', subscriptionId: { not: null } } }));
   });
 });
