@@ -90,3 +90,8 @@ export class CreateQuotationDto {
   @Matches(/^\d+$/)
   otherCostsRial?: string;
 }
+
+export class UpdateQuotationDto extends CreateQuotationDto {
+  @IsDateString()
+  expectedUpdatedAt!: string;
+}

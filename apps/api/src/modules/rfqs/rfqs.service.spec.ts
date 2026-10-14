@@ -289,9 +289,11 @@ describe('RfqsService draft editing', () => {
 
   it('replaces draft items atomically and records the edit', async () => {
     const updated = { ...draft, title: input.title, updatedAt: new Date('2026-10-14T08:05:00.000Z') };
+    let rfqUpdateInput: unknown;
+    let quotationItemsInput: unknown;
     const tx = {
-      rfq: { updateMany: jest.fn().mockResolvedValue({ count: 1 }), findUniqueOrThrow: jest.fn().mockResolvedValue(updated) },
-      rfqItem: { deleteMany: jest.fn().mockResolvedValue({ count: 1 }), createMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      rfq: { updateMany: jest.fn((value: unknown) => { rfqUpdateInput = value; return Promise.resolve({ count: 1 }); }), findUniqueOrThrow: jest.fn().mockResolvedValue(updated) },
+      rfqItem: { deleteMany: jest.fn().mockResolvedValue({ count: 1 }), createMany: jest.fn((value: unknown) => { quotationItemsInput = value; return Promise.resolve({ count: 2 }); }) },
       qualityControlRequest: { upsert: jest.fn().mockResolvedValue({}), deleteMany: jest.fn() },
       auditLog: { create: jest.fn().mockResolvedValue({}) },
       outboxEvent: { create: jest.fn().mockResolvedValue({}) },
@@ -311,14 +313,12 @@ describe('RfqsService draft editing', () => {
     internals.resolveDeliveryLocation = jest.fn().mockResolvedValue({ provinceId: 'province-1', provinceCode: 'tehran', cityId: 'city-1', provinceName: 'تهران', cityName: 'تهران' });
 
     await expect(service.updateDraft(buyerUser as never, draft.id, input as never)).resolves.toEqual(updated);
-    expect(tx.rfq.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ id: draft.id, updatedAt: originalUpdatedAt }),
-    }));
+    expect(rfqUpdateInput).toMatchObject({ where: { id: draft.id, updatedAt: originalUpdatedAt } });
     expect(tx.rfqItem.deleteMany).toHaveBeenCalledWith({ where: { rfqId: draft.id } });
-    expect(tx.rfqItem.createMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.arrayContaining([
+    expect(quotationItemsInput).toMatchObject({ data: [
       expect.objectContaining({ title: 'تراورتن کرم', sortOrder: 0 }),
       expect.objectContaining({ title: 'گرانیت طوسی', sortOrder: 1 }),
-    ]) }));
+    ] });
     expect(tx.qualityControlRequest.upsert).toHaveBeenCalledTimes(1);
     expect(tx.auditLog.create).toHaveBeenCalledTimes(1);
     expect(tx.outboxEvent.create).toHaveBeenCalledTimes(1);
@@ -330,6 +330,6 @@ describe('RfqsService draft editing', () => {
 
     await expect(service.updateDraft(buyerUser as never, draft.id, {
       ...input, expectedUpdatedAt: '2026-10-14T07:59:00.000Z',
-    } as never)).rejects.toBeInstanceOf(ConflictException);
+    })).rejects.toBeInstanceOf(ConflictException);
   });
 });
