@@ -61,6 +61,53 @@ export class AttachmentsService {
     };
   }
 
+  async createQuotationUploadIntent(user: AuthenticatedUser, quotationId: string, input: CreateUploadIntentDto) {
+    const quotation = await this.prisma.quotation.findUnique({
+      where: { id: quotationId },
+      select: { id: true, supplierOrganizationId: true, status: true },
+    });
+    if (!quotation || !this.canManageQuotation(user, quotation.supplierOrganizationId)) {
+      throw new NotFoundException('پیشنهاد قیمت پیدا نشد.');
+    }
+    if (quotation.status !== 'DRAFT') throw new ConflictException('افزودن فایل فقط به پیش‌نویس پیشنهاد مجاز است.');
+    if (!['GENERAL', 'PRODUCT_IMAGE', 'SPECIFICATION', 'PROFORMA'].includes(input.purpose)) {
+      throw new BadRequestException('نوع پیوست برای پیشنهاد قیمت مجاز نیست.');
+    }
+    const maxSizeBytes = this.config.get<number>('ATTACHMENT_MAX_SIZE_BYTES', DEFAULT_MAX_ATTACHMENT_SIZE_BYTES);
+    if (input.sizeBytes > maxSizeBytes) throw new BadRequestException(`حداکثر حجم هر فایل ${Math.floor(maxSizeBytes / 1024 / 1024)} مگابایت است.`);
+    const extension = normalizedAttachmentExtension(input.fileName, input.mimeType);
+    if (!extension) throw new BadRequestException('نوع یا پسوند این فایل مجاز نیست.');
+
+    const attachment = await this.prisma.attachment.create({
+      data: {
+        organizationId: quotation.supplierOrganizationId,
+        uploadedByUserId: user.id,
+        quotationId: quotation.id,
+        purpose: input.purpose,
+        bucket: this.storage.bucket,
+        storageKey: `${quotation.supplierOrganizationId}/quotations/${quotation.id}/${randomUUID()}${extension}`,
+        originalName: safeOriginalFileName(input.fileName),
+        mimeType: input.mimeType,
+        sizeBytes: input.sizeBytes,
+      },
+    });
+    const uploadUrl = await this.storage.createUploadUrl(attachment.storageKey, attachment.mimeType);
+    await this.prisma.auditLog.create({
+      data: {
+        actorUserId: user.id,
+        organizationId: quotation.supplierOrganizationId,
+        action: 'quotation.attachment.upload_intent.create',
+        entityType: 'Attachment',
+        entityId: attachment.id,
+        metadata: { quotationId: quotation.id, purpose: attachment.purpose, mimeType: attachment.mimeType, sizeBytes: attachment.sizeBytes },
+      },
+    });
+    return {
+      attachment: this.publicAttachment(attachment),
+      upload: { url: uploadUrl, method: 'PUT', headers: { 'content-type': attachment.mimeType }, expiresInSeconds: 300 },
+    };
+  }
+
   async createSupplierUploadIntent(user: AuthenticatedUser, organizationId: string, input: CreateUploadIntentDto) {
     if (!this.canManageSupplierOrganization(user, organizationId)) throw new NotFoundException('پروفایل فروشنده پیدا نشد.');
     if (input.purpose !== 'CERTIFICATE') throw new BadRequestException('مدارک احراز فروشنده باید با نوع گواهی ثبت شوند.');
@@ -181,6 +228,22 @@ export class AttachmentsService {
     return attachments.map((attachment) => this.publicAttachment(attachment));
   }
 
+  async listForQuotation(user: AuthenticatedUser, quotationId: string) {
+    const quotation = await this.prisma.quotation.findUnique({
+      where: { id: quotationId },
+      select: { supplierOrganizationId: true, status: true, rfq: { select: { buyerOrganizationId: true } } },
+    });
+    if (!quotation || !this.canReadQuotation(user, quotation.supplierOrganizationId, quotation.rfq.buyerOrganizationId, quotation.status)) {
+      throw new NotFoundException('پیشنهاد قیمت پیدا نشد.');
+    }
+    const canManage = this.canManageQuotation(user, quotation.supplierOrganizationId);
+    const attachments = await this.prisma.attachment.findMany({
+      where: { quotationId, status: canManage ? { not: 'DELETED' } : 'READY' },
+      orderBy: { createdAt: 'asc' },
+    });
+    return attachments.map((attachment) => this.publicAttachment(attachment));
+  }
+
   async listForSupplier(user: AuthenticatedUser, organizationId: string) {
     const profile = await this.prisma.supplierProfile.findUnique({ where: { organizationId }, select: { id: true } });
     if (!profile || !this.canReadSupplierDocuments(user, organizationId)) throw new NotFoundException('پروفایل فروشنده پیدا نشد.');
@@ -196,12 +259,14 @@ export class AttachmentsService {
       where: { id: attachmentId },
       include: {
         rfq: { select: { buyerOrganizationId: true, invitations: { select: { supplierOrganizationId: true } } } },
+        quotation: { select: { supplierOrganizationId: true, status: true, rfq: { select: { buyerOrganizationId: true } } } },
         supplierProfile: { select: { organizationId: true } },
       },
     });
     const canReadRfq = attachment?.rfq && this.canReadRfq(user, attachment.rfq.buyerOrganizationId, attachment.rfq.invitations.map((item) => item.supplierOrganizationId));
+    const canReadQuotation = attachment?.quotation && this.canReadQuotation(user, attachment.quotation.supplierOrganizationId, attachment.quotation.rfq.buyerOrganizationId, attachment.quotation.status);
     const canReadSupplierDocument = attachment?.supplierProfile && this.canReadSupplierDocuments(user, attachment.supplierProfile.organizationId);
-    if (!attachment || (!canReadRfq && !canReadSupplierDocument)) {
+    if (!attachment || (!canReadRfq && !canReadQuotation && !canReadSupplierDocument)) {
       throw new NotFoundException('فایل پیدا نشد.');
     }
     if (attachment.status !== 'READY') throw new ConflictException('فایل هنوز تأیید امنیتی نشده است.');
@@ -214,15 +279,18 @@ export class AttachmentsService {
       where: { id: attachmentId },
       include: {
         rfq: { select: { lifecycleState: true, operationalStatus: true } },
+        quotation: { select: { supplierOrganizationId: true, status: true } },
         supplierProfile: { select: { organizationId: true, verificationStatus: true } },
       },
     });
     const canManageRfq = attachment?.rfq && this.canManageBuyerOrganization(user, attachment.organizationId);
+    const canManageQuotation = attachment?.quotation && this.canManageQuotation(user, attachment.quotation.supplierOrganizationId);
     const canManageSupplierDocument = attachment?.supplierProfile && this.canManageSupplierOrganization(user, attachment.supplierProfile.organizationId);
-    if (!attachment || (!canManageRfq && !canManageSupplierDocument)) throw new NotFoundException('فایل پیدا نشد.');
+    if (!attachment || (!canManageRfq && !canManageQuotation && !canManageSupplierDocument)) throw new NotFoundException('فایل پیدا نشد.');
     const removableRfq = attachment.rfq?.lifecycleState === 'DRAFT' && ['DRAFT_INCOMPLETE', 'NEEDS_CHANGES'].includes(attachment.rfq.operationalStatus);
+    const removableQuotation = attachment.quotation?.status === 'DRAFT';
     const removableSupplierDocument = attachment.supplierProfile && !['VERIFIED', 'SUSPENDED'].includes(attachment.supplierProfile.verificationStatus);
-    if (!removableRfq && !removableSupplierDocument) {
+    if (!removableRfq && !removableQuotation && !removableSupplierDocument) {
       throw new ConflictException('حذف این فایل در وضعیت فعلی مجاز نیست.');
     }
     await this.storage.remove(attachment.storageKey);
@@ -236,11 +304,16 @@ export class AttachmentsService {
   private async findManageableAttachment(user: AuthenticatedUser, attachmentId: string) {
     const attachment = await this.prisma.attachment.findUnique({
       where: { id: attachmentId },
-      include: { supplierProfile: { select: { organizationId: true } } },
+      include: {
+        quotation: { select: { supplierOrganizationId: true, status: true } },
+        supplierProfile: { select: { organizationId: true } },
+      },
     });
     const canManageRfq = attachment?.rfqId && this.canManageBuyerOrganization(user, attachment.organizationId);
+    const canManageQuotation = attachment?.quotation && attachment.quotation.status === 'DRAFT'
+      && this.canManageQuotation(user, attachment.quotation.supplierOrganizationId);
     const canManageSupplierDocument = attachment?.supplierProfile && this.canManageSupplierOrganization(user, attachment.supplierProfile.organizationId);
-    if (!attachment || (!canManageRfq && !canManageSupplierDocument)) throw new NotFoundException('فایل پیدا نشد.');
+    if (!attachment || (!canManageRfq && !canManageQuotation && !canManageSupplierDocument)) throw new NotFoundException('فایل پیدا نشد.');
     return attachment;
   }
 
@@ -259,6 +332,19 @@ export class AttachmentsService {
   private canManageSupplierOrganization(user: AuthenticatedUser, organizationId: string): boolean {
     return user.memberships.some((membership) => membership.organizationId === organizationId
       && ['SUPPLIER_OWNER', 'SUPPLIER_MANAGER'].includes(membership.role));
+  }
+
+  private canManageQuotation(user: AuthenticatedUser, organizationId: string): boolean {
+    return user.memberships.some((membership) => membership.organizationId === organizationId
+      && ['SUPPLIER_OWNER', 'SUPPLIER_MANAGER', 'SUPPLIER_SALES'].includes(membership.role))
+      || user.permissions.includes('quotation.manage');
+  }
+
+  private canReadQuotation(user: AuthenticatedUser, supplierOrganizationId: string, buyerOrganizationId: string, status: string): boolean {
+    if (user.permissions.includes('quotation.manage')) return true;
+    if (user.memberships.some((membership) => membership.organizationId === supplierOrganizationId)) return true;
+    if (!['SUBMITTED', 'ACCEPTED', 'REJECTED', 'REVISED'].includes(status)) return false;
+    return user.memberships.some((membership) => membership.organizationId === buyerOrganizationId);
   }
 
   private canReadSupplierDocuments(user: AuthenticatedUser, organizationId: string): boolean {
