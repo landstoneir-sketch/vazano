@@ -7,7 +7,7 @@ import { formatProductSpecifications, type ProductAttributeBinding, type Product
 
 type Organization = { id: string; displayName: string; kind: string; status: string };
 type RfqItem = { id: string; title: string; quantity: string; specifications: ProductSpecifications; category: { nameFa: string; attributeBindings: ProductAttributeBinding[] }; unit: { symbolFa: string } };
-type Rfq = { id: string; code: string; title: string; responseDeadline: string | null; items: RfqItem[] };
+type Rfq = { id: string; code: string; title: string; description: string | null; deliveryProvince: string | null; deliveryCity: string | null; requiredAt: string | null; responseDeadline: string | null; installationRequired: boolean; items: RfqItem[] };
 type QuotationItem = { rfqItemId: string; quantity: string; unitPriceRial: string; discountRial: string; isAlternative: boolean; offeredDescription: string | null };
 type CreatedQuotation = { id: string; code: string; status: string; finalAmountRial: string; updatedAt: string };
 type SupplierQuotation = CreatedQuotation & {
@@ -202,7 +202,7 @@ export function QuoteForm({ rfqId, initialOrganizationId }: { rfqId: string; ini
     if (created?.status === 'DRAFT' && (!(event.target instanceof HTMLInputElement) || event.target.type !== 'file')) setDraftDirty(true);
   }}>
     {message && <div className={`message ${created?.status === 'SUBMITTED' ? 'message-success' : ''}`}>{message}</div>}
-    <div className="full"><div className="eyebrow">{rfq.code}</div><h2>{rfq.title}</h2></div>
+    <div className="full"><div className="eyebrow">{rfq.code}</div><h2>{rfq.title}</h2>{rfq.description && <p>{rfq.description}</p>}<div className="specification-summary"><span>تحویل: {rfq.deliveryProvince ?? 'نامشخص'}، {rfq.deliveryCity ?? 'نامشخص'}</span><span>مهلت پاسخ: {rfq.responseDeadline ? new Date(rfq.responseDeadline).toLocaleString('fa-IR') : 'تعیین نشده'}</span><span>زمان موردنیاز: {rfq.requiredAt ? new Date(rfq.requiredAt).toLocaleString('fa-IR') : 'تعیین نشده'}</span><span>نصب: {rfq.installationRequired ? 'موردنیاز است' : 'موردنیاز نیست'}</span></div></div>
     <label className="form-field"><span>حساب فروشنده</span><select value={organizationId} disabled={Boolean(created)} onChange={(event) => setOrganizationId(event.target.value)} required>{organizations.map((item) => <option key={item.id} value={item.id}>{item.displayName} · {item.status}</option>)}</select></label>
     <label className="form-field"><span>مدت آماده‌سازی (روز)</span><input type="number" min="0" value={preparationDays} onChange={(event) => setPreparationDays(event.target.value)} required /></label>
     <label className="form-field"><span>تاریخ تحویل (اختیاری)</span><input type="date" value={deliveryDate} onChange={(event) => setDeliveryDate(event.target.value)} /></label>
