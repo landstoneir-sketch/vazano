@@ -184,3 +184,65 @@ describe('RfqsService supplier invitation decisions', () => {
     await expect(service.declineInvitation(supplierUser as never, 'invitation-1')).rejects.toBeInstanceOf(ConflictException);
   });
 });
+
+describe('RfqsService buyer cancellation', () => {
+  const buyerUser = {
+    id: 'buyer-user-1', permissions: [], memberships: [{ organizationId: 'buyer-1', role: 'BUYER_OWNER' }],
+  };
+
+  it('cancels the RFQ and fully refunds submitted proposal credits', async () => {
+    const rfq = {
+      id: 'rfq-1', buyerOrganizationId: 'buyer-1', lifecycleState: 'PUBLISHED', operationalStatus: 'HAS_QUOTES',
+      commitmentStatus: 'NOT_REQUIRED', items: [],
+    };
+    let refundLedgerInput: { data: { amountCredits: bigint; reasonCode: string } } | undefined;
+    const tx = {
+      quotation: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'quotation-1', status: 'SUBMITTED', supplierOrganizationId: 'supplier-1' }]),
+        findFirst: jest.fn().mockResolvedValue(null),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      creditLedgerEntry: {
+        findMany: jest.fn().mockResolvedValue([{ walletId: 'wallet-1', amountCredits: -300_000n, referenceId: 'quotation-1', idempotencyKey: 'quotation:quotation-1:submit:v1' }]),
+        create: jest.fn((input: { data: { amountCredits: bigint; reasonCode: string } }) => {
+          refundLedgerInput = input;
+          return Promise.resolve({});
+        }),
+      },
+      rfqInvitation: {
+        findMany: jest.fn().mockResolvedValue([{ supplierOrganizationId: 'supplier-1' }]),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      rfq: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUniqueOrThrow: jest.fn().mockResolvedValue({ ...rfq, lifecycleState: 'CANCELLED', operationalStatus: 'CANCELLED' }),
+      },
+      qualityControlRequest: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      creditWallet: { update: jest.fn().mockResolvedValue({}) },
+      auditLog: { create: jest.fn().mockResolvedValue({}) },
+      outboxEvent: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const prisma = {
+      rfq: { findUnique: jest.fn().mockResolvedValue(rfq) },
+      $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
+    };
+    const service = new RfqsService(prisma as never, {} as never, {} as never, {} as never);
+
+    await expect(service.cancel(buyerUser as never, rfq.id, 'تغییر نیاز پروژه')).resolves.toMatchObject({ refundedCredits: '300000' });
+    expect(tx.creditWallet.update).toHaveBeenCalledTimes(1);
+    expect(refundLedgerInput?.data.amountCredits).toBe(300_000n);
+    expect(refundLedgerInput?.data.reasonCode).toBe('RFQ_CANCELLED_FULL_REFUND');
+    expect(tx.auditLog.create).toHaveBeenCalledTimes(1);
+    expect(tx.outboxEvent.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('requires support handling when buyer commitment money is active', async () => {
+    const prisma = { rfq: { findUnique: jest.fn().mockResolvedValue({
+      id: 'rfq-1', buyerOrganizationId: 'buyer-1', lifecycleState: 'PUBLISHED', operationalStatus: 'OPEN_FOR_QUOTES',
+      commitmentStatus: 'HELD', items: [],
+    }) } };
+    const service = new RfqsService(prisma as never, {} as never, {} as never, {} as never);
+
+    await expect(service.cancel(buyerUser as never, 'rfq-1', 'تغییر نیاز پروژه')).rejects.toBeInstanceOf(ConflictException);
+  });
+});

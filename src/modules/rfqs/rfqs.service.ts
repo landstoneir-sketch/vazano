@@ -200,6 +200,95 @@ export class RfqsService implements OnApplicationBootstrap, OnApplicationShutdow
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
+  async cancel(user: AuthenticatedUser, rfqId: string, rawReason: string) {
+    const rfq = await this.findAuthorizedRfq(user, rfqId);
+    const isBuyerMember = user.memberships.some((membership) => membership.organizationId === rfq.buyerOrganizationId);
+    if (!isBuyerMember && !user.permissions.includes('rfq.manage')) {
+      throw new ForbiddenException('لغو این استعلام برای شما مجاز نیست.');
+    }
+    if (rfq.lifecycleState === 'CANCELLED') return { rfq, refundedCredits: '0' };
+    if (!['DRAFT', 'SUBMITTED', 'PUBLISHED'].includes(rfq.lifecycleState)) {
+      throw new ConflictException('این استعلام در وضعیت فعلی قابل لغو نیست.');
+    }
+    if (['PAYMENT_PENDING', 'HELD', 'REFUND_PENDING'].includes(rfq.commitmentStatus)) {
+      throw new ConflictException('این استعلام دارای فرایند مالی فعال است؛ لغو باید توسط پشتیبانی و پس از تعیین تکلیف وجه انجام شود.');
+    }
+    const reason = rawReason.trim();
+
+    return this.prisma.$transaction(async (tx) => {
+      const activeQuotations = await tx.quotation.findMany({
+        where: { rfqId: rfq.id, status: { in: ['DRAFT', 'SUBMITTED', 'REVISED'] } },
+        select: { id: true, status: true, supplierOrganizationId: true },
+      });
+      const acceptedQuotation = await tx.quotation.findFirst({ where: { rfqId: rfq.id, status: 'ACCEPTED' }, select: { id: true } });
+      if (acceptedQuotation) throw new ConflictException('پس از انتخاب فروشنده، لغو استعلام فقط از مسیر پشتیبانی امکان‌پذیر است.');
+      const chargedQuotationIds = activeQuotations.filter((quotation) => ['SUBMITTED', 'REVISED'].includes(quotation.status)).map((quotation) => quotation.id);
+      const feeEntries = chargedQuotationIds.length === 0 ? [] : await tx.creditLedgerEntry.findMany({
+        where: { idempotencyKey: { in: chargedQuotationIds.map((id) => `quotation:${id}:submit:v1`) } },
+        select: { walletId: true, amountCredits: true, referenceId: true, idempotencyKey: true },
+      });
+      const activeInvitations = await tx.rfqInvitation.findMany({
+        where: { rfqId: rfq.id, status: { in: ['INVITED', 'VIEWED', 'RESPONDED'] } },
+        select: { supplierOrganizationId: true },
+      });
+      const changed = await tx.rfq.updateMany({
+        where: { id: rfq.id, lifecycleState: rfq.lifecycleState, operationalStatus: rfq.operationalStatus },
+        data: { lifecycleState: 'CANCELLED', operationalStatus: 'CANCELLED', closedAt: new Date() },
+      });
+      if (changed.count !== 1) throw new ConflictException('وضعیت استعلام هم‌زمان تغییر کرده است؛ صفحه را تازه‌سازی کنید.');
+      await tx.rfqInvitation.updateMany({
+        where: { rfqId: rfq.id, status: { in: ['INVITED', 'VIEWED', 'RESPONDED'] } },
+        data: { status: 'EXPIRED' },
+      });
+      await tx.quotation.updateMany({
+        where: { id: { in: activeQuotations.map((quotation) => quotation.id) } },
+        data: { status: 'EXPIRED' },
+      });
+      await tx.qualityControlRequest.updateMany({ where: { rfqId: rfq.id, status: 'REQUESTED' }, data: { status: 'CANCELLED' } });
+
+      let refundedCredits = 0n;
+      for (const feeEntry of feeEntries) {
+        if (feeEntry.amountCredits >= 0n) continue;
+        const refund = -feeEntry.amountCredits;
+        await tx.creditWallet.update({ where: { id: feeEntry.walletId }, data: { cachedBalanceCredits: { increment: refund } } });
+        await tx.creditLedgerEntry.create({
+          data: {
+            walletId: feeEntry.walletId,
+            type: 'REFUND',
+            amountCredits: refund,
+            referenceType: 'Quotation',
+            referenceId: feeEntry.referenceId,
+            idempotencyKey: `quotation:${feeEntry.referenceId}:rfq-cancelled-refund:v1`,
+            reasonCode: 'RFQ_CANCELLED_FULL_REFUND',
+            metadata: { originalDebitIdempotencyKey: feeEntry.idempotencyKey },
+          },
+        });
+        refundedCredits += refund;
+      }
+      const supplierOrganizationIds = [...new Set(activeInvitations.map((invitation) => invitation.supplierOrganizationId))];
+      await tx.auditLog.create({
+        data: {
+          actorUserId: user.id,
+          organizationId: rfq.buyerOrganizationId,
+          action: 'rfq.cancel',
+          entityType: 'Rfq',
+          entityId: rfq.id,
+          metadata: { reason, expiredQuotations: activeQuotations.length, refundedCredits: refundedCredits.toString() },
+        },
+      });
+      await tx.outboxEvent.create({
+        data: {
+          aggregateType: 'Rfq',
+          aggregateId: rfq.id,
+          eventType: 'ir.vazano.rfq.cancelled.v1',
+          payload: { rfqId: rfq.id, supplierOrganizationIds, refundedCredits: refundedCredits.toString() },
+        },
+      });
+      const updated = await tx.rfq.findUniqueOrThrow({ where: { id: rfq.id }, include: { items: true } });
+      return { rfq: updated, refundedCredits: refundedCredits.toString() };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
   async getOne(user: AuthenticatedUser, rfqId: string) {
     const rfq = await this.prisma.rfq.findUnique({
       where: { id: rfqId },

@@ -143,6 +143,13 @@ const inAppNotificationTemplates = [
     actionPathTemplate: '/supplier',
   },
   {
+    code: 'IN_APP_RFQ_CANCELLED_FA_V1',
+    eventType: 'ir.vazano.rfq.cancelled.v1',
+    titleTemplate: 'استعلام توسط خریدار لغو شد',
+    bodyTemplate: 'استعلام {{rfqCode}} با عنوان «{{rfqTitle}}» لغو شد. اعتبار مصرف‌شده برای پیشنهاد ثبت‌شده به‌طور کامل بازگردانده می‌شود.',
+    actionPathTemplate: '/supplier',
+  },
+  {
     code: 'IN_APP_RFQ_QUOTE_WINDOW_CLOSED_FA_V1',
     eventType: 'ir.vazano.rfq.quote_window_closed.v1',
     titleTemplate: 'مهلت دریافت پیشنهاد پایان یافت',

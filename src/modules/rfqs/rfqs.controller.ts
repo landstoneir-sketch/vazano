@@ -4,7 +4,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { SessionGuard } from '../auth/session.guard';
 import { CreateRfqDto } from './create-rfq.dto';
 import { RfqsService } from './rfqs.service';
-import { ReviewRfqDto } from './review-rfq.dto';
+import { CancelRfqDto, ReviewRfqDto } from './review-rfq.dto';
 import { CreateCommitmentPaymentDto } from './create-commitment-payment.dto';
 
 @Controller('rfqs')
@@ -55,6 +55,11 @@ export class RfqsController {
   @Post(':id/submit')
   submit(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.rfqs.submit(user, id);
+  }
+
+  @Post(':id/cancel')
+  cancel(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() input: CancelRfqDto) {
+    return this.rfqs.cancel(user, id, input.reason);
   }
 
   @Post(':id/review')
