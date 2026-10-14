@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, RfqSource } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
@@ -20,13 +20,67 @@ const categoryDetailsInclude = {
 } as const;
 
 @Injectable()
-export class RfqsService {
+export class RfqsService implements OnApplicationBootstrap, OnApplicationShutdown {
+  private readonly logger = new Logger(RfqsService.name);
+  private lifecycleTimer?: NodeJS.Timeout;
+  private lifecycleRunning = false;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly payments: PaymentsService,
     private readonly config: ConfigService,
     private readonly policySettings: RfqPolicySettingsService,
   ) {}
+
+  onApplicationBootstrap(): void {
+    if (this.config.get<string>('RFQ_LIFECYCLE_WORKER_ENABLED', 'true') !== 'true') return;
+    void this.runLifecycleWorker();
+    const intervalMs = Number(this.config.get<string>('RFQ_LIFECYCLE_WORKER_INTERVAL_MS', '60000'));
+    this.lifecycleTimer = setInterval(() => void this.runLifecycleWorker(), intervalMs);
+    this.lifecycleTimer.unref();
+  }
+
+  onApplicationShutdown(): void {
+    if (this.lifecycleTimer) clearInterval(this.lifecycleTimer);
+  }
+
+  async processResponseDeadlines(now = new Date()): Promise<{ negotiating: number; expired: number }> {
+    const candidates = await this.prisma.rfq.findMany({
+      where: {
+        lifecycleState: 'PUBLISHED',
+        operationalStatus: { in: ['OPEN_FOR_QUOTES', 'HAS_QUOTES'] },
+        responseDeadline: { lte: now },
+      },
+      select: { id: true, buyerOrganizationId: true, operationalStatus: true },
+      orderBy: { responseDeadline: 'asc' },
+      take: 100,
+    });
+    let negotiating = 0;
+    let expired = 0;
+    for (const candidate of candidates) {
+      const hasQuotes = candidate.operationalStatus === 'HAS_QUOTES';
+      const changed = await this.prisma.$transaction(async (tx) => {
+        const update = await tx.rfq.updateMany({
+          where: { id: candidate.id, lifecycleState: 'PUBLISHED', operationalStatus: candidate.operationalStatus, responseDeadline: { lte: now } },
+          data: hasQuotes
+            ? { operationalStatus: 'NEGOTIATING' }
+            : { lifecycleState: 'EXPIRED', operationalStatus: 'EXPIRED', closedAt: now },
+        });
+        if (update.count !== 1) return false;
+        const outcome = hasQuotes ? 'NEGOTIATING' : 'EXPIRED';
+        await tx.auditLog.create({
+          data: { organizationId: candidate.buyerOrganizationId, action: 'rfq.quote_window.closed', entityType: 'Rfq', entityId: candidate.id, metadata: { outcome } },
+        });
+        await tx.outboxEvent.create({
+          data: { aggregateType: 'Rfq', aggregateId: candidate.id, eventType: 'ir.vazano.rfq.quote_window_closed.v1', payload: { rfqId: candidate.id, outcome } },
+        });
+        return true;
+      });
+      if (changed && hasQuotes) negotiating += 1;
+      if (changed && !hasQuotes) expired += 1;
+    }
+    return { negotiating, expired };
+  }
 
   listForUser(user: AuthenticatedUser) {
     const buyerOrganizationIds = user.memberships
@@ -56,11 +110,20 @@ export class RfqsService {
   }
 
   listMatchedForSupplier(user: AuthenticatedUser) {
+    const now = new Date();
     const supplierOrganizationIds = user.memberships
       .filter((membership) => ['SUPPLIER_OWNER', 'SUPPLIER_MANAGER', 'SUPPLIER_SALES'].includes(membership.role))
       .map((membership) => membership.organizationId);
     return this.prisma.rfqInvitation.findMany({
-      where: { supplierOrganizationId: { in: supplierOrganizationIds }, status: { in: ['INVITED', 'VIEWED', 'RESPONDED'] } },
+      where: {
+        supplierOrganizationId: { in: supplierOrganizationIds },
+        status: { in: ['INVITED', 'VIEWED', 'RESPONDED'] },
+        rfq: {
+          lifecycleState: 'PUBLISHED',
+          operationalStatus: { in: ['OPEN_FOR_QUOTES', 'HAS_QUOTES'] },
+          OR: [{ responseDeadline: null }, { responseDeadline: { gt: now } }],
+        },
+      },
       include: {
         supplierOrganization: { select: { id: true, displayName: true } },
         rfq: {
@@ -538,5 +601,18 @@ export class RfqsService {
     const isOperator = user.permissions.includes('rfq.create_on_behalf') || user.permissions.includes('rfq.manage');
     if (!isMember && !isOperator) throw new ForbiddenException('دسترسی به این استعلام مجاز نیست.');
     return rfq;
+  }
+
+  private async runLifecycleWorker(): Promise<void> {
+    if (this.lifecycleRunning) return;
+    this.lifecycleRunning = true;
+    try {
+      const result = await this.processResponseDeadlines();
+      if (result.negotiating + result.expired > 0) this.logger.log(`Closed ${result.negotiating + result.expired} RFQ response windows.`);
+    }
+    catch (error: unknown) {
+      this.logger.error('RFQ lifecycle processing failed.', error instanceof Error ? error.stack : undefined);
+    }
+    finally { this.lifecycleRunning = false; }
   }
 }

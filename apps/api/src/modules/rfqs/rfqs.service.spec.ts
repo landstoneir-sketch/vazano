@@ -108,3 +108,28 @@ describe('RfqsService commitment payment callbacks', () => {
     expect(payments.create).not.toHaveBeenCalled();
   });
 });
+
+describe('RfqsService response deadlines', () => {
+  it('moves RFQs with quotes to negotiation and expires RFQs without quotes', async () => {
+    const candidates = [
+      { id: 'rfq-with-quotes', buyerOrganizationId: 'buyer-1', operationalStatus: 'HAS_QUOTES' },
+      { id: 'rfq-without-quotes', buyerOrganizationId: 'buyer-2', operationalStatus: 'OPEN_FOR_QUOTES' },
+    ];
+    const tx = {
+      rfq: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      auditLog: { create: jest.fn().mockResolvedValue({}) },
+      outboxEvent: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const prisma = {
+      rfq: { findMany: jest.fn().mockResolvedValue(candidates) },
+      $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
+    };
+    const service = new RfqsService(prisma as never, {} as never, {} as never, {} as never);
+    const now = new Date('2026-10-14T10:00:00.000Z');
+
+    await expect(service.processResponseDeadlines(now)).resolves.toEqual({ negotiating: 1, expired: 1 });
+    expect(tx.rfq.updateMany).toHaveBeenNthCalledWith(1, expect.objectContaining({ data: { operationalStatus: 'NEGOTIATING' } }));
+    expect(tx.rfq.updateMany).toHaveBeenNthCalledWith(2, expect.objectContaining({ data: { lifecycleState: 'EXPIRED', operationalStatus: 'EXPIRED', closedAt: now } }));
+    expect(tx.outboxEvent.create).toHaveBeenCalledTimes(2);
+  });
+});
