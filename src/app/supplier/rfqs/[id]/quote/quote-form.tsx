@@ -46,8 +46,11 @@ export function QuoteForm({ rfqId, initialOrganizationId }: { rfqId: string; ini
   useEffect(() => {
     if (!organizationId) return;
     let active = true;
-    void apiRequest<SupplierQuotation[]>(`/quotations/mine?organizationId=${encodeURIComponent(organizationId)}`)
-      .then((quotations) => {
+    void Promise.all([
+      apiRequest<SupplierQuotation[]>(`/quotations/mine?organizationId=${encodeURIComponent(organizationId)}`),
+      apiRequest(`/rfqs/${rfqId}/invitations/view`, { method: 'POST', body: JSON.stringify({ supplierOrganizationId: organizationId }) }),
+    ])
+      .then(([quotations]) => {
         if (!active) return;
         const draft = quotations.find((quotation) => quotation.rfq.id === rfqId && quotation.status === 'DRAFT') ?? null;
         setCreated(draft);
