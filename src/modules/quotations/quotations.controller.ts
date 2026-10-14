@@ -1,8 +1,8 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { SessionGuard } from '../auth/session.guard';
-import { CreateQuotationDto } from './create-quotation.dto';
+import { CreateQuotationDto, UpdateQuotationDto } from './create-quotation.dto';
 import { QuotationsService } from './quotations.service';
 
 @Controller('quotations')
@@ -13,6 +13,11 @@ export class QuotationsController {
   @Post()
   create(@CurrentUser() user: AuthenticatedUser, @Body() input: CreateQuotationDto) {
     return this.quotations.createDraft(user, input);
+  }
+
+  @Put(':id')
+  update(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() input: UpdateQuotationDto) {
+    return this.quotations.updateDraft(user, id, input);
   }
 
   @Post(':id/submit')

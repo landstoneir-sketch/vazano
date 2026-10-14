@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { PrismaService } from '../../shared/prisma/prisma.service';
-import { CreateQuotationDto } from './create-quotation.dto';
+import { CreateQuotationDto, UpdateQuotationDto } from './create-quotation.dto';
 import { calculateProposalFeeCredits, calculateProposalRefundCredits, calculateQuotationTotals, effectiveDailyProposalLimit, resolveProposalFeePolicy, startOfTehranDay, totalProposalLimitFromEntitlements } from './quotation-policies';
 import { calculateQualityControlFeeRial } from '../rfqs/rfq-policies';
 
@@ -38,7 +38,9 @@ export class QuotationsService {
       throw new ConflictException('این استعلام برای دریافت پیشنهاد باز نیست.');
     }
     if (rfq.responseDeadline && rfq.responseDeadline <= now) throw new ConflictException('مهلت پاسخ به استعلام پایان یافته است.');
-    if (!invitation) throw new ForbiddenException('این استعلام برای فروشنده انتخاب‌شده ارسال نشده است.');
+    if (!invitation || ['DECLINED', 'EXPIRED'].includes(invitation.status)) {
+      throw new ForbiddenException('دعوت این فروشنده برای استعلام فعال نیست.');
+    }
     const existingDraft = await this.prisma.quotation.findFirst({
       where: { rfqId: input.rfqId, supplierOrganizationId: input.supplierOrganizationId, status: 'DRAFT' },
     });
@@ -105,6 +107,106 @@ export class QuotationsService {
       await tx.auditLog.create({ data: { actorUserId: user.id, organizationId: input.supplierOrganizationId, action: 'quotation.draft.create', entityType: 'Quotation', entityId: quotation.id } });
       return quotation;
     });
+  }
+
+  async updateDraft(user: AuthenticatedUser, quotationId: string, input: UpdateQuotationDto) {
+    const quotation = await this.prisma.quotation.findUnique({
+      where: { id: quotationId },
+      include: { rfq: { include: { items: true } } },
+    });
+    if (!quotation) throw new NotFoundException('پیشنهاد قیمت پیدا نشد.');
+    this.assertSupplierMembership(user, quotation.supplierOrganizationId);
+    if (quotation.status !== 'DRAFT') throw new ConflictException('فقط پیش‌نویس پیشنهاد قابل ویرایش است.');
+    if (input.rfqId !== quotation.rfqId || input.supplierOrganizationId !== quotation.supplierOrganizationId) {
+      throw new BadRequestException('استعلام و حساب فروشنده پیش‌نویس قابل تغییر نیستند.');
+    }
+    const expectedUpdatedAt = new Date(input.expectedUpdatedAt);
+    if (expectedUpdatedAt.getTime() !== quotation.updatedAt.getTime()) {
+      throw new ConflictException('این پیش‌نویس در جای دیگری تغییر کرده است؛ صفحه را تازه‌سازی کنید.');
+    }
+    const now = new Date();
+    if (quotation.rfq.lifecycleState !== 'PUBLISHED' || !['OPEN_FOR_QUOTES', 'HAS_QUOTES'].includes(quotation.rfq.operationalStatus)) {
+      throw new ConflictException('این استعلام برای دریافت پیشنهاد باز نیست.');
+    }
+    if (quotation.rfq.responseDeadline && quotation.rfq.responseDeadline <= now) {
+      throw new ConflictException('مهلت پاسخ به استعلام پایان یافته است.');
+    }
+    const invitation = await this.prisma.rfqInvitation.findUnique({
+      where: { rfqId_supplierOrganizationId: { rfqId: quotation.rfqId, supplierOrganizationId: quotation.supplierOrganizationId } },
+    });
+    if (!invitation || ['DECLINED', 'EXPIRED'].includes(invitation.status)) {
+      throw new ForbiddenException('دعوت این فروشنده برای استعلام فعال نیست.');
+    }
+    const rfqItems = new Map(quotation.rfq.items.map((item) => [item.id, item]));
+    if (new Set(input.items.map((item) => item.rfqItemId)).size !== input.items.length) {
+      throw new BadRequestException('هر ردیف استعلام فقط یک‌بار قابل قیمت‌گذاری است.');
+    }
+    for (const item of input.items) {
+      const requested = rfqItems.get(item.rfqItemId);
+      if (!requested) throw new BadRequestException('ردیف پیشنهاد با این استعلام مرتبط نیست.');
+      const quantity = new Prisma.Decimal(item.quantity);
+      if (quantity.lte(0) || quantity.gt(requested.quantity)) {
+        throw new BadRequestException('مقدار قابل تأمین باید مثبت و حداکثر برابر مقدار درخواستی باشد.');
+      }
+    }
+    let totals: ReturnType<typeof calculateQuotationTotals>;
+    try {
+      totals = calculateQuotationTotals(input);
+    } catch {
+      throw new BadRequestException('مقادیر تخفیف یا جمع پیشنهاد معتبر نیست.');
+    }
+    if (totals.finalAmountRial <= 0n) throw new BadRequestException('مبلغ نهایی پیشنهاد باید بیشتر از صفر باشد.');
+
+    return this.prisma.$transaction(async (tx) => {
+      const updatedAt = new Date();
+      const changed = await tx.quotation.updateMany({
+        where: { id: quotation.id, status: 'DRAFT', updatedAt: expectedUpdatedAt },
+        data: {
+          paymentTerms: input.paymentTerms,
+          preparationDays: input.preparationDays,
+          deliveryDate: input.deliveryDate ? new Date(input.deliveryDate) : null,
+          validUntil: input.validUntil ? new Date(input.validUntil) : null,
+          subtotalRial: totals.subtotalRial,
+          discountRial: totals.discountRial,
+          taxRial: totals.taxRial,
+          packagingRial: totals.packagingRial,
+          loadingRial: totals.loadingRial,
+          shippingRial: totals.shippingRial,
+          otherCostsRial: totals.otherCostsRial,
+          finalAmountRial: totals.finalAmountRial,
+          updatedAt,
+        },
+      });
+      if (changed.count !== 1) throw new ConflictException('پیش‌نویس هم‌زمان تغییر کرده است؛ صفحه را تازه‌سازی کنید.');
+      await tx.quotationItem.deleteMany({ where: { quotationId: quotation.id } });
+      await tx.quotationItem.createMany({
+        data: input.items.map((item, index) => ({
+          quotationId: quotation.id,
+          rfqItemId: item.rfqItemId,
+          quantity: totals.items[index]!.quantity,
+          unitPriceRial: totals.items[index]!.unitPriceRial,
+          discountRial: totals.items[index]!.discountRial,
+          lineSubtotalRial: totals.items[index]!.lineSubtotalRial,
+          lineNetRial: totals.items[index]!.lineNetRial,
+          isAlternative: item.isAlternative ?? false,
+          offeredDescription: item.offeredDescription,
+        })),
+      });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: user.id,
+          organizationId: quotation.supplierOrganizationId,
+          action: 'quotation.draft.update',
+          entityType: 'Quotation',
+          entityId: quotation.id,
+          metadata: { previousUpdatedAt: quotation.updatedAt.toISOString(), itemCount: input.items.length },
+        },
+      });
+      return tx.quotation.findUniqueOrThrow({
+        where: { id: quotation.id },
+        include: { items: { include: { rfqItem: true } } },
+      });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
   async submit(user: AuthenticatedUser, quotationId: string) {
