@@ -20,6 +20,16 @@ export class AttachmentsController {
     return this.attachments.listForRfq(user, rfqId);
   }
 
+  @Post('quotations/:quotationId/upload-intent')
+  createQuotationUploadIntent(@CurrentUser() user: AuthenticatedUser, @Param('quotationId') quotationId: string, @Body() input: CreateUploadIntentDto) {
+    return this.attachments.createQuotationUploadIntent(user, quotationId, input);
+  }
+
+  @Get('quotations/:quotationId')
+  listForQuotation(@CurrentUser() user: AuthenticatedUser, @Param('quotationId') quotationId: string) {
+    return this.attachments.listForQuotation(user, quotationId);
+  }
+
   @Post('suppliers/:organizationId/upload-intent')
   createSupplierUploadIntent(@CurrentUser() user: AuthenticatedUser, @Param('organizationId') organizationId: string, @Body() input: CreateUploadIntentDto) {
     return this.attachments.createSupplierUploadIntent(user, organizationId, input);

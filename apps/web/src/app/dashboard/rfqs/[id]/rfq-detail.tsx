@@ -28,6 +28,7 @@ export function RfqDetail({ rfqId, qualityPaymentResult, qualityReceiptId, commi
   const [rfq, setRfq] = useState<Rfq | null>(null);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [quotationAttachments, setQuotationAttachments] = useState<Record<string, Attachment[]>>({});
   const [review, setReview] = useState<SupplierReview | null>(null);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
@@ -40,7 +41,8 @@ export function RfqDetail({ rfqId, qualityPaymentResult, qualityReceiptId, commi
         apiRequest<{ rfq: Rfq; quotations: Quotation[] }>(`/quotations/rfqs/${rfqId}/comparison`),
         apiRequest<SupplierReview | null>(`/reviews/rfqs/${rfqId}`),
       ]);
-      setRfq(data.rfq); setQuotations(data.quotations); setReview(reviewData);
+      const attachmentEntries = await Promise.all(data.quotations.map(async (quotation) => [quotation.id, await apiRequest<Attachment[]>(`/attachments/quotations/${quotation.id}`)] as const));
+      setRfq(data.rfq); setQuotations(data.quotations); setQuotationAttachments(Object.fromEntries(attachmentEntries)); setReview(reviewData);
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : 'دریافت اطلاعات انجام نشد.'); }
   }, [rfqId]);
 
@@ -51,7 +53,10 @@ export function RfqDetail({ rfqId, qualityPaymentResult, qualityReceiptId, commi
       apiRequest<Attachment[]>(`/attachments/rfqs/${rfqId}`),
       apiRequest<SupplierReview | null>(`/reviews/rfqs/${rfqId}`),
     ])
-      .then(([data, attachmentData, reviewData]) => { if (active) { setRfq(data.rfq); setQuotations(data.quotations); setAttachments(attachmentData); setReview(reviewData); } })
+      .then(async ([data, attachmentData, reviewData]) => {
+        const quoteAttachmentEntries = await Promise.all(data.quotations.map(async (quotation) => [quotation.id, await apiRequest<Attachment[]>(`/attachments/quotations/${quotation.id}`)] as const));
+        if (active) { setRfq(data.rfq); setQuotations(data.quotations); setAttachments(attachmentData); setQuotationAttachments(Object.fromEntries(quoteAttachmentEntries)); setReview(reviewData); }
+      })
       .catch((reason: unknown) => { if (active) setMessage(reason instanceof Error ? reason.message : 'دریافت اطلاعات انجام نشد.'); });
     return () => { active = false; };
   }, [rfqId]);
@@ -210,6 +215,7 @@ export function RfqDetail({ rfqId, qualityPaymentResult, qualityReceiptId, commi
       <strong className="price">{toman(displayedQuotationAmountRial(quote.finalAmountRial, quote.taxRial, rfq.displayPricesTaxInclusive))}</strong><p>مالیات: {toman(quote.taxRial)}{rfq.displayPricesTaxInclusive ? ' (در مبلغ اصلی محاسبه شده)' : ' (جداگانه)'} · حمل: {toman(quote.shippingRial)}</p>
       <p>آماده‌سازی: {quote.preparationDays ?? '—'} روز · اعتبار تا: {quote.validUntil ? new Date(quote.validUntil).toLocaleDateString('fa-IR') : '—'}</p>
       <ul>{quote.items.map((item) => <li key={item.id}>{item.rfqItem.title}: {toman(item.unitPriceRial)} / واحد{item.isAlternative ? ' · جایگزین' : ''}</li>)}</ul>
+      {(quotationAttachments[quote.id]?.length ?? 0) > 0 && <div className="stack"><strong>پیوست‌های فروشنده</strong>{quotationAttachments[quote.id]!.map((attachment) => <div className="list-card" key={attachment.id}><span>{attachment.originalName}</span><button type="button" className="button button-secondary" onClick={() => void downloadAttachment(attachment.id)}>دریافت امن</button></div>)}</div>}
       <div className="list-card-actions"><Link className="button button-secondary" href={`/messages?rfq=${rfq.id}&supplier=${quote.supplierOrganization.id}` as Route}>پیام به فروشنده</Link>
       {quote.status === 'SUBMITTED' && <button className="button button-primary" disabled={busyId === quote.id} onClick={() => void accept(quote.id)}>انتخاب فروشنده</button>}</div>
       {quote.status === 'ACCEPTED' && <div className="message message-success">فروشنده منتخب</div>}

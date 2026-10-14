@@ -25,6 +25,8 @@ type SupplierQuotation = CreatedQuotation & {
   items: QuotationItem[];
 };
 type ProposalFeePolicy = { version: string; rate: string; minToman: number; maxToman: number; refundFractionIfEligible: string };
+type Attachment = { id: string; originalName: string; status: string; sizeBytes: number };
+type UploadIntent = { attachment: Attachment; upload: { url: string; method: 'PUT'; headers: Record<string, string> } };
 
 const toRial = (toman: string) => Math.round(Number(toman || '0') * 10).toString();
 const fromRial = (rial: string) => (BigInt(rial || '0') / BigInt(10)).toString();
@@ -56,6 +58,8 @@ export function QuoteForm({ rfqId, initialOrganizationId }: { rfqId: string; ini
   const [busy, setBusy] = useState(false);
   const [feePolicy, setFeePolicy] = useState<ProposalFeePolicy | null>(null);
   const [draftDirty, setDraftDirty] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -86,7 +90,7 @@ export function QuoteForm({ rfqId, initialOrganizationId }: { rfqId: string; ini
         if (!draft) {
           setPrices({}); setQuantities(Object.fromEntries(rfq.items.map((item) => [item.id, item.quantity])));
           setLineDiscounts({}); setIncludedItems(Object.fromEntries(rfq.items.map((item) => [item.id, true])));
-          setAlternatives({}); setOfferedDescriptions({}); setMessage('');
+          setAlternatives({}); setOfferedDescriptions({}); setAttachments([]); setMessage('');
           return;
         }
         setPrices(Object.fromEntries(draft.items.map((item) => [item.rfqItemId, fromRial(item.unitPriceRial)])));
@@ -105,6 +109,15 @@ export function QuoteForm({ rfqId, initialOrganizationId }: { rfqId: string; ini
       .catch((reason: unknown) => { if (active) setMessage(reason instanceof Error ? reason.message : 'بررسی پیش‌نویس قبلی انجام نشد.'); });
     return () => { active = false; };
   }, [organizationId, rfq, rfqId]);
+
+  useEffect(() => {
+    if (!created?.id || created.status !== 'DRAFT') return;
+    let active = true;
+    void apiRequest<Attachment[]>(`/attachments/quotations/${created.id}`)
+      .then((data) => { if (active) setAttachments(data); })
+      .catch((reason: unknown) => { if (active) setMessage(reason instanceof Error ? reason.message : 'دریافت پیوست‌های پیشنهاد انجام نشد.'); });
+    return () => { active = false; };
+  }, [created?.id, created?.status]);
 
   const estimatedTotalToman = useMemo(() => {
     if (!rfq) return 0;
@@ -159,8 +172,35 @@ export function QuoteForm({ rfqId, initialOrganizationId }: { rfqId: string; ini
     finally { setBusy(false); }
   }
 
+  async function uploadAttachment() {
+    if (!created || !selectedFile) return;
+    setBusy(true); setMessage('');
+    try {
+      const purpose = selectedFile.type.startsWith('image/') ? 'PRODUCT_IMAGE' : selectedFile.type === 'application/pdf' ? 'PROFORMA' : 'SPECIFICATION';
+      const intent = await apiRequest<UploadIntent>(`/attachments/quotations/${created.id}/upload-intent`, {
+        method: 'POST', body: JSON.stringify({ fileName: selectedFile.name, mimeType: selectedFile.type, sizeBytes: selectedFile.size, purpose }),
+      });
+      const upload = await fetch(intent.upload.url, { method: intent.upload.method, headers: intent.upload.headers, body: selectedFile });
+      if (!upload.ok) throw new Error('ارسال فایل به فضای ذخیره‌سازی انجام نشد.');
+      const completed = await apiRequest<Attachment>(`/attachments/${intent.attachment.id}/complete`, { method: 'POST' });
+      setAttachments((current) => [...current, completed]); setSelectedFile(null); setMessage('پیوست پیشنهاد با موفقیت ثبت شد.');
+    } catch (reason: unknown) { setMessage(reason instanceof Error ? reason.message : 'بارگذاری پیوست انجام نشد.'); }
+    finally { setBusy(false); }
+  }
+
+  async function removeAttachment(attachmentId: string) {
+    setBusy(true); setMessage('');
+    try {
+      await apiRequest(`/attachments/${attachmentId}`, { method: 'DELETE' });
+      setAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId));
+    } catch (reason: unknown) { setMessage(reason instanceof Error ? reason.message : 'حذف پیوست انجام نشد.'); }
+    finally { setBusy(false); }
+  }
+
   if (!rfq) return <div className="card">{message || 'در حال دریافت استعلام…'}</div>;
-  return <form className="card form-grid" onSubmit={save} onChangeCapture={() => { if (created?.status === 'DRAFT') setDraftDirty(true); }}>
+  return <form className="card form-grid" onSubmit={save} onChangeCapture={(event) => {
+    if (created?.status === 'DRAFT' && (!(event.target instanceof HTMLInputElement) || event.target.type !== 'file')) setDraftDirty(true);
+  }}>
     {message && <div className={`message ${created?.status === 'SUBMITTED' ? 'message-success' : ''}`}>{message}</div>}
     <div className="full"><div className="eyebrow">{rfq.code}</div><h2>{rfq.title}</h2></div>
     <label className="form-field"><span>حساب فروشنده</span><select value={organizationId} disabled={Boolean(created)} onChange={(event) => setOrganizationId(event.target.value)} required>{organizations.map((item) => <option key={item.id} value={item.id}>{item.displayName} · {item.status}</option>)}</select></label>
@@ -180,8 +220,16 @@ export function QuoteForm({ rfqId, initialOrganizationId }: { rfqId: string; ini
     <label className="form-field"><span>سایر هزینه‌های شفاف (تومان)</span><input inputMode="numeric" pattern="\d+" value={otherCostsToman} onChange={(event) => setOtherCostsToman(event.target.value)} /></label>
     <label className="form-field"><span>مالیات، جداگانه (تومان)</span><input inputMode="numeric" pattern="\d+" value={taxToman} onChange={(event) => setTaxToman(event.target.value)} /></label>
     <div className="card summary-card"><span>جمع برآوردی</span><strong>{Math.max(0, estimatedTotalToman).toLocaleString('fa-IR')} تومان</strong><small>{feePolicy ? `هزینه ارسال پیشنهاد براساس سیاست ${feePolicy.version}: ${(Number(feePolicy.rate) * 100).toLocaleString('fa-IR')}٪ مبلغ، حداقل ${feePolicy.minToman.toLocaleString('fa-IR')} و حداکثر ${feePolicy.maxToman.toLocaleString('fa-IR')} تومان.` : 'هزینه ارسال پیشنهاد هنگام ارسال نهایی محاسبه می‌شود.'}</small></div>
+    {created?.status === 'DRAFT' && <fieldset className="fieldset full"><legend>پیش‌فاکتور، تصویر نمونه یا مشخصات فنی</legend><p className="muted">PDF، تصویر، Word یا Excel تا حداکثر ۲۰ مگابایت؛ فایل پیش از نمایش به خریدار بررسی امنیتی می‌شود.</p><div className="attachment-upload-row"><input aria-label="انتخاب پیوست پیشنهاد" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.xls,.xlsx,.docx" onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)} /><button className="button button-secondary" type="button" disabled={busy || !selectedFile} onClick={() => void uploadAttachment()}>بارگذاری فایل</button></div>{attachments.length > 0 && <div className="stack">{attachments.map((attachment) => <div className="list-card" key={attachment.id}><span>{attachment.originalName} · {attachmentStatusLabel(attachment.status)}</span><button className="button button-ghost" type="button" disabled={busy} onClick={() => void removeAttachment(attachment.id)}>حذف</button></div>)}</div>}</fieldset>}
     {created?.status !== 'SUBMITTED' && <button className="button button-secondary" disabled={busy || !organizationId}>{busy ? 'در حال ذخیره…' : created ? 'ذخیره تغییرات پیش‌نویس' : 'ذخیره پیش‌نویس'}</button>}
     {created?.status === 'DRAFT' && <button type="button" className="button button-primary" disabled={busy || draftDirty} onClick={() => void submit()}>{draftDirty ? 'ابتدا تغییرات را ذخیره کنید' : busy ? 'در حال ارسال…' : 'ارسال نهایی پیشنهاد'}</button>}
     {created?.status === 'SUBMITTED' && <Link className="button button-secondary" href="/supplier">بازگشت به فرصت‌های فروش</Link>}
   </form>;
+}
+
+function attachmentStatusLabel(status: string): string {
+  if (status === 'READY') return 'آماده نمایش';
+  if (status === 'QUARANTINED') return 'قرنطینه‌شده';
+  if (status === 'REJECTED') return 'ردشده';
+  return 'در انتظار بررسی امنیتی';
 }
