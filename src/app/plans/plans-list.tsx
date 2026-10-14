@@ -1,9 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { apiRequest } from '../../lib/api';
 
-type Plan = { id: string; nameFa: string; durationIso: string; priceRial: string; grantCredits: string; dailyProposalLimit: number; maxProposalLimit: number; isTrial: boolean };
+type Plan = { id: string; nameFa: string; descriptionFa?: string | null; billingCycle?: string; durationIso: string; priceRial: string; grantCredits: string; dailyProposalLimit: number; maxProposalLimit: number; isTrial: boolean };
 
 function formatToman(rial: string): string {
   return (BigInt(rial) / BigInt(10)).toLocaleString('fa-IR');
@@ -15,5 +16,18 @@ export function PlansList() {
   useEffect(() => { void apiRequest<Plan[]>('/subscriptions/plans').then(setPlans).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'دریافت پلن‌ها انجام نشد.')); }, []);
   if (error) return <div className="message message-error">{error}</div>;
   if (plans.length === 0) return <div className="card">در حال دریافت پلن‌ها…</div>;
-  return <div className="plan-grid">{plans.map((plan) => <article className="card plan-card" key={plan.id}><h2>{plan.nameFa}</h2><strong>{plan.isTrial ? 'رایگان' : `${formatToman(plan.priceRial)} تومان`}</strong><p>{BigInt(plan.grantCredits).toLocaleString('fa-IR')} اعتبار</p><p>{plan.isTrial ? `مدت آزمایش: ${Number(plan.durationIso.match(/^P(\d+)D$/)?.[1] ?? 0).toLocaleString('fa-IR')} روز` : `سقف پایه: ${plan.dailyProposalLimit.toLocaleString('fa-IR')} پیشنهاد موفق روزانه`}</p><small>{plan.isTrial ? 'هر سازمان فروشنده فقط یک‌بار می‌تواند این دوره را فعال کند.' : `افزایش قاعده‌مند در کمبود عرضه تا ${plan.maxProposalLimit.toLocaleString('fa-IR')} پیشنهاد`}</small></article>)}</div>;
+  return <><div className="plan-grid public-plan-grid">{plans.map((plan) => <article className={`card plan-card public-plan-card ${plan.isTrial ? 'plan-card-trial' : ''}`} key={plan.id}>
+    <div className="plan-card-heading"><h2>{plan.nameFa}</h2>{plan.isTrial && <span className="status-badge">آزمایشی</span>}</div>
+    <strong>{plan.isTrial ? 'رایگان' : `${formatToman(plan.priceRial)} تومان`}</strong>
+    <span className="plan-cycle">{plan.isTrial ? `${Number(plan.durationIso.match(/^P(\d+)D$/)?.[1] ?? 0).toLocaleString('fa-IR')} روز` : billingCycleLabel(plan.billingCycle)}</span>
+    <p>{plan.descriptionFa || 'دسترسی به فرصت‌های فروش و مدیریت پیشنهادهای قیمت'}</p>
+    <ul className="plan-features"><li>{BigInt(plan.grantCredits).toLocaleString('fa-IR')} اعتبار قابل مصرف</li><li>{plan.isTrial ? 'فعال‌سازی بدون پرداخت' : `${plan.dailyProposalLimit.toLocaleString('fa-IR')} پیشنهاد موفق روزانه`}</li><li>{plan.isTrial ? 'یک‌بار برای هر سازمان' : `سقف افزایش‌یافته تا ${plan.maxProposalLimit.toLocaleString('fa-IR')} پیشنهاد`}</li></ul>
+    <Link className={`button ${plan.isTrial ? 'button-secondary' : 'button-primary'}`} href="/supplier/subscription">{plan.isTrial ? 'شروع دوره آزمایشی' : 'انتخاب این پلن'}</Link>
+  </article>)}</div><p className="plans-footnote">پرداخت پلن‌های پولی پس از نمایش مبلغ نهایی و تأیید شما از طریق زرین‌پال انجام می‌شود. خرید اشتراک هیچ اولویتی در انتخاب برنده ایجاد نمی‌کند.</p></>;
+}
+
+function billingCycleLabel(cycle?: string): string {
+  if (cycle === 'YEARLY') return 'سالانه';
+  if (cycle === 'QUARTERLY') return 'سه‌ماهه';
+  return 'ماهانه';
 }
