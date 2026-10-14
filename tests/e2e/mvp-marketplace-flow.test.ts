@@ -8,6 +8,8 @@ const TEST_MOBILE_NORMALIZED = TEST_MOBILE_LOCAL;
 const TEST_RFQ_TITLE = 'آزمون اجرایی جریان کامل وازانو';
 const BUYER_ORGANIZATION_ID = 'demo-buyer-organization';
 const SUPPLIER_ORGANIZATION_ID = 'demo-supplier-organization';
+const SECONDARY_SUPPLIER_ORGANIZATION_ID = 'e2e-secondary-supplier-organization';
+const SECONDARY_QUOTATION_CODE = 'VZ-E2E-SECONDARY-QUOTE';
 
 async function cleanupTestData() {
   const rfqs = await prisma.rfq.findMany({
@@ -21,6 +23,10 @@ async function cleanupTestData() {
     ? await prisma.quotation.findMany({ where: { rfqId: { in: rfqIds } }, select: { id: true } })
     : [];
   const quotationIds = quotations.map(({ id }) => id);
+  const quotationLedgerEntries = quotationIds.length
+    ? await prisma.creditLedgerEntry.findMany({ where: { referenceType: 'Quotation', referenceId: { in: quotationIds } }, select: { walletId: true } })
+    : [];
+  const affectedWalletIds = [...new Set(quotationLedgerEntries.map(({ walletId }) => walletId))];
   const qualityControlRequests = rfqIds.length
     ? await prisma.qualityControlRequest.findMany({ where: { rfqId: { in: rfqIds } }, select: { id: true } })
     : [];
@@ -55,8 +61,15 @@ async function cleanupTestData() {
     await prisma.qualityControlRequest.deleteMany({ where: { rfqId: { in: rfqIds } } });
   }
   if (quotationIds.length) {
+    await prisma.creditLedgerEntry.deleteMany({ where: { referenceType: 'Quotation', referenceId: { in: quotationIds } } });
     await prisma.attachment.deleteMany({ where: { quotationId: { in: quotationIds } } });
     await prisma.quotation.deleteMany({ where: { id: { in: quotationIds } } });
+  }
+  for (const walletId of affectedWalletIds) {
+    const wallet = await prisma.creditWallet.findUnique({ where: { id: walletId }, select: { organizationId: true } });
+    if (!wallet || wallet.organizationId === SECONDARY_SUPPLIER_ORGANIZATION_ID) continue;
+    const balance = await prisma.creditLedgerEntry.aggregate({ where: { walletId }, _sum: { amountCredits: true } });
+    await prisma.creditWallet.update({ where: { id: walletId }, data: { cachedBalanceCredits: balance._sum.amountCredits ?? 0n } });
   }
   if (rfqIds.length) {
     await prisma.supportTicket.deleteMany({ where: { relatedRfqId: { in: rfqIds } } });
@@ -68,6 +81,12 @@ async function cleanupTestData() {
   await prisma.user.deleteMany({
     where: { OR: [{ id: TEST_USER_ID }, { mobile: TEST_MOBILE_NORMALIZED }] },
   });
+  const secondaryWallet = await prisma.creditWallet.findUnique({ where: { organizationId: SECONDARY_SUPPLIER_ORGANIZATION_ID }, select: { id: true } });
+  if (secondaryWallet) {
+    await prisma.creditLedgerEntry.deleteMany({ where: { walletId: secondaryWallet.id } });
+    await prisma.creditWallet.delete({ where: { id: secondaryWallet.id } });
+  }
+  await prisma.organization.deleteMany({ where: { id: SECONDARY_SUPPLIER_ORGANIZATION_ID } });
   const supplierProfile = await prisma.supplierProfile.findUnique({ where: { organizationId: SUPPLIER_ORGANIZATION_ID }, select: { id: true } });
   if (supplierProfile) {
     await prisma.supplierServiceProvince.deleteMany({ where: { supplierProfileId: supplierProfile.id } });
@@ -263,13 +282,81 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   await page.getByRole('button', { name: 'ارسال نهایی پیشنهاد' }).click();
   await expect(page.getByText(/پیشنهاد قیمت با موفقیت ارسال شد/)).toBeVisible();
 
+  const primaryQuotation = await prisma.quotation.findFirstOrThrow({
+    where: { rfqId: rfqId!, supplierOrganizationId: SUPPLIER_ORGANIZATION_ID, status: 'SUBMITTED' },
+  });
+  const secondarySupplier = await prisma.organization.create({
+    data: {
+      id: SECONDARY_SUPPLIER_ORGANIZATION_ID,
+      kind: 'SUPPLIER',
+      type: 'COMPANY',
+      legalName: 'فروشنده دوم تست اجرایی',
+      displayName: 'فروشنده دوم تست اجرایی',
+      province: 'اصفهان',
+      city: 'اصفهان',
+      status: 'ACTIVE',
+    },
+  });
+  const secondaryWallet = await prisma.creditWallet.create({
+    data: { organizationId: secondarySupplier.id, cachedBalanceCredits: 1_000_000n },
+  });
+  await prisma.creditLedgerEntry.create({
+    data: {
+      walletId: secondaryWallet.id,
+      type: 'GRANT',
+      amountCredits: 1_000_000n,
+      referenceType: 'E2eFixture',
+      referenceId: secondarySupplier.id,
+      idempotencyKey: 'e2e-secondary-supplier:initial-credit:v1',
+      reasonCode: 'E2E_FIXTURE',
+    },
+  });
+  const secondaryQuotation = await prisma.quotation.create({
+    data: {
+      code: SECONDARY_QUOTATION_CODE,
+      rfqId: rfqId!,
+      supplierOrganizationId: secondarySupplier.id,
+      createdByUserId: TEST_USER_ID,
+      status: 'SUBMITTED',
+      subtotalRial: 1_300_000_000n,
+      finalAmountRial: 1_300_000_000n,
+      submittedAt: new Date(),
+    },
+  });
+  await prisma.creditLedgerEntry.create({
+    data: {
+      walletId: secondaryWallet.id,
+      type: 'CONSUME',
+      amountCredits: -300_000n,
+      referenceType: 'Quotation',
+      referenceId: secondaryQuotation.id,
+      idempotencyKey: `quotation:${secondaryQuotation.id}:submit:v1`,
+      reasonCode: 'QUOTATION_SUBMISSION_FEE',
+      metadata: { policyVersion: '1.2', finalAmountRial: '1300000000', rate: '0.001', refundFractionIfEligible: '2/3' },
+    },
+  });
+  await prisma.creditWallet.update({ where: { id: secondaryWallet.id }, data: { cachedBalanceCredits: 700_000n } });
+
   await page.goto(`/dashboard/rfqs/${rfqId}`);
   await expect(page.getByText(TEST_RFQ_TITLE)).toBeVisible();
   await expect(page.getByText('سنگ نمونه وازانو')).toBeVisible();
+  await expect(page.getByText('فروشنده دوم تست اجرایی')).toBeVisible();
   page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'انتخاب فروشنده' }).click();
+  await page.locator('article').filter({ hasText: 'سنگ نمونه وازانو' }).getByRole('button', { name: 'انتخاب فروشنده' }).click();
   await expect(page.getByText('فروشنده منتخب ثبت شد.')).toBeVisible();
   await expect(page.getByText('فروشنده منتخب', { exact: true })).toBeVisible();
+  const rejectedQuotation = await prisma.quotation.findUniqueOrThrow({ where: { id: secondaryQuotation.id } });
+  expect(rejectedQuotation.status).toBe('REJECTED');
+  const secondaryWalletAfterSelection = await prisma.creditWallet.findUniqueOrThrow({ where: { id: secondaryWallet.id } });
+  expect(secondaryWalletAfterSelection.cachedBalanceCredits).toBe(900_000n);
+  expect(await prisma.creditLedgerEntry.count({ where: { idempotencyKey: `quotation:${secondaryQuotation.id}:not-selected-refund:v1` } })).toBe(1);
+
+  const repeatedSelection = await page.request.post(`http://localhost:3101/v1/quotations/${primaryQuotation.id}/accept`, {
+    headers: { Origin: 'http://localhost:3100' },
+  });
+  expect(repeatedSelection.ok()).toBeTruthy();
+  expect((await prisma.creditWallet.findUniqueOrThrow({ where: { id: secondaryWallet.id } })).cachedBalanceCredits).toBe(900_000n);
+  expect(await prisma.creditLedgerEntry.count({ where: { idempotencyKey: `quotation:${secondaryQuotation.id}:not-selected-refund:v1` } })).toBe(1);
   await expect(page.getByRole('button', { name: 'پرداخت کارمزد و فعال‌سازی خدمت' })).toBeVisible();
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'پرداخت کارمزد و فعال‌سازی خدمت' }).click();

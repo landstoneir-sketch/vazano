@@ -50,6 +50,7 @@ export default defineConfig({
         OTP_DEBUG_CODE: '11111',
         NOTIFICATION_WORKER_ENABLED: 'false',
         SUBSCRIPTION_LIFECYCLE_WORKER_ENABLED: 'false',
+        RFQ_LIFECYCLE_WORKER_ENABLED: 'false',
         PAYMENT_PROVIDER: 'mock',
       },
     },
