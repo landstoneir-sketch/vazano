@@ -8,6 +8,7 @@ type Rfq = {
   id: string;
   code: string;
   title: string;
+  lifecycleState: string;
   operationalStatus: string;
   approvalStatus: string;
   createdAt: string;
@@ -31,7 +32,7 @@ export function RfqList() {
     {items.length === 0 && !error && <div className="card">هنوز استعلامی ثبت نشده است.</div>}
     {items.map((rfq) => <article className="card list-card" key={rfq.id}>
       <div><div className="eyebrow">{rfq.code}</div><h2>{rfq.title}</h2><p>وضعیت: {rfq.operationalStatus} · تأیید: {rfq.approvalStatus}</p></div>
-      <div className="list-card-actions"><span className="count-badge">{rfq._count.quotations} پیشنهاد</span><Link className="button button-secondary" href={`/dashboard/rfqs/${rfq.id}`}>مشاهده و مقایسه</Link></div>
+      <div className="list-card-actions"><span className="count-badge">{rfq._count.quotations} پیشنهاد</span>{rfq.lifecycleState === 'DRAFT' && ['DRAFT_INCOMPLETE', 'NEEDS_CHANGES'].includes(rfq.operationalStatus) && <Link className="button button-primary" href={`/dashboard/rfqs/new?edit=${rfq.id}`}>ادامه و ویرایش</Link>}<Link className="button button-secondary" href={`/dashboard/rfqs/${rfq.id}`}>مشاهده و مقایسه</Link></div>
     </article>)}
   </div>;
 }

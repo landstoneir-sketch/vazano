@@ -21,8 +21,25 @@ type ProductAttribute = {
   validation: Record<string, unknown>;
   isRequired: boolean;
 };
-type SpecificationValue = string | boolean | string[];
-type CreatedRfq = { id: string; code: string; lifecycleState: string; commitmentStatus: string; commitmentAmountRial: string | null; operationalStatus: string };
+type SpecificationValue = string | number | boolean | string[] | null;
+type CreatedRfq = {
+  id: string;
+  code: string;
+  lifecycleState: string;
+  commitmentStatus: string;
+  commitmentAmountRial: string | null;
+  operationalStatus: string;
+  updatedAt: string;
+  buyerOrganizationId: string;
+  buyerContactUserId: string;
+  primaryDomainId: string;
+  title: string;
+  deliveryProvinceId: string | null;
+  deliveryCityId: string | null;
+  installationRequired: boolean;
+  qualityControlRequested: boolean;
+  items: Array<{ categoryId: string; unitId: string; title: string; quantity: string; specifications: Record<string, SpecificationValue> }>;
+};
 type Attachment = { id: string; originalName: string; status: string; sizeBytes: number };
 type UploadIntent = { attachment: Attachment; upload: { url: string; method: 'PUT'; headers: Record<string, string> } };
 type RfqPolicy = {
@@ -38,7 +55,7 @@ type RfqPolicy = {
   buyerCommitmentAmountRial: string;
 };
 
-export function NewRfqForm({ operatorMode = false }: { operatorMode?: boolean }) {
+export function NewRfqForm({ operatorMode = false, draftId }: { operatorMode?: boolean; draftId?: string }) {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [industries, setIndustries] = useState<Industry[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -65,6 +82,7 @@ export function NewRfqForm({ operatorMode = false }: { operatorMode?: boolean })
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [policy, setPolicy] = useState<RfqPolicy | null>(null);
+  const [draftDirty, setDraftDirty] = useState(false);
 
   useEffect(() => {
     void Promise.all([
@@ -74,14 +92,28 @@ export function NewRfqForm({ operatorMode = false }: { operatorMode?: boolean })
       apiRequest<Unit[]>('/catalog/units'),
       apiRequest<Province[]>('/locations/provinces'),
       apiRequest<RfqPolicy>('/rfqs/active-policy'),
-    ]).then(([orgData, industryData, categoryData, unitData, provinceData, policyData]) => {
+      draftId ? apiRequest<CreatedRfq>(`/rfqs/${draftId}`) : Promise.resolve(null),
+      draftId ? apiRequest<Attachment[]>(`/attachments/rfqs/${draftId}`) : Promise.resolve([]),
+    ]).then(([orgData, industryData, categoryData, unitData, provinceData, policyData, draftData, attachmentData]) => {
       const buyers = operatorMode ? orgData : orgData.filter((item) => item.kind === 'BUYER');
       setOrganizations(buyers); setIndustries(industryData); setCategories(categoryData); setUnits(unitData); setProvinces(provinceData);
       setPolicy(policyData);
-      setOrganizationId(buyers[0]?.id ?? ''); setIndustryId(industryData[0]?.id ?? ''); setUnitId(unitData[0]?.id ?? '');
-      setBuyerContactUserId(buyers[0]?.contacts?.[0]?.id ?? '');
+      if (draftData) {
+        const firstItem = draftData.items[0];
+        if (draftData.lifecycleState !== 'DRAFT' || !['DRAFT_INCOMPLETE', 'NEEDS_CHANGES'].includes(draftData.operationalStatus) || !firstItem) {
+          throw new Error('این استعلام دیگر یک پیش‌نویس قابل ویرایش نیست.');
+        }
+        setCreated(draftData); setAttachments(attachmentData); setOrganizationId(draftData.buyerOrganizationId);
+        setBuyerContactUserId(draftData.buyerContactUserId); setIndustryId(draftData.primaryDomainId); setTitle(draftData.title);
+        setCategoryId(firstItem.categoryId); setUnitId(firstItem.unitId); setItemTitle(firstItem.title); setQuantity(firstItem.quantity);
+        setSpecifications(firstItem.specifications ?? {}); setProvinceId(draftData.deliveryProvinceId ?? ''); setCityId(draftData.deliveryCityId ?? '');
+        setInstallationRequired(draftData.installationRequired); setQualityControlRequested(draftData.qualityControlRequested); setDraftDirty(false);
+      } else {
+        setOrganizationId(buyers[0]?.id ?? ''); setIndustryId(industryData[0]?.id ?? ''); setUnitId(unitData[0]?.id ?? '');
+        setBuyerContactUserId(buyers[0]?.contacts?.[0]?.id ?? '');
+      }
     }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'دریافت اطلاعات اولیه انجام نشد.'));
-  }, [operatorMode]);
+  }, [draftId, operatorMode]);
 
   const selectableCategories = useMemo(() => categories.filter((item) => item.industryId === industryId && item.parentId), [categories, industryId]);
 
@@ -89,7 +121,7 @@ export function NewRfqForm({ operatorMode = false }: { operatorMode?: boolean })
     if (!categoryId) return;
     let active = true;
     void apiRequest<ProductAttribute[]>(`/catalog/categories/${categoryId}/attributes`)
-      .then((data) => { if (active) { setProductAttributes(data); setSpecifications({}); } })
+      .then((data) => { if (active) setProductAttributes(data); })
       .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : 'دریافت ویژگی‌های فنی انجام نشد.'); });
     return () => { active = false; };
   }, [categoryId]);
@@ -115,9 +147,9 @@ export function NewRfqForm({ operatorMode = false }: { operatorMode?: boolean })
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true); setError(''); setCreated(null);
+    event.preventDefault(); setBusy(true); setError('');
     try {
-      const rfq = await apiRequest<CreatedRfq>(operatorMode ? '/rfqs/on-behalf' : '/rfqs', { method: 'POST', body: JSON.stringify({
+      const payload = {
         buyerOrganizationId: organizationId,
         ...(operatorMode ? { buyerContactUserId } : {}),
         primaryDomainId: industryId,
@@ -127,8 +159,13 @@ export function NewRfqForm({ operatorMode = false }: { operatorMode?: boolean })
         installationRequired,
         qualityControlRequested,
         items: [{ categoryId, unitId, title: itemTitle, quantity, specifications }],
-      }) });
+        ...(created ? { expectedUpdatedAt: created.updatedAt } : {}),
+      };
+      const rfq = await apiRequest<CreatedRfq>(created ? `/rfqs/${created.id}` : (operatorMode ? '/rfqs/on-behalf' : '/rfqs'), {
+        method: created ? 'PUT' : 'POST', body: JSON.stringify(payload),
+      });
       setCreated(rfq);
+      setDraftDirty(false);
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'ثبت استعلام انجام نشد.'); }
     finally { setBusy(false); }
   }
@@ -138,7 +175,7 @@ export function NewRfqForm({ operatorMode = false }: { operatorMode?: boolean })
     setBusy(true); setError('');
     try {
       const updated = await apiRequest<CreatedRfq>(`/rfqs/${created.id}/submit`, { method: 'POST' });
-      setCreated(updated);
+      setCreated(updated); setDraftDirty(false);
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'ارسال برای بررسی انجام نشد.'); }
     finally { setBusy(false); }
   }
@@ -178,9 +215,11 @@ export function NewRfqForm({ operatorMode = false }: { operatorMode?: boolean })
 
   const selectedOrganization = organizations.find((item) => item.id === organizationId);
 
-  return <form className="card form-grid" onSubmit={submit}>
+  return <form className="card form-grid" onSubmit={submit} onChangeCapture={(event) => {
+    if (created && (!(event.target instanceof HTMLInputElement) || event.target.type !== 'file')) setDraftDirty(true);
+  }}>
     {error && <div className="message message-error">{error}</div>}
-    {created && <div className="message message-success"><strong>{created.lifecycleState === 'DRAFT' ? 'پیش‌نویس ثبت شد.' : created.operationalStatus === 'UNDER_REVIEW' ? 'استعلام در صف بررسی است.' : created.operationalStatus === 'WAITING_COMMITMENT' ? 'استعلام تأیید شد و منتظر تکمیل تعهد خریدار است.' : 'استعلام تأیید شد و آماده انتشار است.'}</strong><br />کد استعلام: {created.code}<br />وضعیت تعهد: {created.commitmentStatus}{created.lifecycleState === 'DRAFT' && <><br /><button type="button" className="button button-secondary" onClick={() => void submitForReview()} disabled={busy}>{policy?.pilotManualReview === false ? 'ثبت نهایی استعلام' : 'ارسال برای بررسی وازانو'}</button></>}{created.lifecycleState !== 'DRAFT' && <><br /><Link className="button button-secondary" href={`/dashboard/rfqs/${created.id}`}>مشاهده جزئیات و ادامه فرایند</Link></>}</div>}
+    {created && <div className="message message-success"><strong>{created.lifecycleState === 'DRAFT' ? (draftDirty ? 'تغییرات ذخیره‌نشده دارید.' : 'پیش‌نویس ذخیره شده است.') : created.operationalStatus === 'UNDER_REVIEW' ? 'استعلام در صف بررسی است.' : created.operationalStatus === 'WAITING_COMMITMENT' ? 'استعلام تأیید شد و منتظر تکمیل تعهد خریدار است.' : 'استعلام تأیید شد و آماده انتشار است.'}</strong><br />کد استعلام: {created.code}<br />وضعیت تعهد: {created.commitmentStatus}{created.lifecycleState === 'DRAFT' && <><br /><button type="button" className="button button-secondary" onClick={() => void submitForReview()} disabled={busy || draftDirty}>{draftDirty ? 'ابتدا تغییرات را ذخیره کنید' : policy?.pilotManualReview === false ? 'ثبت نهایی استعلام' : 'ارسال برای بررسی وازانو'}</button></>}{created.lifecycleState !== 'DRAFT' && <><br /><Link className="button button-secondary" href={`/dashboard/rfqs/${created.id}`}>مشاهده جزئیات و ادامه فرایند</Link></>}</div>}
     {created && created.lifecycleState === 'DRAFT' && <fieldset className="fieldset full"><legend>عکس، نقشه، متره یا مشخصات فنی</legend>
       <p className="muted">PDF، تصویر، Word یا Excel تا حداکثر ۲۰ مگابایت؛ فایل اجرایی و SVG پذیرفته نمی‌شود.</p>
       <div className="attachment-upload-row">
@@ -189,8 +228,8 @@ export function NewRfqForm({ operatorMode = false }: { operatorMode?: boolean })
       </div>
       {attachments.length > 0 && <ul>{attachments.map((attachment) => <li key={attachment.id}>{attachment.originalName} — {attachmentStatusLabel(attachment.status)}</li>)}</ul>}
     </fieldset>}
-    <label className="form-field"><span>حساب خریدار</span><select value={organizationId} onChange={(event) => { const nextId = event.target.value; setOrganizationId(nextId); setBuyerContactUserId(organizations.find((item) => item.id === nextId)?.contacts?.[0]?.id ?? ''); }} required>{organizations.map((item) => <option value={item.id} key={item.id}>{item.displayName}{operatorMode && item.province ? ` — ${item.province}` : ''}</option>)}</select></label>
-    {operatorMode && <label className="form-field"><span>فرد تماس خریدار</span><select value={buyerContactUserId} onChange={(event) => setBuyerContactUserId(event.target.value)} required><option value="">انتخاب کنید</option>{selectedOrganization?.contacts?.map((contact) => <option value={contact.id} key={contact.id}>{contact.displayName} — {contact.mobileMasked}</option>)}</select></label>}
+    <label className="form-field"><span>حساب خریدار</span><select value={organizationId} disabled={Boolean(created)} onChange={(event) => { const nextId = event.target.value; setOrganizationId(nextId); setBuyerContactUserId(organizations.find((item) => item.id === nextId)?.contacts?.[0]?.id ?? ''); }} required>{organizations.map((item) => <option value={item.id} key={item.id}>{item.displayName}{operatorMode && item.province ? ` — ${item.province}` : ''}</option>)}</select></label>
+    {operatorMode && <label className="form-field"><span>فرد تماس خریدار</span><select value={buyerContactUserId} disabled={Boolean(created)} onChange={(event) => setBuyerContactUserId(event.target.value)} required><option value="">انتخاب کنید</option>{selectedOrganization?.contacts?.map((contact) => <option value={contact.id} key={contact.id}>{contact.displayName} — {contact.mobileMasked}</option>)}</select></label>}
     <label className="form-field"><span>حوزه اصلی</span><select value={industryId} onChange={(event) => { setIndustryId(event.target.value); setCategoryId(''); setProductAttributes([]); setSpecifications({}); }} required>{industries.map((item) => <option value={item.id} key={item.id}>{item.nameFa}</option>)}</select></label>
     <label className="form-field full"><span>عنوان استعلام</span><input value={title} onChange={(event) => setTitle(event.target.value)} required minLength={3} placeholder="مثلاً تأمین سنگ نمای پروژه مسکونی" /></label>
     <fieldset className="fieldset full"><legend>ردیف محصول</legend><div className="form-columns">
@@ -209,7 +248,7 @@ export function NewRfqForm({ operatorMode = false }: { operatorMode?: boolean })
         const minimum = typeof attribute.validation.min === 'number' ? attribute.validation.min : undefined;
         const maximum = typeof attribute.validation.max === 'number' ? attribute.validation.max : undefined;
         const maxLength = typeof attribute.validation.maxLength === 'number' ? attribute.validation.maxLength : undefined;
-        return <label className="form-field" key={attribute.id}><span>{label}{attribute.isRequired ? ' *' : ''}</span><input aria-label={label} type={attribute.dataType === 'NUMBER' ? 'number' : 'text'} min={minimum} max={maximum} maxLength={maxLength} value={typeof value === 'string' ? value : ''} required={attribute.isRequired} onChange={(event) => setSpecifications((current) => ({ ...current, [attribute.code]: event.target.value }))} /></label>;
+        return <label className="form-field" key={attribute.id}><span>{label}{attribute.isRequired ? ' *' : ''}</span><input aria-label={label} type={attribute.dataType === 'NUMBER' ? 'number' : 'text'} min={minimum} max={maximum} maxLength={maxLength} value={typeof value === 'string' || typeof value === 'number' ? String(value) : ''} required={attribute.isRequired} onChange={(event) => setSpecifications((current) => ({ ...current, [attribute.code]: event.target.value }))} /></label>;
       })}
     </div></fieldset>}
     <label className="form-field"><span>استان تحویل</span><select value={provinceId} onChange={(event) => { setProvinceId(event.target.value); setCities([]); setCityId(''); }} required><option value="">انتخاب استان</option>{provinces.filter((item) => policy?.marketCoverageMode !== 'SELECTED_PROVINCES' || policy.marketCoverageProvinceCodes.includes(item.code)).map((item) => <option value={item.id} key={item.id}>{item.nameFa}</option>)}</select></label>
@@ -219,7 +258,7 @@ export function NewRfqForm({ operatorMode = false }: { operatorMode?: boolean })
       ? <label className="check-field"><input type="checkbox" checked={qualityControlRequested} onChange={(event) => setQualityControlRequested(event.target.checked)} /><span>کنترل کیفیت توسط وازانو (کارمزد {((policy?.qualityControlFeeBps ?? 300) / 100).toLocaleString('fa-IR')}٪ مبلغ خرید)</span></label>
       : <div className="message">خدمت کنترل کیفیت در حال حاضر غیرفعال است.</div>}
     <div className="message">{legalRoleText(policy?.legalRole)} مبلغ کالا، حمل و نصب مستقیماً میان خریدار و فروشنده تعیین می‌شود. قیمت‌ها {policy?.displayPricesTaxInclusive ? 'با مالیات' : 'بدون مالیات'} نمایش داده می‌شوند.</div>
-    <button className="button button-primary" disabled={busy || Boolean(created) || !organizationId || !provinceId || (operatorMode && !buyerContactUserId)}>{busy ? 'در حال ثبت…' : operatorMode ? 'ثبت پیش‌نویس از طرف خریدار' : 'ذخیره پیش‌نویس استعلام'}</button>
+    <button className="button button-primary" disabled={busy || !organizationId || !provinceId || (operatorMode && !buyerContactUserId)}>{busy ? 'در حال ذخیره…' : created ? 'ذخیره تغییرات پیش‌نویس' : operatorMode ? 'ثبت پیش‌نویس از طرف خریدار' : 'ذخیره پیش‌نویس استعلام'}</button>
   </form>;
 }
 
