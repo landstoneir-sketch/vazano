@@ -9,6 +9,7 @@ type Organization = { id: string; displayName: string; kind: string; status: str
 type RfqItem = { id: string; title: string; quantity: string; specifications: ProductSpecifications; category: { nameFa: string; attributeBindings: ProductAttributeBinding[] }; unit: { symbolFa: string } };
 type Rfq = { id: string; code: string; title: string; responseDeadline: string | null; items: RfqItem[] };
 type CreatedQuotation = { id: string; code: string; status: string; finalAmountRial: string };
+type SupplierQuotation = CreatedQuotation & { rfq: { id: string } };
 type ProposalFeePolicy = { version: string; rate: string; minToman: number; maxToman: number; refundFractionIfEligible: string };
 
 const toRial = (toman: string) => Math.round(Number(toman || '0') * 10).toString();
@@ -41,6 +42,20 @@ export function QuoteForm({ rfqId, initialOrganizationId }: { rfqId: string; ini
       .catch((reason: unknown) => { if (active) setMessage(reason instanceof Error ? reason.message : 'دریافت اطلاعات انجام نشد.'); });
     return () => { active = false; };
   }, [rfqId]);
+
+  useEffect(() => {
+    if (!organizationId) return;
+    let active = true;
+    void apiRequest<SupplierQuotation[]>(`/quotations/mine?organizationId=${encodeURIComponent(organizationId)}`)
+      .then((quotations) => {
+        if (!active) return;
+        const draft = quotations.find((quotation) => quotation.rfq.id === rfqId && quotation.status === 'DRAFT') ?? null;
+        setCreated(draft);
+        if (draft) setMessage('پیش‌نویس ذخیره‌شده قبلی بازیابی شد و آماده ارسال نهایی است.');
+      })
+      .catch((reason: unknown) => { if (active) setMessage(reason instanceof Error ? reason.message : 'بررسی پیش‌نویس قبلی انجام نشد.'); });
+    return () => { active = false; };
+  }, [organizationId, rfqId]);
 
   const estimatedTotalToman = useMemo(() => {
     if (!rfq) return 0;
