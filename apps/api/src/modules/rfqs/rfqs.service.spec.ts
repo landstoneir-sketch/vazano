@@ -183,6 +183,26 @@ describe('RfqsService supplier invitation decisions', () => {
 
     await expect(service.declineInvitation(supplierUser as never, 'invitation-1')).rejects.toBeInstanceOf(ConflictException);
   });
+
+  it('marks the supplier invitation as viewed only once', async () => {
+    let updateInput: { data: { status: string; viewedAt: Date } } | undefined;
+    const invitation = { id: 'invitation-1', rfqId: 'rfq-1', supplierOrganizationId: 'supplier-1', status: 'INVITED', viewedAt: null };
+    const prisma = {
+      rfqInvitation: {
+        findUnique: jest.fn().mockResolvedValue(invitation),
+        updateMany: jest.fn((input: { data: { status: string; viewedAt: Date } }) => {
+          updateInput = input;
+          return Promise.resolve({ count: 1 });
+        }),
+        findUniqueOrThrow: jest.fn(),
+      },
+    };
+    const service = new RfqsService(prisma as never, {} as never, {} as never, {} as never);
+
+    await expect(service.markInvitationViewed(supplierUser as never, 'rfq-1', 'supplier-1')).resolves.toMatchObject({ status: 'VIEWED' });
+    expect(updateInput?.data.status).toBe('VIEWED');
+    expect(updateInput?.data.viewedAt).toBeInstanceOf(Date);
+  });
 });
 
 describe('RfqsService buyer cancellation', () => {

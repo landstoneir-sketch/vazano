@@ -200,6 +200,26 @@ export class RfqsService implements OnApplicationBootstrap, OnApplicationShutdow
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
+  async markInvitationViewed(user: AuthenticatedUser, rfqId: string, supplierOrganizationId: string) {
+    const hasSupplierAccess = user.memberships.some((membership) =>
+      membership.organizationId === supplierOrganizationId
+      && ['SUPPLIER_OWNER', 'SUPPLIER_MANAGER', 'SUPPLIER_SALES'].includes(membership.role));
+    if (!hasSupplierAccess) throw new ForbiddenException('دسترسی به این دعوت استعلام مجاز نیست.');
+    const invitation = await this.prisma.rfqInvitation.findUnique({
+      where: { rfqId_supplierOrganizationId: { rfqId, supplierOrganizationId } },
+    });
+    if (!invitation) throw new NotFoundException('دعوت استعلام پیدا نشد.');
+    if (['VIEWED', 'RESPONDED'].includes(invitation.status)) return invitation;
+    if (invitation.status !== 'INVITED') throw new ConflictException('این دعوت دیگر فعال نیست.');
+    const viewedAt = new Date();
+    const changed = await this.prisma.rfqInvitation.updateMany({
+      where: { id: invitation.id, status: 'INVITED' },
+      data: { status: 'VIEWED', viewedAt },
+    });
+    if (changed.count !== 1) return this.prisma.rfqInvitation.findUniqueOrThrow({ where: { id: invitation.id } });
+    return { ...invitation, status: 'VIEWED' as const, viewedAt };
+  }
+
   async cancel(user: AuthenticatedUser, rfqId: string, rawReason: string) {
     const rfq = await this.findAuthorizedRfq(user, rfqId);
     const isBuyerMember = user.memberships.some((membership) => membership.organizationId === rfq.buyerOrganizationId);
