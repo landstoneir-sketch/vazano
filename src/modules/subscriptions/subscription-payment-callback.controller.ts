@@ -12,11 +12,11 @@ export class SubscriptionPaymentCallbackController {
 
   @Get('zarinpal/callback')
   async callback(@Query() query: ZarinpalCallbackQueryDto, @Res() response: Response): Promise<void> {
-    const webOrigin = this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:3000';
+    const webOrigin = (this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:3000').replace(/\/$/, '');
     let payment = 'failed';
     try {
       const result = await this.billing.handleCallback(query.Authority, query.Status);
-      payment = result.success ? 'success' : 'cancelled' in result && result.cancelled ? 'cancelled' : 'failed';
+      payment = result.success ? 'success' : 'cancelled' in result && result.cancelled ? 'cancelled' : 'processing' in result && result.processing ? 'processing' : 'failed';
     } catch (error: unknown) {
       this.logger.error(`Subscription callback failed: ${error instanceof Error ? error.message : 'unknown error'}`);
     }
