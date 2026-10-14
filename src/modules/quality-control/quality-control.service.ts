@@ -81,7 +81,20 @@ export class QualityControlService {
     const buyerOrganizationId = intent.payerOrganizationId;
     const request = await this.prisma.qualityControlRequest.findUnique({ where: { id: intent.referenceId } });
     if (!request) throw new NotFoundException('درخواست کنترل کیفیت مرتبط با پرداخت پیدا نشد.');
-    if (intent.status === 'SUCCEEDED') return { success: true, alreadyVerified: true, referenceId: intent.providerReference, rfqId: request.rfqId };
+    if (intent.status === 'SUCCEEDED') {
+      const receipt = await this.prisma.paymentReceipt.findUnique({
+        where: { paymentIntentId: intent.id },
+        select: { id: true, receiptNumber: true },
+      });
+      return {
+        success: true,
+        alreadyVerified: true,
+        referenceId: intent.providerReference,
+        rfqId: request.rfqId,
+        receiptId: receipt?.id,
+        receiptNumber: receipt?.receiptNumber,
+      };
+    }
     if (intent.status === 'CANCELLED') return { success: false, cancelled: true, rfqId: request.rfqId };
     if (intent.status === 'FAILED') return { success: false, failed: true, rfqId: request.rfqId };
     if (intent.status !== 'REDIRECT_PENDING') return { success: false, processing: intent.status === 'VERIFY_PENDING', rfqId: request.rfqId };
@@ -100,7 +113,18 @@ export class QualityControlService {
       if (claim.count === 0) {
         const completed = await tx.paymentIntent.findUniqueOrThrow({ where: { id: intent.id } });
         if (completed.status === 'SUCCEEDED') {
-          return { success: true, alreadyVerified: true, referenceId: completed.providerReference, rfqId: request.rfqId };
+          const receipt = await tx.paymentReceipt.findUnique({
+            where: { paymentIntentId: intent.id },
+            select: { id: true, receiptNumber: true },
+          });
+          return {
+            success: true,
+            alreadyVerified: true,
+            referenceId: completed.providerReference,
+            rfqId: request.rfqId,
+            receiptId: receipt?.id,
+            receiptNumber: receipt?.receiptNumber,
+          };
         }
         return {
           success: false,
@@ -114,7 +138,7 @@ export class QualityControlService {
       const changed = await tx.qualityControlRequest.updateMany({ where: { id: request.id, status: 'QUOTED' }, data: { status: 'ACCEPTED', acceptedAt: paidAt } });
       if (changed.count !== 1) throw new ConflictException('وضعیت درخواست کنترل کیفیت برای فعال‌سازی معتبر نیست.');
       const receipt = buildPaymentReceiptSnapshot(intent.id, intent.amountRial, paidAt);
-      await tx.paymentReceipt.create({ data: {
+      const createdReceipt = await tx.paymentReceipt.create({ data: {
         ...receipt,
         organizationId: buyerOrganizationId,
         qualityControlRequestId: request.id,
@@ -124,7 +148,7 @@ export class QualityControlService {
       await tx.paymentIntent.update({ where: { id: intent.id }, data: { status: 'SUCCEEDED', providerReference: verification.referenceId, verifiedAt: paidAt, callbackPayload: { status: callbackStatus, code: verification.code } } });
       await tx.auditLog.create({ data: { organizationId: buyerOrganizationId, action: 'quality_control.payment.verify', entityType: 'QualityControlRequest', entityId: request.id, metadata: { paymentIntentId: intent.id, receiptNumber: receipt.receiptNumber, feeAmountRial: intent.amountRial.toString() } } });
       await tx.outboxEvent.create({ data: { aggregateType: 'QualityControlRequest', aggregateId: request.id, eventType: 'ir.vazano.quality_control.accepted.v1', payload: { rfqId: request.rfqId, buyerOrganizationId, feeAmountRial: intent.amountRial.toString(), receiptNumber: receipt.receiptNumber } } });
-      return { ...verification, rfqId: request.rfqId, receiptNumber: receipt.receiptNumber };
+      return { ...verification, rfqId: request.rfqId, receiptId: createdReceipt.id, receiptNumber: receipt.receiptNumber };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 

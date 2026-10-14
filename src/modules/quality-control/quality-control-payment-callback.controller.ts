@@ -17,8 +17,12 @@ export class QualityControlPaymentCallbackController {
     let destination = '/dashboard/rfqs';
     try {
       const result = await this.qualityControl.handlePaymentCallback(query.Authority, query.Status);
-      payment = result.success ? 'success' : 'cancelled' in result && result.cancelled ? 'cancelled' : 'failed';
+      payment = result.success ? 'success' : 'cancelled' in result && result.cancelled ? 'cancelled' : 'processing' in result && result.processing ? 'processing' : 'failed';
       destination = `/dashboard/rfqs/${encodeURIComponent(result.rfqId)}`;
+      const search = new URLSearchParams({ qualityPayment: payment });
+      if ('receiptId' in result && typeof result.receiptId === 'string') search.set('qualityReceiptId', result.receiptId);
+      response.redirect(303, `${webOrigin}${destination}?${search.toString()}`);
+      return;
     } catch (error: unknown) {
       this.logger.error(`Quality-control payment callback failed: ${error instanceof Error ? error.message : 'unknown error'}`);
     }

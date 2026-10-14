@@ -69,12 +69,15 @@ describe('QualityControlService payments', () => {
     const verifyPayment = jest.fn();
     const prisma = {
       paymentIntent: { findFirst: jest.fn().mockResolvedValue({ id: 'payment-1', status: 'SUCCEEDED', payerOrganizationId: 'buyer-org', referenceId: 'quality-request', providerReference: 'reference-1' }) },
+      paymentReceipt: { findUnique: jest.fn().mockResolvedValue({ id: 'receipt-1', receiptNumber: 'VZ-2026-PAYMENT-1' }) },
       qualityControlRequest: { findUnique: jest.fn().mockResolvedValue({ id: 'quality-request', rfqId: 'rfq-1' }) },
     } as unknown as PrismaService;
     const payments = { provider: 'ZARINPAL', verify: verifyPayment } as unknown as PaymentsService;
     const service = new QualityControlService(prisma, payments, new ConfigService());
 
-    await expect(service.handlePaymentCallback('authority-1', 'OK')).resolves.toEqual({ success: true, alreadyVerified: true, referenceId: 'reference-1', rfqId: 'rfq-1' });
+    await expect(service.handlePaymentCallback('authority-1', 'OK')).resolves.toEqual({
+      success: true, alreadyVerified: true, referenceId: 'reference-1', rfqId: 'rfq-1', receiptId: 'receipt-1', receiptNumber: 'VZ-2026-PAYMENT-1',
+    });
     expect(verifyPayment).not.toHaveBeenCalled();
   });
 
