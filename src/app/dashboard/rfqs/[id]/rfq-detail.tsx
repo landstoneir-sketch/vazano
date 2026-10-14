@@ -24,6 +24,42 @@ const contractStatusLabels: Record<ContractRequest['status'], string> = {
   REQUESTED: 'ثبت‌شده', UNDER_REVIEW: 'در حال بررسی', TERMS_PREPARED: 'شرایط آماده تأیید', ACCEPTED: 'تأییدشده', COMPLETED: 'تکمیل‌شده', CANCELLED: 'لغوشده',
 };
 
+const operationalStatusLabels: Record<string, string> = {
+  DRAFT_INCOMPLETE: 'پیش‌نویس ناقص',
+  READY_FOR_REVIEW: 'آماده بررسی',
+  UNDER_REVIEW: 'در حال بررسی وازانو',
+  NEEDS_CHANGES: 'نیازمند اصلاح',
+  WAITING_COMMITMENT: 'در انتظار تکمیل تعهد',
+  READY_TO_PUBLISH: 'آماده انتشار',
+  OPEN_FOR_QUOTES: 'در حال دریافت پیشنهاد',
+  HAS_QUOTES: 'پیشنهاد دریافت شده',
+  NEGOTIATING: 'در حال مذاکره',
+  SELLER_SELECTED: 'فروشنده انتخاب شده',
+  COMPLETED: 'تکمیل شده',
+  CANCELLED: 'لغو شده',
+  EXPIRED: 'مهلت پایان یافته',
+};
+
+const quotationStatusLabels: Record<string, string> = {
+  DRAFT: 'پیش‌نویس',
+  SUBMITTED: 'قابل انتخاب',
+  REVISED: 'نسخه پیشین',
+  WITHDRAWN: 'پس گرفته شده',
+  ACCEPTED: 'فروشنده منتخب',
+  REJECTED: 'انتخاب نشده',
+  EXPIRED: 'منقضی شده',
+};
+
+const rfqProgressSteps = ['ثبت نیاز', 'بررسی و انتشار', 'دریافت پیشنهاد', 'مقایسه', 'انتخاب فروشنده'];
+
+function rfqProgressIndex(status: string): number {
+  if (['DRAFT_INCOMPLETE'].includes(status)) return 0;
+  if (['READY_FOR_REVIEW', 'UNDER_REVIEW', 'NEEDS_CHANGES', 'WAITING_COMMITMENT', 'READY_TO_PUBLISH'].includes(status)) return 1;
+  if (['OPEN_FOR_QUOTES', 'CANCELLED', 'EXPIRED'].includes(status)) return 2;
+  if (['HAS_QUOTES', 'NEGOTIATING'].includes(status)) return 3;
+  return 4;
+}
+
 export function RfqDetail({ rfqId, qualityPaymentResult, qualityReceiptId, commitmentPaymentResult, commitmentReceiptId }: { rfqId: string; qualityPaymentResult?: string; qualityReceiptId?: string; commitmentPaymentResult?: string; commitmentReceiptId?: string }) {
   const [rfq, setRfq] = useState<Rfq | null>(null);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
@@ -166,8 +202,13 @@ export function RfqDetail({ rfqId, qualityPaymentResult, qualityReceiptId, commi
   }
 
   if (!rfq) return <div className="card">{message || 'در حال دریافت اطلاعات…'}</div>;
+  const currentProgressIndex = rfqProgressIndex(rfq.operationalStatus);
   return <div className="stack">
-    <div><div className="eyebrow">{rfq.code}</div><h1>{rfq.title}</h1><p className="muted">{rfq.deliveryProvince ?? 'استان نامشخص'}، {rfq.deliveryCity ?? 'شهر نامشخص'} · {rfq.operationalStatus}</p>{['DRAFT', 'SUBMITTED', 'PUBLISHED'].includes(rfq.lifecycleState) && !['PAYMENT_PENDING', 'HELD', 'REFUND_PENDING'].includes(rfq.commitmentStatus) && <button className="button button-danger" type="button" disabled={busyId === 'cancel-rfq'} onClick={() => void cancelRfq()}>{busyId === 'cancel-rfq' ? 'در حال لغو…' : 'لغو استعلام'}</button>}</div>
+    <header className="rfq-detail-heading">
+      <div><div className="eyebrow">{rfq.code}</div><h1>{rfq.title}</h1><div className="rfq-detail-meta"><span>{rfq.deliveryProvince ?? 'استان نامشخص'}، {rfq.deliveryCity ?? 'شهر نامشخص'}</span><span className={`status-badge rfq-status-${rfq.operationalStatus.toLowerCase()}`}>{operationalStatusLabels[rfq.operationalStatus] ?? rfq.operationalStatus}</span></div></div>
+      {['DRAFT', 'SUBMITTED', 'PUBLISHED'].includes(rfq.lifecycleState) && !['PAYMENT_PENDING', 'HELD', 'REFUND_PENDING'].includes(rfq.commitmentStatus) && <button className="button button-danger" type="button" disabled={busyId === 'cancel-rfq'} onClick={() => void cancelRfq()}>{busyId === 'cancel-rfq' ? 'در حال لغو…' : 'لغو استعلام'}</button>}
+    </header>
+    <ol className="rfq-progress" aria-label="مراحل استعلام">{rfqProgressSteps.map((step, index) => <li className={index < currentProgressIndex ? 'is-complete' : index === currentProgressIndex ? 'is-current' : ''} key={step} aria-current={index === currentProgressIndex ? 'step' : undefined}><b>{index < currentProgressIndex ? '✓' : (index + 1).toLocaleString('fa-IR')}</b><span>{step}</span></li>)}</ol>
     {qualityPaymentResult === 'success' && <div className="message message-success">پرداخت کنترل کیفیت تأیید شد و درخواست وارد صف عملیات وازانو شده است.{qualityReceiptId && <> <Link href={`/dashboard/receipts/${qualityReceiptId}` as Route}>مشاهده رسید</Link></>}</div>}
     {qualityPaymentResult === 'cancelled' && <div className="message message-error">پرداخت کنترل کیفیت لغو شد و درخواست هنوز فعال نشده است.</div>}
     {qualityPaymentResult === 'failed' && <div className="message message-error">تأیید پرداخت کنترل کیفیت انجام نشد. در صورت کسر وجه، شماره پیگیری را برای پشتیبانی ارسال کنید.</div>}
@@ -177,8 +218,8 @@ export function RfqDetail({ rfqId, qualityPaymentResult, qualityReceiptId, commi
     {commitmentPaymentResult === 'failed' && <div className="message message-error">تأیید پرداخت تعهد انجام نشد. در صورت کسر وجه، شماره پیگیری را برای پشتیبانی ارسال کنید.</div>}
     {commitmentPaymentResult === 'processing' && <div className="message">نتیجه پرداخت در حال پردازش است؛ چند لحظه بعد وضعیت صفحه را بررسی کنید.</div>}
     {message && <div className="message message-success">{message}</div>}
-    <article className="card"><h2>شرایط و برنامه زمانی</h2>{rfq.description && <p>{rfq.description}</p>}<div className="specification-summary"><span>محل تحویل: {rfq.deliveryProvince ?? 'نامشخص'}، {rfq.deliveryCity ?? 'نامشخص'}</span><span>مهلت پیشنهاد: {rfq.responseDeadline ? new Date(rfq.responseDeadline).toLocaleString('fa-IR') : 'تعیین نشده'}</span><span>زمان موردنیاز: {rfq.requiredAt ? new Date(rfq.requiredAt).toLocaleString('fa-IR') : 'تعیین نشده'}</span><span>نصب: {rfq.installationRequired ? 'موردنیاز است' : 'موردنیاز نیست'}</span></div></article>
-    <article className="card"><h2>اقلام درخواستی</h2><ul>{rfq.items.map((item) => {
+    <article className="card rfq-detail-card"><h2>شرایط و برنامه زمانی</h2>{rfq.description && <p>{rfq.description}</p>}<div className="rfq-fact-grid"><div><span>محل تحویل</span><strong>{rfq.deliveryProvince ?? 'نامشخص'}، {rfq.deliveryCity ?? 'نامشخص'}</strong></div><div><span>مهلت پیشنهاد</span><strong>{rfq.responseDeadline ? new Date(rfq.responseDeadline).toLocaleString('fa-IR') : 'تعیین نشده'}</strong></div><div><span>زمان موردنیاز</span><strong>{rfq.requiredAt ? new Date(rfq.requiredAt).toLocaleString('fa-IR') : 'تعیین نشده'}</strong></div><div><span>خدمات نصب</span><strong>{rfq.installationRequired ? 'موردنیاز است' : 'موردنیاز نیست'}</strong></div></div></article>
+    <article className="card rfq-detail-card"><h2>اقلام درخواستی</h2><ul className="rfq-item-list">{rfq.items.map((item) => {
       const details = formatProductSpecifications(item.specifications, item.category.attributeBindings);
       return <li key={item.id}>{item.category.nameFa} — {item.title} — {item.quantity} {item.unit.symbolFa}{details.length > 0 && <div className="specification-summary">{details.map((detail) => <span key={detail.code}>{detail.label}: {detail.value}</span>)}</div>}</li>;
     })}</ul></article>
@@ -209,13 +250,14 @@ export function RfqDetail({ rfqId, qualityPaymentResult, qualityReceiptId, commi
       <p className="muted">این بخش خدمت هماهنگی است و به‌تنهایی امضای الکترونیکی یا قرارداد حقوقی لازم‌الاجرا ایجاد نمی‌کند.</p>
     </article>}
     {rfq.operationalStatus === 'SELLER_SELECTED' && <article className="card stack"><div><h2>ارزیابی فروشنده منتخب</h2><p className="muted">هر خرید فقط یک ارزیابی معتبر دارد و امتیاز به پیشنهاد منتخب همین استعلام متصل می‌شود.</p></div>{review ? <div><div className="price" aria-label={`${review.rating} از ۵`}>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</div>{review.comment && <p>{review.comment}</p>}<p className="muted">ثبت‌شده در {new Date(review.createdAt).toLocaleDateString('fa-IR')}{review.status === 'HIDDEN' ? ' · توسط پشتیبانی پنهان شده است' : ' · منتشرشده'}</p>{review.status === 'HIDDEN' && review.moderationReason && <div className="message message-error">دلیل پنهان‌سازی: {review.moderationReason}</div>}</div> : <form className="form-grid" onSubmit={(event) => { event.preventDefault(); void submitReview(); }}><label className="form-field"><span>امتیاز کلی</span><select value={reviewRating} onChange={(event) => setReviewRating(Number(event.target.value))}><option value={5}>۵ — عالی</option><option value={4}>۴ — خوب</option><option value={3}>۳ — متوسط</option><option value={2}>۲ — ضعیف</option><option value={1}>۱ — بسیار ضعیف</option></select></label><label className="form-field full"><span>توضیح تجربه خرید (اختیاری)</span><textarea minLength={3} maxLength={1000} rows={3} value={reviewComment} onChange={(event) => setReviewComment(event.target.value)} /></label><button className="button button-primary" disabled={busyId === 'review'}>{busyId === 'review' ? 'در حال ثبت…' : 'ثبت قطعی امتیاز'}</button></form>}</article>}
-    <h2>مقایسه پیشنهادها</h2>
-    {quotations.length === 0 && <div className="card">هنوز پیشنهاد قیمتی دریافت نشده است.</div>}
+    <header className="comparison-heading"><div><div className="eyebrow">تصمیم خرید</div><h2>مقایسه پیشنهادها</h2><p className="muted">قیمت، پوشش اقلام، زمان تحویل و شرایط پرداخت را کنار هم بررسی کنید.</p></div><span className="count-badge">{quotations.length.toLocaleString('fa-IR')} پیشنهاد</span></header>
+    {quotations.length === 0 && <div className="card empty-state">هنوز پیشنهاد قیمتی دریافت نشده است. پس از دریافت اولین پیشنهاد، مقایسه در همین بخش فعال می‌شود.</div>}
     <div className="comparison-grid">{quotations.map((quote) => <article className={`card quote-card ${quote.status === 'ACCEPTED' ? 'selected-card' : ''}`} key={quote.id}>
-      <div className="eyebrow">{quote.code} · نسخه {quote.status}</div><h3>{quote.supplierOrganization.displayName}</h3>
-      <strong className="price">{toman(displayedQuotationAmountRial(quote.finalAmountRial, quote.taxRial, rfq.displayPricesTaxInclusive))}</strong><p>پوشش پیشنهاد: {quote.items.length.toLocaleString('fa-IR')} از {rfq.items.length.toLocaleString('fa-IR')} ردیف{quote.items.length < rfq.items.length ? ' · پیشنهاد جزئی' : ' · کامل'}</p>
-      <div className="specification-summary"><span>جمع اقلام: {toman(quote.subtotalRial)}</span><span>تخفیف کل: {toman(quote.discountRial)}</span><span>بسته‌بندی: {toman(quote.packagingRial)}</span><span>بارگیری: {toman(quote.loadingRial)}</span><span>حمل: {toman(quote.shippingRial)}</span><span>سایر هزینه‌ها: {toman(quote.otherCostsRial)}</span><span>مالیات: {toman(quote.taxRial)}{rfq.displayPricesTaxInclusive ? ' (در مبلغ اصلی)' : ' (جداگانه)'}</span></div>
-      <p>آماده‌سازی: {quote.preparationDays ?? '—'} روز · تحویل: {quote.deliveryDate ? new Date(quote.deliveryDate).toLocaleDateString('fa-IR') : '—'} · اعتبار تا: {quote.validUntil ? new Date(quote.validUntil).toLocaleDateString('fa-IR') : '—'}</p>
+      <div className="quote-card-heading"><div><div className="eyebrow">{quote.code}</div><h3>{quote.supplierOrganization.displayName}</h3><span className="muted">{quote.supplierOrganization.province ?? 'استان نامشخص'}، {quote.supplierOrganization.city ?? 'شهر نامشخص'}</span></div><span className={`status-badge quotation-status-${quote.status.toLowerCase()}`}>{quotationStatusLabels[quote.status] ?? quote.status}</span></div>
+      <div className="quote-price-block"><span>مبلغ قابل مقایسه {rfq.displayPricesTaxInclusive ? 'با مالیات' : 'بدون مالیات'}</span><strong className="price">{toman(displayedQuotationAmountRial(quote.finalAmountRial, quote.taxRial, rfq.displayPricesTaxInclusive))}</strong></div>
+      <div className="quote-key-facts"><div><span>پوشش اقلام</span><strong>{quote.items.length.toLocaleString('fa-IR')} از {rfq.items.length.toLocaleString('fa-IR')}</strong><small>{quote.items.length < rfq.items.length ? 'پیشنهاد جزئی' : 'پیشنهاد کامل'}</small></div><div><span>آماده‌سازی</span><strong>{quote.preparationDays !== null ? `${quote.preparationDays.toLocaleString('fa-IR')} روز` : '—'}</strong></div><div><span>اعتبار پیشنهاد</span><strong>{quote.validUntil ? new Date(quote.validUntil).toLocaleDateString('fa-IR') : '—'}</strong></div></div>
+      <p className="quote-delivery-date">تحویل پیشنهادی: <strong>{quote.deliveryDate ? new Date(quote.deliveryDate).toLocaleDateString('fa-IR') : 'تعیین نشده'}</strong></p>
+      <details className="quote-breakdown"><summary>جزئیات مبلغ و هزینه‌ها</summary><div className="specification-summary"><span>جمع اقلام: {toman(quote.subtotalRial)}</span><span>تخفیف کل: {toman(quote.discountRial)}</span><span>بسته‌بندی: {toman(quote.packagingRial)}</span><span>بارگیری: {toman(quote.loadingRial)}</span><span>حمل: {toman(quote.shippingRial)}</span><span>سایر هزینه‌ها: {toman(quote.otherCostsRial)}</span><span>مالیات: {toman(quote.taxRial)}{rfq.displayPricesTaxInclusive ? ' (در مبلغ اصلی)' : ' (جداگانه)'}</span></div></details>
       {quote.paymentTerms && <div className="message"><strong>شرایط پرداخت:</strong> {quote.paymentTerms}</div>}
       <ul>{quote.items.map((item) => <li key={item.id}><strong>{item.rfqItem.title}</strong>: {item.quantity} {item.rfqItem.unit.symbolFa} × {toman(item.unitPriceRial)} / واحد · جمع ردیف {toman(item.lineNetRial)}{item.isAlternative ? ' · محصول جایگزین' : ''}{item.offeredDescription ? ` · ${item.offeredDescription}` : ''}</li>)}</ul>
       {(quotationAttachments[quote.id]?.length ?? 0) > 0 && <div className="stack"><strong>پیوست‌های فروشنده</strong>{quotationAttachments[quote.id]!.map((attachment) => <div className="list-card" key={attachment.id}><span>{attachment.originalName}</span><button type="button" className="button button-secondary" onClick={() => void downloadAttachment(attachment.id)}>دریافت امن</button></div>)}</div>}
