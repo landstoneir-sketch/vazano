@@ -5,24 +5,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { apiRequest } from '@/lib/api';
+import { dashboardManagementLinks } from '@/lib/dashboard-access';
 import type { RouteIdentity } from '@/lib/route-access';
 
 type AuthenticatedAccount = RouteIdentity & { id: string; mobile: string; status: string };
 
 const SUPPLIER_ROLES = new Set(['SUPPLIER_OWNER', 'SUPPLIER_MANAGER', 'SUPPLIER_SALES']);
-
-function adminLanding(account: AuthenticatedAccount): Route | null {
-  if (account.globalRoles.includes('SUPER_ADMIN') || account.permissions.includes('rfq.review')) return '/admin/rfqs';
-  if (account.permissions.includes('support.manage')) return '/admin/support' as Route;
-  if (account.permissions.includes('category.manage')) return '/admin/catalog' as Route;
-  if (account.permissions.includes('location.manage')) return '/admin/locations' as Route;
-  if (account.permissions.includes('quality_control.manage')) return '/admin/quality-control' as Route;
-  if (account.permissions.includes('contract.manage')) return '/admin/contracts' as Route;
-  if (account.permissions.includes('report.read')) return '/admin/reports' as Route;
-  if (account.permissions.includes('content.manage')) return '/admin/content' as Route;
-  if (account.permissions.includes('billing.read')) return '/admin/billing' as Route;
-  return null;
-}
 
 function maskMobile(mobile: string): string {
   if (mobile.length < 7) return mobile;
@@ -59,7 +47,7 @@ export function AccountNavigation() {
 
   const hasSupplierArea = account.memberships.some((membership) => SUPPLIER_ROLES.has(membership.role))
     || account.permissions.some((permission) => ['rfq.manage', 'supplier.verify'].includes(permission));
-  const managementPath = adminLanding(account);
+  const managementLinks = dashboardManagementLinks(account);
 
   return (
     <span className="nav-account">
@@ -67,7 +55,12 @@ export function AccountNavigation() {
       {hasSupplierArea && <Link href="/supplier">فروشنده</Link>}
       <Link href={'/messages' as Route}>پیام‌ها</Link>
       <Link href="/notifications">اعلان‌ها</Link>
-      {managementPath && <Link href={managementPath}>مدیریت</Link>}
+      {managementLinks.length > 0 && <details className="nav-management">
+        <summary>مدیریت</summary>
+        <span className="nav-management-panel" aria-label="بخش‌های مدیریتی">
+          {managementLinks.map((item) => <Link aria-label={item.label} href={item.href} key={item.href}>{item.label}</Link>)}
+        </span>
+      </details>}
       <Link className="nav-user-badge" href="/dashboard/profile" title="پروفایل من">{maskMobile(account.mobile)}</Link>
       <button className="nav-logout" type="button" disabled={loggingOut} onClick={() => void logout()}>
         {loggingOut ? 'در حال خروج…' : 'خروج'}
