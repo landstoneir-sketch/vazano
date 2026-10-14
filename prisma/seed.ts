@@ -143,6 +143,13 @@ const inAppNotificationTemplates = [
     actionPathTemplate: '/supplier',
   },
   {
+    code: 'IN_APP_RFQ_QUOTE_WINDOW_CLOSED_FA_V1',
+    eventType: 'ir.vazano.rfq.quote_window_closed.v1',
+    titleTemplate: 'مهلت دریافت پیشنهاد پایان یافت',
+    bodyTemplate: 'مهلت دریافت پیشنهاد برای استعلام {{rfqCode}} پایان یافت؛ وضعیت: {{statusLabel}}.',
+    actionPathTemplate: '/supplier',
+  },
+  {
     code: 'IN_APP_QUOTATION_SUBMITTED_FA_V1',
     eventType: 'ir.vazano.quotation.submitted.v1',
     titleTemplate: 'پیشنهاد قیمت جدید دریافت شد',

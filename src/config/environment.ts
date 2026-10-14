@@ -11,6 +11,7 @@ export function validateEnvironment(environment: Environment): Environment {
   for (const key of ['API_RATE_LIMIT_REQUESTS_PER_MINUTE', 'API_MUTATION_RATE_LIMIT_REQUESTS_PER_MINUTE', 'PAYMENT_CALLBACK_RATE_LIMIT_REQUESTS_PER_MINUTE']) {
     if (environment[key]) requirePositiveInteger(environment, key);
   }
+  if (environment.RFQ_LIFECYCLE_WORKER_INTERVAL_MS) requirePositiveInteger(environment, 'RFQ_LIFECYCLE_WORKER_INTERVAL_MS');
   const paymentProvider = environment.PAYMENT_PROVIDER ?? 'zarinpal';
   const smsProvider = environment.SMS_PROVIDER ?? 'debug';
   if (!['zarinpal', 'mock'].includes(paymentProvider)) throw new Error('PAYMENT_PROVIDER must be zarinpal or mock.');

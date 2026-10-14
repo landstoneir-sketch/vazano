@@ -8,6 +8,7 @@ const SUPPORTED_EVENT_TYPES = [
   'ir.vazano.rfq.submitted.v1',
   'ir.vazano.rfq.reviewed.v1',
   'ir.vazano.rfq.distributed.v1',
+  'ir.vazano.rfq.quote_window_closed.v1',
   'ir.vazano.quotation.submitted.v1',
   'ir.vazano.quotation.accepted.v1',
   'ir.vazano.quotation.rejected.v1',
@@ -254,6 +255,30 @@ export class NotificationsService {
           actionPath: '/supplier',
           variables: { rfqCode: rfq.code, rfqTitle: rfq.title },
         }))));
+      }
+      case 'ir.vazano.rfq.quote_window_closed.v1': {
+        const rfq = await tx.rfq.findUnique({
+          where: { id: event.aggregateId },
+          select: {
+            id: true,
+            code: true,
+            buyerContactUserId: true,
+            buyerOrganizationId: true,
+            invitations: { select: { supplierOrganizationId: true, supplierOrganization: { select: { members: { where: { status: 'ACTIVE' }, select: { userId: true } } } } } },
+          },
+        });
+        if (!rfq) return [];
+        const outcome = jsonStringField(event.payload, 'outcome');
+        const statusLabel = outcome === 'NEGOTIATING' ? 'آماده مقایسه و انتخاب' : 'بدون پیشنهاد منقضی شد';
+        return this.uniqueTargets([
+          { userId: rfq.buyerContactUserId, organizationId: rfq.buyerOrganizationId, actionPath: `/dashboard/rfqs/${rfq.id}`, variables: { rfqCode: rfq.code, statusLabel } },
+          ...rfq.invitations.flatMap((invitation) => invitation.supplierOrganization.members.map((member) => ({
+            userId: member.userId,
+            organizationId: invitation.supplierOrganizationId,
+            actionPath: '/supplier',
+            variables: { rfqCode: rfq.code, statusLabel },
+          }))),
+        ]);
       }
       case 'ir.vazano.quotation.submitted.v1': {
         const quotation = await tx.quotation.findUnique({
