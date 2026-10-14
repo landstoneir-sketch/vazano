@@ -41,6 +41,7 @@ export class AdminBillingService {
       this.prisma.paymentReceipt.findMany({
         include: {
           organization: { select: { id: true, displayName: true, legalName: true } },
+          paymentIntent: { select: { purpose: true, referenceType: true, referenceId: true } },
           subscription: { select: { plan: { select: { code: true, nameFa: true } } } },
           qualityControlRequest: { select: { rfq: { select: { code: true, title: true } } } },
         },
@@ -98,7 +99,14 @@ export class AdminBillingService {
     const payers = payerIds.length
       ? await this.prisma.organization.findMany({ where: { id: { in: payerIds } }, select: { id: true, displayName: true, legalName: true } })
       : [];
+    const commitmentRfqIds = receipts
+      .filter((receipt) => receipt.paymentIntent.purpose === 'BUYER_COMMITMENT' && receipt.paymentIntent.referenceType === 'Rfq')
+      .map((receipt) => receipt.paymentIntent.referenceId);
+    const commitmentRfqs = commitmentRfqIds.length
+      ? await this.prisma.rfq.findMany({ where: { id: { in: commitmentRfqIds } }, select: { id: true, code: true, title: true } })
+      : [];
     const payerMap = new Map(payers.map((payer) => [payer.id, payer]));
+    const commitmentRfqMap = new Map(commitmentRfqs.map((rfq) => [rfq.id, rfq]));
     return {
       summary: Object.fromEntries(statusGroups.map((item) => [item.status, item._count._all])),
       reminderSummary: Object.fromEntries(reminderGroups.map((item) => [`${item.channel}:${item.status}`, item._count._all])),
@@ -106,7 +114,12 @@ export class AdminBillingService {
       plans,
       subscriptions,
       payments: payments.map((payment) => ({ ...payment, payerOrganization: payment.payerOrganizationId ? payerMap.get(payment.payerOrganizationId) ?? null : null })),
-      receipts,
+      receipts: receipts.map((receipt) => ({
+        ...receipt,
+        rfq: receipt.paymentIntent.purpose === 'BUYER_COMMITMENT'
+          ? commitmentRfqMap.get(receipt.paymentIntent.referenceId) ?? null
+          : null,
+      })),
       reminders,
       suppliers,
       manualRenewals,
