@@ -192,6 +192,7 @@ export class QuotationsService {
       where: { supplierOrganizationId: organizationId },
       include: { rfq: { select: { id: true, code: true, title: true, responseDeadline: true } }, items: true },
       orderBy: { createdAt: 'desc' },
+      take: 100,
     });
   }
 
