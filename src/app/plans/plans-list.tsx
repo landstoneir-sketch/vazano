@@ -19,15 +19,19 @@ export function PlansList() {
   return <><div className="plan-grid public-plan-grid">{plans.map((plan) => <article className={`card plan-card public-plan-card ${plan.isTrial ? 'plan-card-trial' : ''}`} key={plan.id}>
     <div className="plan-card-heading"><h2>{plan.nameFa}</h2>{plan.isTrial && <span className="status-badge">آزمایشی</span>}</div>
     <strong>{plan.isTrial ? 'رایگان' : `${formatToman(plan.priceRial)} تومان`}</strong>
-    <span className="plan-cycle">{plan.isTrial ? `${Number(plan.durationIso.match(/^P(\d+)D$/)?.[1] ?? 0).toLocaleString('fa-IR')} روز` : billingCycleLabel(plan.billingCycle)}</span>
+    <span className="plan-cycle">مدت اعتبار: {durationLabel(plan.durationIso)}</span>
     <p>{plan.descriptionFa || 'دسترسی به فرصت‌های فروش و مدیریت پیشنهادهای قیمت'}</p>
     <ul className="plan-features"><li>{BigInt(plan.grantCredits).toLocaleString('fa-IR')} اعتبار قابل مصرف</li><li>{plan.isTrial ? 'فعال‌سازی بدون پرداخت' : `${plan.dailyProposalLimit.toLocaleString('fa-IR')} پیشنهاد موفق روزانه`}</li><li>{plan.isTrial ? 'یک‌بار برای هر سازمان' : `سقف افزایش‌یافته تا ${plan.maxProposalLimit.toLocaleString('fa-IR')} پیشنهاد`}</li></ul>
     <Link className={`button ${plan.isTrial ? 'button-secondary' : 'button-primary'}`} href="/supplier/subscription">{plan.isTrial ? 'شروع دوره آزمایشی' : 'انتخاب این پلن'}</Link>
   </article>)}</div><p className="plans-footnote">پرداخت پلن‌های پولی پس از نمایش مبلغ نهایی و تأیید شما از طریق زرین‌پال انجام می‌شود. خرید اشتراک هیچ اولویتی در انتخاب برنده ایجاد نمی‌کند.</p></>;
 }
 
-function billingCycleLabel(cycle?: string): string {
-  if (cycle === 'YEARLY') return 'سالانه';
-  if (cycle === 'QUARTERLY') return 'سه‌ماهه';
-  return 'ماهانه';
+function durationLabel(durationIso: string): string {
+  const days = durationIso.match(/^P(\d+)D$/)?.[1];
+  if (days) return `${Number(days).toLocaleString('fa-IR')} روز`;
+  const months = durationIso.match(/^P(\d+)M$/)?.[1];
+  if (months) return `${Number(months).toLocaleString('fa-IR')} ماه`;
+  const years = durationIso.match(/^P(\d+)Y$/)?.[1];
+  if (years) return `${Number(years).toLocaleString('fa-IR')} سال`;
+  return durationIso;
 }
