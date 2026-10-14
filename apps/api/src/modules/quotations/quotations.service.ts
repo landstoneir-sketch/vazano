@@ -196,6 +196,40 @@ export class QuotationsService {
     });
   }
 
+  async withdraw(user: AuthenticatedUser, quotationId: string) {
+    const quotation = await this.prisma.quotation.findUnique({ where: { id: quotationId }, include: { rfq: true } });
+    if (!quotation) throw new NotFoundException('پیشنهاد قیمت پیدا نشد.');
+    this.assertSupplierMembership(user, quotation.supplierOrganizationId);
+    if (quotation.status === 'WITHDRAWN') return quotation;
+    if (quotation.status !== 'SUBMITTED') throw new ConflictException('فقط پیشنهاد ارسال‌شده قابل پس‌گرفتن است.');
+    const now = new Date();
+    if (quotation.rfq.responseDeadline && quotation.rfq.responseDeadline <= now) {
+      throw new ConflictException('پس از پایان مهلت دریافت پیشنهاد، پس‌گرفتن پیشنهاد ممکن نیست.');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const claim = await tx.quotation.updateMany({
+        where: { id: quotation.id, status: 'SUBMITTED' },
+        data: { status: 'WITHDRAWN', withdrawnAt: now },
+      });
+      if (claim.count !== 1) throw new ConflictException('وضعیت پیشنهاد هم‌زمان تغییر کرده است؛ صفحه را تازه‌سازی کنید.');
+      const remainingQuotes = await tx.quotation.count({ where: { rfqId: quotation.rfqId, status: 'SUBMITTED' } });
+      if (remainingQuotes === 0) {
+        await tx.rfq.updateMany({
+          where: { id: quotation.rfqId, lifecycleState: 'PUBLISHED', operationalStatus: 'HAS_QUOTES' },
+          data: { operationalStatus: 'OPEN_FOR_QUOTES' },
+        });
+      }
+      await tx.auditLog.create({
+        data: { actorUserId: user.id, organizationId: quotation.supplierOrganizationId, action: 'quotation.withdraw', entityType: 'Quotation', entityId: quotation.id, metadata: { creditRefunded: false } },
+      });
+      await tx.outboxEvent.create({
+        data: { aggregateType: 'Quotation', aggregateId: quotation.id, eventType: 'ir.vazano.quotation.withdrawn.v1', payload: { quotationId: quotation.id, rfqId: quotation.rfqId } },
+      });
+      return tx.quotation.findUniqueOrThrow({ where: { id: quotation.id } });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
   async comparison(user: AuthenticatedUser, rfqId: string) {
     const rfq = await this.findBuyerRfq(user, rfqId);
     const [quotations, commitmentReceipt] = await Promise.all([

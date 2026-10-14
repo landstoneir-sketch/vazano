@@ -74,6 +74,20 @@ export function SupplierPerformance() {
     finally { setBusyQuotationId(''); }
   }
 
+  async function withdrawQuotation(quotationId: string, organizationId: string) {
+    if (!window.confirm('پیشنهاد پس گرفته شود؟ اعتبار مصرف‌شده بابت ارسال این پیشنهاد بازگردانده نمی‌شود.')) return;
+    setBusyQuotationId(quotationId); setError('');
+    try {
+      const updated = await apiRequest<Quotation>(`/quotations/${quotationId}/withdraw`, { method: 'POST' });
+      setQuotations((current) => ({
+        ...current,
+        [organizationId]: (current[organizationId] ?? []).map((quotation) => quotation.id === quotationId ? { ...quotation, ...updated } : quotation),
+      }));
+    }
+    catch (reason: unknown) { setError(reason instanceof Error ? reason.message : 'پس‌گرفتن پیشنهاد انجام نشد.'); }
+    finally { setBusyQuotationId(''); }
+  }
+
   return <div className="stack">{items.map((item) => <article className="card" key={item.organizationId}>
     <div className="admin-card-title"><div><div className="eyebrow">عملکرد فروشنده</div><h2>{item.organizationName}</h2></div><div><strong>{verificationLabels[item.verificationStatus] ?? item.verificationStatus}</strong><p className="muted">{item.subscription ? `${item.subscription.plan.nameFa} · ${item.subscription.status}` : 'بدون اشتراک فعال'}</p></div></div>
     <div className="dashboard-grid">
@@ -93,6 +107,7 @@ export function SupplierPerformance() {
         <div className="list-card-actions">
           {quotation.status === 'DRAFT' && <button className="button button-primary" type="button" disabled={busyQuotationId === quotation.id} onClick={() => void submitDraft(quotation.id, item.organizationId)}>{busyQuotationId === quotation.id ? 'در حال ارسال…' : 'ارسال پیش‌نویس'}</button>}
           {quotation.status === 'SUBMITTED' && <Link className="button button-secondary" href={`/supplier/rfqs/${quotation.rfq.id}/quote?organizationId=${item.organizationId}`}>ثبت نسخه جدید</Link>}
+          {quotation.status === 'SUBMITTED' && <button className="button button-ghost" type="button" disabled={busyQuotationId === quotation.id} onClick={() => void withdrawQuotation(quotation.id, item.organizationId)}>{busyQuotationId === quotation.id ? 'در حال ثبت…' : 'پس‌گرفتن پیشنهاد'}</button>}
           <Link className="button button-secondary" href={`/messages?rfq=${quotation.rfq.id}&supplier=${item.organizationId}` as Route}>پیام درباره استعلام</Link>
         </div>
       </div>)}

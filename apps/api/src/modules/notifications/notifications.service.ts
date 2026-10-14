@@ -12,6 +12,7 @@ const SUPPORTED_EVENT_TYPES = [
   'ir.vazano.quotation.submitted.v1',
   'ir.vazano.quotation.accepted.v1',
   'ir.vazano.quotation.rejected.v1',
+  'ir.vazano.quotation.withdrawn.v1',
   'ir.vazano.contract.requested.v1',
   'ir.vazano.contract.terms_prepared.v1',
   'ir.vazano.contract.accepted.v1',
@@ -342,6 +343,19 @@ export class NotificationsService {
           actionPath: '/supplier',
           variables: { quotationCode: quotation.code, rfqCode: quotation.rfq.code, refundCredits },
         })));
+      }
+      case 'ir.vazano.quotation.withdrawn.v1': {
+        const quotation = await tx.quotation.findUnique({
+          where: { id: event.aggregateId },
+          select: { code: true, rfq: { select: { id: true, code: true, buyerContactUserId: true, buyerOrganizationId: true } }, supplierOrganization: { select: { displayName: true } } },
+        });
+        if (!quotation) return [];
+        return [{
+          userId: quotation.rfq.buyerContactUserId,
+          organizationId: quotation.rfq.buyerOrganizationId,
+          actionPath: `/dashboard/rfqs/${quotation.rfq.id}`,
+          variables: { quotationCode: quotation.code, rfqCode: quotation.rfq.code, supplierName: quotation.supplierOrganization.displayName },
+        }];
       }
       case 'ir.vazano.contract.requested.v1': {
         const [request, operators] = await Promise.all([

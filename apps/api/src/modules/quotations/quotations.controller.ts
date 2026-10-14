@@ -25,6 +25,11 @@ export class QuotationsController {
     return this.quotations.accept(user, id);
   }
 
+  @Post(':id/withdraw')
+  withdraw(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.quotations.withdraw(user, id);
+  }
+
   @Get('mine')
   listMine(@CurrentUser() user: AuthenticatedUser, @Query('organizationId') organizationId: string) {
     return this.quotations.listForSupplier(user, organizationId);
