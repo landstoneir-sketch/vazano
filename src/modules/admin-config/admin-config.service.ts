@@ -9,10 +9,15 @@ import { evaluateReleaseReadiness } from './release-readiness';
 import { assertValidSubscriptionPolicySetting } from '../subscriptions/subscription-policy-settings.service';
 import { assertValidProposalFeePolicy, assertValidShortageOverrideSetting } from '../quotations/quotation-policies';
 import { assertValidRfqPolicySetting, resolveRfqPolicySettings } from '../rfqs/rfq-policy-settings.service';
+import { FileSafetyService } from '../attachments/file-safety.service';
 
 @Injectable()
 export class AdminConfigService {
-  constructor(private readonly prisma: PrismaService, private readonly environment: ConfigService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly environment: ConfigService,
+    private readonly fileSafety: FileSafetyService,
+  ) {}
 
   async releaseReadiness(user: AuthenticatedUser) {
     this.requireAnyPermission(user, ['settings.read', 'settings.manage']);
@@ -106,6 +111,8 @@ export class AdminConfigService {
       && this.environment.get<string>('ZARINPAL_ENABLED') === 'true'
       && this.environment.get<string>('ZARINPAL_SANDBOX') === 'false'
       && Boolean(this.environment.get<string>('ZARINPAL_MERCHANT_ID'));
+    const fileScanningReady = this.fileSafety.requiresContent()
+      && await this.fileSafety.checkHealth().then(() => true).catch(() => false);
 
     return {
       generatedAt: new Date().toISOString(),
@@ -115,7 +122,7 @@ export class AdminConfigService {
         smsConfigured,
         subscriptionSmsConfigured,
         paymentConfigured,
-        fileScanningConfigured: this.environment.get<string>('FILE_SCAN_MODE') === 'clamav',
+        fileScanningConfigured: fileScanningReady,
         notificationWorkerEnabled: this.environment.get<string>('NOTIFICATION_WORKER_ENABLED', 'true') === 'true',
         subscriptionWorkerEnabled: this.environment.get<string>('SUBSCRIPTION_LIFECYCLE_WORKER_ENABLED', 'true') === 'true',
         rfqLifecycleWorkerEnabled: this.environment.get<string>('RFQ_LIFECYCLE_WORKER_ENABLED', 'true') === 'true',

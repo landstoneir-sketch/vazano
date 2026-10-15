@@ -1,14 +1,22 @@
 import { ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from '../../shared/prisma/prisma.service';
 import { ObjectStorageService } from '../attachments/object-storage.service';
+import { FileSafetyService } from '../attachments/file-safety.service';
 import { HealthController } from './health.controller';
 import { RedisRuntime } from '../../common/request-security';
 
-function createController(databaseCheck: () => Promise<unknown>, storageCheck: () => Promise<void>, redisCheck: () => Promise<void> = () => Promise.resolve()) {
+function createController(
+  databaseCheck: () => Promise<unknown>,
+  storageCheck: () => Promise<void>,
+  redisCheck: () => Promise<void> = () => Promise.resolve(),
+  scannerRequired = false,
+  scannerCheck: () => Promise<void> = () => Promise.resolve(),
+) {
   const prisma = { $queryRaw: databaseCheck } as unknown as PrismaService;
   const storage = { checkHealth: storageCheck } as unknown as ObjectStorageService;
   const redis = { ping: redisCheck } as unknown as RedisRuntime;
-  return new HealthController(prisma, storage, redis);
+  const fileSafety = { requiresContent: () => scannerRequired, checkHealth: scannerCheck } as unknown as FileSafetyService;
+  return new HealthController(prisma, storage, redis, fileSafety);
 }
 
 describe('HealthController', () => {
@@ -26,5 +34,15 @@ describe('HealthController', () => {
 
   it('rejects readiness when Redis is unavailable', async () => {
     await expect(createController(() => Promise.resolve(1), () => Promise.resolve(), () => Promise.reject(new Error('redis down'))).ready()).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+
+  it('rejects readiness when the configured malware scanner is unavailable', async () => {
+    await expect(createController(
+      () => Promise.resolve(1),
+      () => Promise.resolve(),
+      () => Promise.resolve(),
+      true,
+      () => Promise.reject(new Error('scanner down')),
+    ).ready()).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 });

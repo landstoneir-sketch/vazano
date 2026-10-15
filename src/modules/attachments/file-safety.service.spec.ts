@@ -1,4 +1,4 @@
-import { parseClamAvResponse } from './file-safety.service';
+import { parseClamAvPingResponse, parseClamAvResponse } from './file-safety.service';
 
 describe('ClamAV response policy', () => {
   it('accepts a clean stream response', () => {
@@ -13,5 +13,10 @@ describe('ClamAV response policy', () => {
 
   it('rejects an ambiguous scanner response', () => {
     expect(() => parseClamAvResponse('stream: scanner failure ERROR\0')).toThrow();
+  });
+
+  it('accepts only the expected scanner health response', () => {
+    expect(() => parseClamAvPingResponse('PONG\0')).not.toThrow();
+    expect(() => parseClamAvPingResponse('UNKNOWN COMMAND\0')).toThrow();
   });
 });
