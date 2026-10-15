@@ -7,8 +7,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\wait-for-d
 if errorlevel 1 goto :error
 
 :docker_ready
-echo [Vazano] Starting PostgreSQL, Redis and object storage...
-docker compose up -d --wait --wait-timeout 90 postgres redis minio
+echo [Vazano] Starting PostgreSQL, Redis, object storage and file security scanner...
+docker compose up -d --wait --wait-timeout 240 postgres redis minio clamav
 if errorlevel 1 goto :error
 
 if not exist "node_modules" (
@@ -29,6 +29,9 @@ call npm.cmd run prisma:seed
 if errorlevel 1 goto :error
 echo [Vazano] Starting API and website...
 echo [Vazano] Open http://localhost:3000 after both services report ready.
+if not defined FILE_SCAN_MODE set "FILE_SCAN_MODE=clamav"
+if not defined CLAMAV_HOST set "CLAMAV_HOST=127.0.0.1"
+if not defined CLAMAV_PORT set "CLAMAV_PORT=53310"
 call npm.cmd run dev
 goto :eof
 :error

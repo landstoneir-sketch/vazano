@@ -9,6 +9,6 @@ import { ObjectStorageService } from './object-storage.service';
   imports: [AuthModule],
   controllers: [AttachmentsController],
   providers: [AttachmentsService, ObjectStorageService, FileSafetyService],
-  exports: [ObjectStorageService],
+  exports: [ObjectStorageService, FileSafetyService],
 })
 export class AttachmentsModule {}

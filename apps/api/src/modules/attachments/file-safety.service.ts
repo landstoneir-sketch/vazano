@@ -17,6 +17,11 @@ export function parseClamAvResponse(rawResponse: string): Exclude<FileSafetyResu
   throw new Error('Unexpected response from the malware scanner.');
 }
 
+export function parseClamAvPingResponse(rawResponse: string): void {
+  const response = rawResponse.replaceAll('\0', '').trim();
+  if (response !== 'PONG') throw new Error('Malware scanner health response is invalid.');
+}
+
 @Injectable()
 export class FileSafetyService {
   private readonly logger = new Logger(FileSafetyService.name);
@@ -46,10 +51,15 @@ export class FileSafetyService {
     return this.config.get<string>('FILE_SCAN_MODE') === 'clamav';
   }
 
+  async checkHealth(): Promise<void> {
+    if (!this.requiresContent()) throw new Error('Malware scanner is not configured.');
+    const response = await this.sendCommand('zPING\0', Math.min(this.scannerTimeoutMs(), 3000));
+    parseClamAvPingResponse(response);
+  }
+
   private scanWithClamAv(content: Readable): Promise<Exclude<FileSafetyResult, { verdict: 'PENDING' }>> {
-    const host = this.config.get<string>('CLAMAV_HOST', '127.0.0.1');
-    const port = Number(this.config.get<string>('CLAMAV_PORT', '3310'));
-    const timeoutMs = Number(this.config.get<string>('CLAMAV_TIMEOUT_MS', '15000'));
+    const { host, port } = this.scannerEndpoint();
+    const timeoutMs = this.scannerTimeoutMs();
 
     return new Promise((resolve, reject) => {
       const socket = createConnection({ host, port });
@@ -85,6 +95,48 @@ export class FileSafetyService {
         void this.sendStream(socket, content).catch(fail);
       });
     });
+  }
+
+  private sendCommand(command: string, timeoutMs: number): Promise<string> {
+    const { host, port } = this.scannerEndpoint();
+    return new Promise((resolve, reject) => {
+      const socket = createConnection({ host, port });
+      let response = '';
+      let settled = false;
+      const fail = (error: Error) => {
+        if (settled) return;
+        settled = true;
+        socket.destroy();
+        reject(error);
+      };
+      const succeed = () => {
+        if (settled) return;
+        settled = true;
+        socket.destroy();
+        resolve(response);
+      };
+
+      socket.setTimeout(timeoutMs, () => fail(new Error('Malware scanner timed out.')));
+      socket.once('error', fail);
+      socket.on('data', (chunk: Buffer) => {
+        response += chunk.toString('utf8');
+        if (response.length > 1024) return fail(new Error('Malware scanner health response is too large.'));
+        if (response.includes('\0')) succeed();
+      });
+      socket.once('end', succeed);
+      socket.once('connect', () => socket.end(command));
+    });
+  }
+
+  private scannerEndpoint(): { host: string; port: number } {
+    return {
+      host: this.config.get<string>('CLAMAV_HOST', '127.0.0.1'),
+      port: Number(this.config.get<string>('CLAMAV_PORT', '3310')),
+    };
+  }
+
+  private scannerTimeoutMs(): number {
+    return Number(this.config.get<string>('CLAMAV_TIMEOUT_MS', '15000'));
   }
 
   private async sendStream(socket: Socket, content: Readable): Promise<void> {
