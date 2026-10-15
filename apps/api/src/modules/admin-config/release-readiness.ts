@@ -8,6 +8,14 @@ export type ReleaseReadinessCheck = {
   actionPath?: string;
 };
 
+export type ReleaseReadinessSummary = {
+  total: number;
+  ready: number;
+  warning: number;
+  blocked: number;
+  percent: number;
+};
+
 export type ReleaseReadinessInput = {
   nodeEnvironment: string;
   otpDebugEnabled: boolean;
@@ -34,7 +42,7 @@ export type ReleaseReadinessInput = {
   activeSuperAdminCount: number;
 };
 
-export function evaluateReleaseReadiness(input: ReleaseReadinessInput): { ready: boolean; checks: ReleaseReadinessCheck[] } {
+export function evaluateReleaseReadiness(input: ReleaseReadinessInput): { ready: boolean; summary: ReleaseReadinessSummary; checks: ReleaseReadinessCheck[] } {
   const checks: ReleaseReadinessCheck[] = [
     check('environment.production', 'حالت اجرای Production', input.nodeEnvironment === 'production', 'محیط روی Production تنظیم شده است.', 'نسخه فعلی در محیط توسعه اجرا می‌شود؛ این وضعیت برای کار محلی طبیعی است.'),
     check('security.otp-debug', 'غیرفعال بودن کد ورود آزمایشی', !input.otpDebugEnabled, 'کد ثابت آزمایشی غیرفعال است.', 'کد ثابت آزمایشی فعال است و در انتشار نهایی مجاز نیست.'),
@@ -68,7 +76,22 @@ export function evaluateReleaseReadiness(input: ReleaseReadinessInput): { ready:
     ),
   ];
 
-  return { ready: checks.every((item) => item.status !== 'BLOCKED'), checks };
+  const ready = checks.filter((item) => item.status === 'READY').length;
+  const warning = checks.filter((item) => item.status === 'WARNING').length;
+  const blocked = checks.filter((item) => item.status === 'BLOCKED').length;
+  const total = checks.length;
+
+  return {
+    ready: blocked === 0,
+    summary: {
+      total,
+      ready,
+      warning,
+      blocked,
+      percent: total === 0 ? 0 : Math.round(((ready + warning * 0.5) / total) * 100),
+    },
+    checks,
+  };
 }
 
 function coverageGapDetail(count: number, subject: string, names: string[]): string {
