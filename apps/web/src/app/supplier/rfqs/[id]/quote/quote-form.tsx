@@ -16,7 +16,7 @@ type CategoryGuidance = {
   profiles: Record<string, GuidanceProfile>;
 };
 type QuotationItem = { rfqItemId: string; quantity: string; unitPriceRial: string; discountRial: string; isAlternative: boolean; offeredDescription: string | null };
-type CreatedQuotation = { id: string; code: string; status: string; finalAmountRial: string; updatedAt: string };
+type CreatedQuotation = { id: string; code: string; status: string; version: number; finalAmountRial: string; updatedAt: string };
 type SupplierQuotation = CreatedQuotation & {
   rfq: { id: string };
   paymentTerms: string | null;
@@ -69,6 +69,29 @@ export function QuoteForm({ rfqId, initialOrganizationId }: { rfqId: string; ini
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [guidanceByCategoryId, setGuidanceByCategoryId] = useState<Record<string, CategoryGuidance>>({});
 
+  function populateQuotationFields(quotation: SupplierQuotation, currentRfq: Rfq) {
+    setPrices(Object.fromEntries(quotation.items.map((item) => [item.rfqItemId, fromRial(item.unitPriceRial)])));
+    setQuantities(Object.fromEntries(quotation.items.map((item) => [item.rfqItemId, item.quantity])));
+    setLineDiscounts(Object.fromEntries(quotation.items.map((item) => [item.rfqItemId, fromRial(item.discountRial)])));
+    setIncludedItems(Object.fromEntries(currentRfq.items.map((item) => [item.id, quotation.items.some((line) => line.rfqItemId === item.id)])));
+    setAlternatives(Object.fromEntries(quotation.items.map((item) => [item.rfqItemId, item.isAlternative])));
+    setOfferedDescriptions(Object.fromEntries(quotation.items.map((item) => [item.rfqItemId, item.offeredDescription ?? ''])));
+    setShippingToman(fromRial(quotation.shippingRial)); setPackagingToman(fromRial(quotation.packagingRial));
+    setLoadingToman(fromRial(quotation.loadingRial)); setOtherCostsToman(fromRial(quotation.otherCostsRial));
+    setDiscountToman(fromRial(quotation.discountRial)); setTaxToman(fromRial(quotation.taxRial));
+    setPaymentTerms(quotation.paymentTerms ?? ''); setPreparationDays(String(quotation.preparationDays ?? 0));
+    setDeliveryDate(datePart(quotation.deliveryDate)); setValidUntil(datePart(quotation.validUntil) || dateAfterDays(7));
+  }
+
+  function resetQuotationFields(currentRfq: Rfq) {
+    setPrices({}); setQuantities(Object.fromEntries(currentRfq.items.map((item) => [item.id, item.quantity])));
+    setLineDiscounts({}); setIncludedItems(Object.fromEntries(currentRfq.items.map((item) => [item.id, true])));
+    setAlternatives({}); setOfferedDescriptions({});
+    setShippingToman('0'); setPackagingToman('0'); setLoadingToman('0'); setOtherCostsToman('0');
+    setDiscountToman('0'); setTaxToman('0'); setPaymentTerms(''); setPreparationDays('7');
+    setDeliveryDate(''); setValidUntil(dateAfterDays(7));
+  }
+
   useEffect(() => {
     let active = true;
     void Promise.all([apiRequest<Rfq>(`/rfqs/${rfqId}`), apiRequest<Organization[]>('/organizations/mine'), apiRequest<ProposalFeePolicy>('/quotations/active-policy')])
@@ -106,22 +129,18 @@ export function QuoteForm({ rfqId, initialOrganizationId }: { rfqId: string; ini
         const draft = quotations.find((quotation) => quotation.rfq.id === rfqId && quotation.status === 'DRAFT') ?? null;
         setCreated(draft); setDraftDirty(false);
         if (!draft) {
-          setPrices({}); setQuantities(Object.fromEntries(rfq.items.map((item) => [item.id, item.quantity])));
-          setLineDiscounts({}); setIncludedItems(Object.fromEntries(rfq.items.map((item) => [item.id, true])));
-          setAlternatives({}); setOfferedDescriptions({}); setAttachments([]); setMessage('');
+          const latestSubmitted = quotations.find((quotation) => quotation.rfq.id === rfqId && quotation.status === 'SUBMITTED') ?? null;
+          if (latestSubmitted) {
+            populateQuotationFields(latestSubmitted, rfq);
+            setAttachments([]);
+            setMessage(`اطلاعات نسخه ${latestSubmitted.version.toLocaleString('fa-IR')} برای ساخت نسخه جدید کپی شد. پیوست‌های قبلی کپی نمی‌شوند و ارسال نهایی نسخه جدید دوباره مشمول هزینه اعتبار است.`);
+            return;
+          }
+          resetQuotationFields(rfq);
+          setAttachments([]); setMessage('');
           return;
         }
-        setPrices(Object.fromEntries(draft.items.map((item) => [item.rfqItemId, fromRial(item.unitPriceRial)])));
-        setQuantities(Object.fromEntries(draft.items.map((item) => [item.rfqItemId, item.quantity])));
-        setLineDiscounts(Object.fromEntries(draft.items.map((item) => [item.rfqItemId, fromRial(item.discountRial)])));
-        setIncludedItems(Object.fromEntries(rfq.items.map((item) => [item.id, draft.items.some((line) => line.rfqItemId === item.id)])));
-        setAlternatives(Object.fromEntries(draft.items.map((item) => [item.rfqItemId, item.isAlternative])));
-        setOfferedDescriptions(Object.fromEntries(draft.items.map((item) => [item.rfqItemId, item.offeredDescription ?? ''])));
-        setShippingToman(fromRial(draft.shippingRial)); setPackagingToman(fromRial(draft.packagingRial));
-        setLoadingToman(fromRial(draft.loadingRial)); setOtherCostsToman(fromRial(draft.otherCostsRial));
-        setDiscountToman(fromRial(draft.discountRial)); setTaxToman(fromRial(draft.taxRial));
-        setPaymentTerms(draft.paymentTerms ?? ''); setPreparationDays(String(draft.preparationDays ?? 0));
-        setDeliveryDate(datePart(draft.deliveryDate)); setValidUntil(datePart(draft.validUntil) || dateAfterDays(7));
+        populateQuotationFields(draft, rfq);
         setMessage('پیش‌نویس ذخیره‌شده بازیابی شد و قابل ویرایش است.');
       })
       .catch((reason: unknown) => { if (active) setMessage(reason instanceof Error ? reason.message : 'بررسی پیش‌نویس قبلی انجام نشد.'); });
