@@ -97,6 +97,15 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        image: redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     env:
       NODE_ENV: development
       TZ: Asia/Tehran
@@ -105,6 +114,7 @@ jobs:
       NEXT_PUBLIC_API_BASE_URL: http://localhost:3101/v1
       API_INTERNAL_URL: http://localhost:3101/v1
       DATABASE_URL: postgresql://vazano:ci_only_password@localhost:5432/vazano?schema=public
+      E2E_DATABASE_URL: postgresql://vazano:ci_only_password@localhost:5432/vazano?schema=public
       REDIS_URL: redis://localhost:6379
       SESSION_TTL_DAYS: 30
       OTP_TTL_SECONDS: 120
@@ -137,6 +147,23 @@ jobs:
 
       - name: Install locked dependencies
         run: npm ci
+
+      - name: Start S3-compatible test storage
+        run: |
+          docker run --detach --name vazano-ci-minio \
+            --publish 9000:9000 \
+            --env MINIO_ROOT_USER=vazano-ci \
+            --env MINIO_ROOT_PASSWORD=ci_only_storage_secret \
+            minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e \
+            server /data
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:9000/minio/health/ready >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs vazano-ci-minio
+          exit 1
 
       - name: Prepare test database
         run: |
