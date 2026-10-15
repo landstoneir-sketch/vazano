@@ -80,6 +80,103 @@ const naturalStoneCategories = [
   ['conglomerate', 'conglomerate', 'کنگلومرا', 'Conglomerate'],
 ] as const;
 
+const stoneApplicationOptions = [
+  'نمای خارجی', 'نمای داخلی', 'نمای رومی', 'کف داخلی', 'کف لابی', 'کف واحد', 'کف فروشگاه', 'کف مرکز تجاری',
+  'کف فضای پرتردد', 'کف پارکینگ', 'کف محوطه', 'پیاده‌رو', 'پله', 'زیرپله', 'پاگرد', 'دیوار داخلی',
+  'دیوار راه‌پله', 'دیوار پارکینگ', 'سرویس بهداشتی', 'حمام', 'آشپزخانه', 'کانتر', 'جزیره آشپزخانه',
+  'آسانسور', 'لابی', 'قرنیز', 'جدول', 'محوطه‌سازی', 'فضای باز', 'فضای مرطوب', 'فضای سردسیر',
+  'فضای یخبندان', 'مناطق گرم', 'مناطق دارای آلودگی',
+] as const;
+
+const stoneKnowledgeGuidance = {
+  version: '1.0',
+  packVersion: '2.1.0-source-redacted',
+  sourceSha256: '51A20E4B61D03A23BF9577681E4C6672690099236AFC604A893BB0AADF750B38',
+  scope: 'decision_support_not_engineering_approval',
+  disclaimerFa: 'این راهنما برای تکمیل استعلام و شروع بررسی است؛ تأیید نهایی باید براساس مشخصات پروژه، نمونه و آزمون همان پارت انجام شود.',
+  profiles: {
+    exteriorFacade: {
+      requiredChecks: ['هویت و یکسانی پارت', 'سلامت و نبود ترک مؤثر', 'ابعاد و ضخامت واقعی', 'روش و ظرفیت مهار'],
+      comparisonCriteria: ['مقاومت خمشی', 'جذب آب', 'پایداری فضای باز', 'رفتار حرارتی', 'هماهنگی رنگ و طرح', 'تأمین بار هم‌سورت', 'هزینه کل تهیه و اجرا'],
+      suggestedFamilies: ['تراورتن', 'گرانیت', 'چینی / کریستال'],
+    },
+    romanFacade: {
+      requiredChecks: ['هویت و یکسانی پارت', 'سلامت و نبود ترک مؤثر', 'ابعاد و ضخامت واقعی', 'روش و ظرفیت مهار'],
+      comparisonCriteria: ['مقاومت خمشی', 'جذب آب', 'پایداری فضای باز', 'رفتار حرارتی', 'هماهنگی رنگ و طرح', 'تأمین بار هم‌سورت', 'هزینه کل تهیه و اجرا'],
+      suggestedFamilies: ['تراورتن'],
+    },
+    wall: {
+      requiredChecks: ['هویت و یکسانی پارت', 'سلامت و نبود ترک مؤثر', 'ابعاد و ضخامت واقعی'],
+      comparisonCriteria: ['ظرفیت و سازگاری مهار', 'هماهنگی رنگ و طرح', 'لکه‌پذیری و نظافت', 'تأمین بار هم‌سورت', 'هزینه کل تهیه و اجرا'],
+      suggestedFamilies: ['تراورتن', 'مرمریت', 'گرانیت', 'چینی / کریستال', 'مرمر / اونیکس', 'لایم‌استون', 'ماسه‌سنگ'],
+    },
+    floor: {
+      requiredChecks: ['هویت و یکسانی پارت', 'سلامت و نبود ترک مؤثر', 'ابعاد و ضخامت واقعی', 'لغزش در شرایط مصرف', 'بستر و باربری سازه'],
+      comparisonCriteria: ['مقاومت سایشی', 'مقاومت لغزشی', 'مقاومت خمشی و فشاری', 'جذب آب', 'قابلیت ترمیم', 'تأمین بار هم‌سورت', 'هزینه کل تهیه و اجرا'],
+      suggestedFamilies: ['گرانیت', 'چینی / کریستال', 'مرمریت'],
+    },
+    outdoorFloor: {
+      requiredChecks: ['هویت و یکسانی پارت', 'سلامت و نبود ترک مؤثر', 'ابعاد و ضخامت واقعی', 'لغزش در شرایط خیس', 'بستر و باربری سازه'],
+      comparisonCriteria: ['دوام یخ‌زدگی و ذوب', 'زهکشی و آب‌بندی', 'پایداری فضای باز', 'مقاومت سایشی', 'مقاومت خمشی و فشاری', 'جذب آب', 'هزینه کل تهیه و اجرا'],
+      suggestedFamilies: ['گرانیت', 'چینی / کریستال', 'مرمریت'],
+    },
+    wetWall: {
+      requiredChecks: ['هویت و یکسانی پارت', 'سلامت و نبود ترک مؤثر', 'ابعاد و ضخامت واقعی', 'زهکشی و آب‌بندی'],
+      comparisonCriteria: ['جذب آب', 'لغزش در صورت مصرف کف', 'تماس با شوینده و مواد اسیدی', 'لکه‌پذیری و نظافت', 'هماهنگی رنگ و طرح', 'هزینه کل تهیه و اجرا'],
+      suggestedFamilies: ['تراورتن', 'مرمریت', 'گرانیت', 'چینی / کریستال', 'مرمر / اونیکس', 'لایم‌استون', 'ماسه‌سنگ'],
+    },
+    wetFloor: {
+      requiredChecks: ['هویت و یکسانی پارت', 'سلامت و نبود ترک مؤثر', 'ابعاد و ضخامت واقعی', 'لغزش در شرایط خیس', 'بستر و باربری سازه', 'زهکشی و آب‌بندی'],
+      comparisonCriteria: ['جذب آب', 'تماس با شوینده و مواد اسیدی', 'مقاومت سایشی', 'مقاومت خمشی و فشاری', 'قابلیت ترمیم', 'هزینه کل تهیه و اجرا'],
+      suggestedFamilies: ['گرانیت', 'چینی / کریستال', 'مرمریت'],
+    },
+    worktop: {
+      requiredChecks: ['هویت و یکسانی پارت', 'سلامت و نبود ترک مؤثر', 'ابعاد و ضخامت واقعی', 'تماس با مواد اسیدی', 'لکه‌پذیری و نظافت'],
+      comparisonCriteria: ['رفتار حرارتی', 'مقاومت خمشی', 'قابلیت ترمیم', 'هزینه کل تهیه و اجرا'],
+      suggestedFamilies: ['گرانیت', 'سایر گزینه‌های دارای آزمون و تأیید پروژه'],
+    },
+    elevator: {
+      requiredChecks: ['هویت و یکسانی پارت', 'سلامت و نبود ترک مؤثر', 'ابعاد و ضخامت واقعی', 'وزن و طراحی تکیه‌گاه'],
+      comparisonCriteria: ['مقاومت خمشی', 'ظرفیت و سازگاری مهار', 'مقاومت سایشی', 'مقاومت لغزشی', 'هزینه کل تهیه و اجرا'],
+      suggestedFamilies: ['تراورتن', 'مرمریت', 'گرانیت', 'چینی / کریستال', 'مرمر / اونیکس', 'لایم‌استون', 'ماسه‌سنگ'],
+    },
+    outdoorGeneral: {
+      requiredChecks: ['هویت و یکسانی پارت', 'سلامت و نبود ترک مؤثر', 'ابعاد و ضخامت واقعی'],
+      comparisonCriteria: ['دوام یخ‌زدگی و ذوب', 'زهکشی و آب‌بندی', 'پایداری فضای باز', 'مقاومت لغزشی', 'هماهنگی رنگ و طرح', 'تأمین بار هم‌سورت', 'هزینه کل تهیه و اجرا'],
+      suggestedFamilies: ['تراورتن', 'مرمریت', 'گرانیت', 'چینی / کریستال', 'مرمر / اونیکس', 'لایم‌استون', 'ماسه‌سنگ'],
+    },
+    coldClimate: {
+      requiredChecks: ['هویت و یکسانی پارت', 'سلامت و نبود ترک مؤثر', 'ابعاد و ضخامت واقعی', 'آزمون یخ‌زدگی و ذوب همان پارت'],
+      comparisonCriteria: ['جذب آب', 'مقاومت خمشی', 'ظرفیت و سازگاری مهار', 'زهکشی و آب‌بندی', 'هزینه کل تهیه و اجرا'],
+      suggestedFamilies: ['گرانیت', 'تراورتن', 'چینی / کریستال', 'ماسه‌سنگ'],
+    },
+    hotClimate: {
+      requiredChecks: ['هویت و یکسانی پارت', 'سلامت و نبود ترک مؤثر', 'ابعاد و ضخامت واقعی', 'رفتار حرارتی در شرایط پروژه'],
+      comparisonCriteria: ['پایداری فضای باز', 'ظرفیت و سازگاری مهار', 'هماهنگی رنگ و طرح', 'هزینه کل تهیه و اجرا'],
+      suggestedFamilies: ['تراورتن', 'مرمریت', 'گرانیت', 'چینی / کریستال', 'مرمر / اونیکس', 'لایم‌استون', 'ماسه‌سنگ'],
+    },
+    pollutedClimate: {
+      requiredChecks: ['هویت و یکسانی پارت', 'سلامت و نبود ترک مؤثر', 'ابعاد و ضخامت واقعی'],
+      comparisonCriteria: ['تماس با مواد اسیدی و شوینده', 'پایداری فضای باز', 'لکه‌پذیری و نظافت', 'قابلیت ترمیم', 'ظرفیت و سازگاری مهار', 'هزینه کل تهیه و اجرا'],
+      suggestedFamilies: ['تراورتن', 'مرمریت', 'گرانیت', 'چینی / کریستال', 'مرمر / اونیکس', 'لایم‌استون', 'ماسه‌سنگ'],
+    },
+  },
+  applications: [
+    ['exterior_facade', 'نمای خارجی', 'exteriorFacade', true], ['interior_facade', 'نمای داخلی', 'wall', false], ['roman_facade', 'نمای رومی', 'romanFacade', true],
+    ['interior_floor', 'کف داخلی', 'floor', false], ['lobby_floor', 'کف لابی', 'floor', false], ['unit_floor', 'کف واحد', 'floor', false],
+    ['shop_floor', 'کف فروشگاه', 'floor', false], ['mall_floor', 'کف مرکز تجاری', 'floor', false], ['high_traffic_floor', 'کف فضای پرتردد', 'floor', true],
+    ['parking_floor', 'کف پارکینگ', 'floor', true], ['yard_floor', 'کف محوطه', 'outdoorFloor', false], ['sidewalk', 'پیاده‌رو', 'outdoorFloor', false],
+    ['stair_tread', 'پله', 'floor', true], ['stair_riser', 'زیرپله', 'wall', false], ['landing', 'پاگرد', 'floor', false],
+    ['interior_wall', 'دیوار داخلی', 'wall', false], ['stair_wall', 'دیوار راه‌پله', 'wall', false], ['parking_wall', 'دیوار پارکینگ', 'wall', false],
+    ['toilet', 'سرویس بهداشتی', 'wetWall', false], ['bathroom', 'حمام', 'wetFloor', false], ['kitchen', 'آشپزخانه', 'worktop', false],
+    ['countertop', 'کانتر', 'worktop', false], ['kitchen_island', 'جزیره آشپزخانه', 'worktop', false], ['elevator', 'آسانسور', 'elevator', true],
+    ['lobby', 'لابی', 'wall', false], ['skirting', 'قرنیز', 'wall', false], ['kerb', 'جدول', 'outdoorGeneral', false],
+    ['landscaping', 'محوطه‌سازی', 'outdoorGeneral', false], ['outdoors', 'فضای باز', 'outdoorGeneral', false], ['wet_area', 'فضای مرطوب', 'wetFloor', false],
+    ['cold_climate', 'فضای سردسیر', 'coldClimate', true], ['freeze_thaw', 'فضای یخبندان', 'coldClimate', true],
+    ['hot_climate', 'مناطق گرم', 'hotClimate', false], ['polluted_climate', 'مناطق دارای آلودگی', 'pollutedClimate', false],
+  ],
+} as const;
+
 const naturalStoneAttributes = [
   { code: 'stone-color', nameFa: 'رنگ غالب', nameEn: 'Primary color', dataType: 'TEXT' as const, unitLabelFa: null, options: [], validation: { maxLength: 80 }, isRequired: false },
   { code: 'quarry-name', nameFa: 'معدن یا خاستگاه', nameEn: 'Quarry / origin', dataType: 'TEXT' as const, unitLabelFa: null, options: [], validation: { maxLength: 120 }, isRequired: false },
@@ -87,7 +184,7 @@ const naturalStoneAttributes = [
   { code: 'thickness-mm', nameFa: 'ضخامت', nameEn: 'Thickness', dataType: 'NUMBER' as const, unitLabelFa: 'میلی‌متر', options: [], validation: { min: 5, max: 200 }, isRequired: true },
   { code: 'dimensions', nameFa: 'ابعاد یا نوع برش', nameEn: 'Dimensions / cut', dataType: 'TEXT' as const, unitLabelFa: null, options: [], validation: { maxLength: 120 }, isRequired: false },
   { code: 'grade', nameFa: 'درجه یا سورت', nameEn: 'Grade / sort', dataType: 'SINGLE_SELECT' as const, unitLabelFa: null, options: ['سوپر', 'ممتاز', 'درجه یک', 'درجه دو'], validation: {}, isRequired: false },
-  { code: 'application', nameFa: 'محل مصرف', nameEn: 'Application', dataType: 'MULTI_SELECT' as const, unitLabelFa: null, options: ['نما', 'کف', 'پله', 'دیوار داخلی', 'محوطه', 'کانتر و دکوراتیو'], validation: {}, isRequired: false },
+  { code: 'application', nameFa: 'محل مصرف', nameEn: 'Application', dataType: 'MULTI_SELECT' as const, unitLabelFa: null, options: stoneApplicationOptions, validation: {}, isRequired: true },
 ] as const;
 
 const systemSettings = [
@@ -111,6 +208,7 @@ const systemSettings = [
   ['seller.proposal_fee_policy', { version: '1.2', rate: '0.001', minToman: 100_000, maxToman: 5_000_000, refundFractionIfEligible: '2/3' }, 'سیاست هزینه ارسال پیشنهاد فروشنده'],
   ['seller.daily_proposal_limit', { base: 2, shortageOverrideMax: 6 }, 'مرجع قدیمی؛ سقف‌های فعال از بخش پلن‌های اشتراک مدیریت می‌شوند'],
   ['seller.shortage_override', { enabled: false, expiresAt: null, reason: '' }, 'افزایش موقت سقف روزانه پیشنهاد در کمبود عرضه'],
+  ['knowledge.application_guidance.natural-stone.v1', stoneKnowledgeGuidance, 'راهنمای تخصصی تکمیل استعلام سنگ طبیعی؛ قابل ویرایش پس از بازبینی کارشناس'],
 ] as const;
 
 const inAppNotificationTemplates = [
@@ -361,8 +459,8 @@ async function main(): Promise<void> {
   });
   const naturalStone = await prisma.category.upsert({
     where: { code: 'natural-stone' },
-    create: { industryId: industry.id, code: 'natural-stone', slug: 'natural-stone', nameFa: 'سنگ طبیعی', nameEn: 'Natural Stone', sortOrder: 10 },
-    update: isProduction ? {} : { industryId: industry.id, nameFa: 'سنگ طبیعی', isActive: true },
+    create: { industryId: industry.id, code: 'natural-stone', slug: 'natural-stone', nameFa: 'سنگ طبیعی', nameEn: 'Natural Stone', metadata: { knowledgeProfile: 'natural-stone' }, sortOrder: 10 },
+    update: isProduction ? {} : { industryId: industry.id, nameFa: 'سنگ طبیعی', metadata: { knowledgeProfile: 'natural-stone' }, isActive: true },
   });
   for (const [code, slug, nameFa, nameEn] of naturalStoneCategories) {
     await prisma.category.upsert({

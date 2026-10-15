@@ -21,6 +21,16 @@ type ProductAttribute = {
   validation: Record<string, unknown>;
   isRequired: boolean;
 };
+type GuidanceProfile = { requiredChecks: string[]; comparisonCriteria: string[]; suggestedFamilies: string[] };
+type CategoryGuidance = {
+  profile: string | null;
+  version?: string;
+  settingVersion?: number;
+  packVersion?: string | null;
+  disclaimerFa?: string | null;
+  applications: Array<{ code: string; labelFa: string; profileKey: string; sensitive: boolean }>;
+  profiles: Record<string, GuidanceProfile>;
+};
 type SpecificationValue = string | number | boolean | string[] | null;
 type RfqItemDraft = { categoryId: string; unitId: string; title: string; quantity: string; specifications: Record<string, SpecificationValue> };
 type CreatedRfq = {
@@ -83,6 +93,7 @@ export function NewRfqForm({ operatorMode = false, draftId }: { operatorMode?: b
   const [responseDeadline, setResponseDeadline] = useState('');
   const [savedItems, setSavedItems] = useState<RfqItemDraft[]>([]);
   const [productAttributes, setProductAttributes] = useState<ProductAttribute[]>([]);
+  const [categoryGuidance, setCategoryGuidance] = useState<CategoryGuidance | null>(null);
   const [specifications, setSpecifications] = useState<Record<string, SpecificationValue>>({});
   const [created, setCreated] = useState<CreatedRfq | null>(null);
   const [error, setError] = useState('');
@@ -128,13 +139,34 @@ export function NewRfqForm({ operatorMode = false, draftId }: { operatorMode?: b
   const selectableCategories = useMemo(() => categories.filter((item) => item.industryId === industryId && item.parentId), [categories, industryId]);
 
   useEffect(() => {
-    if (!categoryId) return;
+    if (!categoryId) { setCategoryGuidance(null); return; }
     let active = true;
-    void apiRequest<ProductAttribute[]>(`/catalog/categories/${categoryId}/attributes`)
-      .then((data) => { if (active) setProductAttributes(data); })
+    void Promise.all([
+      apiRequest<ProductAttribute[]>(`/catalog/categories/${categoryId}/attributes`),
+      apiRequest<CategoryGuidance>(`/catalog/categories/${categoryId}/guidance`),
+    ])
+      .then(([attributes, guidance]) => { if (active) { setProductAttributes(attributes); setCategoryGuidance(guidance); } })
       .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : 'دریافت ویژگی‌های فنی انجام نشد.'); });
     return () => { active = false; };
   }, [categoryId]);
+
+  const activeGuidance = useMemo(() => {
+    const selectedApplications = Array.isArray(specifications.application) ? specifications.application : [];
+    const matches = categoryGuidance?.applications.filter((application) => selectedApplications.includes(application.labelFa)) ?? [];
+    const profiles = matches.map((application) => categoryGuidance?.profiles[application.profileKey]).filter((item): item is GuidanceProfile => Boolean(item));
+    return {
+      selectedApplications: matches,
+      requiredChecks: unique(profiles.flatMap((profile) => profile.requiredChecks)),
+      comparisonCriteria: unique(profiles.flatMap((profile) => profile.comparisonCriteria)),
+      suggestedFamilies: unique(profiles.flatMap((profile) => profile.suggestedFamilies)),
+      sensitive: matches.some((application) => application.sensitive),
+    };
+  }, [categoryGuidance, specifications.application]);
+
+  const missingRequiredAttributes = useMemo(
+    () => productAttributes.filter((attribute) => attribute.isRequired && specificationMissing(specifications[attribute.code])).map(attributeLabel),
+    [productAttributes, specifications],
+  );
 
   useEffect(() => {
     if (!provinceId) return;
@@ -171,7 +203,7 @@ export function NewRfqForm({ operatorMode = false, draftId }: { operatorMode?: b
       const item = currentItem();
       if (!item) throw new Error('ابتدا مشخصات ردیف محصول را وارد کنید.');
       setSavedItems((current) => [...current, item]);
-      setCategoryId(''); setItemTitle(''); setQuantity(''); setSpecifications({}); setProductAttributes([]);
+      setCategoryId(''); setItemTitle(''); setQuantity(''); setSpecifications({}); setProductAttributes([]); setCategoryGuidance(null);
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : 'افزودن ردیف انجام نشد.');
     }
@@ -187,7 +219,7 @@ export function NewRfqForm({ operatorMode = false, draftId }: { operatorMode?: b
         const next = current.filter((_, itemIndex) => itemIndex !== index);
         if (activeItem) next.push(activeItem);
         setCategoryId(selected.categoryId); setUnitId(selected.unitId); setItemTitle(selected.title);
-        setQuantity(selected.quantity); setSpecifications(selected.specifications); setProductAttributes([]);
+        setQuantity(selected.quantity); setSpecifications(selected.specifications); setProductAttributes([]); setCategoryGuidance(null);
         return next;
       });
     } catch (reason: unknown) {
@@ -286,12 +318,12 @@ export function NewRfqForm({ operatorMode = false, draftId }: { operatorMode?: b
     <div className="rfq-form-section-title full"><b>۱</b><div><strong>اطلاعات پروژه و خریدار</strong><span>عنوانی روشن انتخاب کنید تا تأمین‌کننده سریع‌تر نیاز شما را درک کند.</span></div></div>
     <label className="form-field"><span>حساب خریدار</span><select value={organizationId} disabled={Boolean(created)} onChange={(event) => { const nextId = event.target.value; setOrganizationId(nextId); setBuyerContactUserId(organizations.find((item) => item.id === nextId)?.contacts?.[0]?.id ?? ''); }} required>{organizations.map((item) => <option value={item.id} key={item.id}>{item.displayName}{operatorMode && item.province ? ` — ${item.province}` : ''}</option>)}</select></label>
     {operatorMode && <label className="form-field"><span>فرد تماس خریدار</span><select value={buyerContactUserId} disabled={Boolean(created)} onChange={(event) => setBuyerContactUserId(event.target.value)} required><option value="">انتخاب کنید</option>{selectedOrganization?.contacts?.map((contact) => <option value={contact.id} key={contact.id}>{contact.displayName} — {contact.mobileMasked}</option>)}</select></label>}
-    <label className="form-field"><span>حوزه اصلی</span><select value={industryId} onChange={(event) => { setIndustryId(event.target.value); setCategoryId(''); setProductAttributes([]); setSpecifications({}); }} required>{industries.map((item) => <option value={item.id} key={item.id}>{item.nameFa}</option>)}</select></label>
+    <label className="form-field"><span>حوزه اصلی</span><select value={industryId} onChange={(event) => { setIndustryId(event.target.value); setCategoryId(''); setProductAttributes([]); setCategoryGuidance(null); setSpecifications({}); }} required>{industries.map((item) => <option value={item.id} key={item.id}>{item.nameFa}</option>)}</select></label>
     <label className="form-field full"><span>عنوان استعلام</span><input value={title} onChange={(event) => setTitle(event.target.value)} required minLength={3} placeholder="مثلاً تأمین سنگ نمای پروژه مسکونی" /></label>
     <label className="form-field full"><span>توضیحات تکمیلی (اختیاری)</span><textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={2000} rows={4} placeholder="شرایط پروژه، کیفیت مورد انتظار یا توضیحاتی که فروشندگان باید بدانند" /></label>
     {savedItems.length > 0 && <fieldset className="fieldset full rfq-section"><legend>ردیف‌های افزوده‌شده</legend><div className="stack">{savedItems.map((item, index) => <div className="list-card" key={`${item.categoryId}-${index}`}><div><strong>{item.title}</strong><p className="muted">{categories.find((category) => category.id === item.categoryId)?.nameFa ?? 'محصول'} · {item.quantity} {units.find((unit) => unit.id === item.unitId)?.symbolFa ?? ''}</p></div><div className="list-card-actions"><button className="button button-secondary" type="button" onClick={() => editSavedItem(index)}>ویرایش این ردیف</button><button className="button button-ghost" type="button" onClick={() => setSavedItems((current) => current.filter((_, itemIndex) => itemIndex !== index))}>حذف</button></div></div>)}</div></fieldset>}
     <fieldset className="fieldset full rfq-section"><legend><span>۲</span> ردیف محصول</legend><div className="form-columns">
-      <label className="form-field"><span>نوع سنگ</span><select value={categoryId} onChange={(event) => { setCategoryId(event.target.value); setProductAttributes([]); setSpecifications({}); }} required={savedItems.length === 0}><option value="">انتخاب کنید</option>{selectableCategories.map((item) => <option value={item.id} key={item.id}>{item.nameFa}</option>)}</select></label>
+      <label className="form-field"><span>نوع سنگ</span><select value={categoryId} onChange={(event) => { setCategoryId(event.target.value); setProductAttributes([]); setCategoryGuidance(null); setSpecifications({}); }} required={savedItems.length === 0}><option value="">انتخاب کنید</option>{selectableCategories.map((item) => <option value={item.id} key={item.id}>{item.nameFa}</option>)}</select></label>
       <label className="form-field"><span>شرح محصول</span><input value={itemTitle} onChange={(event) => setItemTitle(event.target.value)} required={savedItems.length === 0} minLength={2} placeholder="سنگ تراورتن کرم، ضخامت ۲ سانتی‌متر" /></label>
       <label className="form-field"><span>مقدار</span><input value={quantity} onChange={(event) => setQuantity(event.target.value)} required={savedItems.length === 0} inputMode="decimal" dir="ltr" /></label>
       <label className="form-field"><span>واحد</span><select value={unitId} onChange={(event) => setUnitId(event.target.value)} required={savedItems.length === 0}>{units.map((item) => <option value={item.id} key={item.id}>{item.nameFa} ({item.symbolFa})</option>)}</select></label>
@@ -301,7 +333,7 @@ export function NewRfqForm({ operatorMode = false, draftId }: { operatorMode?: b
         const label = attributeLabel(attribute);
         const value = specifications[attribute.code];
         if (attribute.dataType === 'SINGLE_SELECT') return <label className="form-field" key={attribute.id}><span>{label}{attribute.isRequired ? ' *' : ''}</span><select aria-label={label} value={typeof value === 'string' ? value : ''} required={attribute.isRequired} onChange={(event) => setSpecifications((current) => ({ ...current, [attribute.code]: event.target.value }))}><option value="">انتخاب کنید</option>{attribute.options.map((option) => <option value={option} key={option}>{option}</option>)}</select></label>;
-        if (attribute.dataType === 'MULTI_SELECT') return <fieldset className="attribute-options" key={attribute.id}><legend>{label}{attribute.isRequired ? ' *' : ''}</legend>{attribute.options.map((option) => <label className="check-field" key={option}><input type="checkbox" checked={Array.isArray(value) && value.includes(option)} onChange={(event) => toggleMultiValue(attribute.code, option, event.target.checked)} /><span>{option}</span></label>)}</fieldset>;
+        if (attribute.dataType === 'MULTI_SELECT') return <fieldset className={`attribute-options ${attribute.code === 'application' ? 'application-options' : ''}`} key={attribute.id}><legend>{label}{attribute.isRequired ? ' *' : ''}</legend>{attribute.options.map((option) => <label className="check-field" key={option}><input type="checkbox" checked={Array.isArray(value) && value.includes(option)} onChange={(event) => toggleMultiValue(attribute.code, option, event.target.checked)} /><span>{option}</span></label>)}</fieldset>;
         if (attribute.dataType === 'BOOLEAN') return <label className="check-field" key={attribute.id}><input type="checkbox" checked={value === true} onChange={(event) => setSpecifications((current) => ({ ...current, [attribute.code]: event.target.checked }))} /><span>{label}</span></label>;
         const minimum = typeof attribute.validation.min === 'number' ? attribute.validation.min : undefined;
         const maximum = typeof attribute.validation.max === 'number' ? attribute.validation.max : undefined;
@@ -309,6 +341,22 @@ export function NewRfqForm({ operatorMode = false, draftId }: { operatorMode?: b
         return <label className="form-field" key={attribute.id}><span>{label}{attribute.isRequired ? ' *' : ''}</span><input aria-label={label} type={attribute.dataType === 'NUMBER' ? 'number' : 'text'} min={minimum} max={maximum} maxLength={maxLength} value={typeof value === 'string' || typeof value === 'number' ? String(value) : ''} required={attribute.isRequired} onChange={(event) => setSpecifications((current) => ({ ...current, [attribute.code]: event.target.value }))} /></label>;
       })}
     </div></fieldset>}
+    {categoryGuidance?.profile && <aside className="stone-guidance full" aria-live="polite">
+      <div className="stone-guidance-heading"><div><strong>راهنمای تخصصی تکمیل استعلام</strong><p>محل مصرف را دقیق انتخاب کنید تا چک‌لیست فنی متناسب با پروژه نمایش داده شود.</p></div><span>پایگاه دانش سنگ وازانو</span></div>
+      {activeGuidance.selectedApplications.length === 0
+        ? <div className="message">در بخش «محل مصرف» حداقل یک گزینه دقیق مانند نمای خارجی، کف پارکینگ یا کانتر را انتخاب کنید.</div>
+        : <>
+          <div className="stone-guidance-applications">{activeGuidance.selectedApplications.map((application) => <span key={application.code}>{application.labelFa}</span>)}</div>
+          {activeGuidance.sensitive && <div className="message message-warning"><strong>کاربرد حساس:</strong> انتخاب نهایی فقط پس از بررسی نمونه، مدارک فنی همان پارت و تأیید روش اجرا انجام شود.</div>}
+          {missingRequiredAttributes.length > 0 && <div className="message message-warning"><strong>برای کامل‌شدن ردیف:</strong> {missingRequiredAttributes.join('، ')} را وارد کنید.</div>}
+          <div className="stone-guidance-grid">
+            <section><h3>مدارک و کنترل‌های لازم</h3><ul>{activeGuidance.requiredChecks.map((item) => <li key={item}>{item}</li>)}</ul></section>
+            <section><h3>معیار مقایسه پیشنهادها</h3><ul>{activeGuidance.comparisonCriteria.map((item) => <li key={item}>{item}</li>)}</ul></section>
+            <section><h3>خانواده‌های مناسب برای شروع جست‌وجو</h3><ul>{activeGuidance.suggestedFamilies.map((item) => <li key={item}>{item}</li>)}</ul></section>
+          </div>
+          <p className="stone-guidance-disclaimer">{categoryGuidance.disclaimerFa}</p>
+        </>}
+    </aside>}
     <div className="rfq-form-section-title full"><b>۴</b><div><strong>زمان و محل تحویل</strong><span>مقصد و مهلت واقعی پروژه به پیشنهاد دقیق‌تر کمک می‌کند.</span></div></div>
     <label className="form-field"><span>زمان موردنیاز (اختیاری)</span><input type="datetime-local" value={requiredAt} onChange={(event) => setRequiredAt(event.target.value)} /></label>
     <label className="form-field"><span>مهلت دریافت پیشنهاد (اختیاری)</span><input type="datetime-local" value={responseDeadline} onChange={(event) => setResponseDeadline(event.target.value)} /></label>
@@ -342,4 +390,13 @@ function toLocalDateTime(value: string | null): string {
   const date = new Date(value);
   const offsetMs = date.getTimezoneOffset() * 60_000;
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function unique(items: string[]): string[] {
+  return [...new Set(items)];
+}
+
+function specificationMissing(value: SpecificationValue | undefined): boolean {
+  if (value === null || value === undefined || value === '') return true;
+  return Array.isArray(value) && value.length === 0;
 }

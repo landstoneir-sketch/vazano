@@ -24,4 +24,9 @@ export class CatalogController {
   listCategoryAttributes(@Param('categoryId') categoryId: string) {
     return this.catalog.listCategoryAttributes(categoryId);
   }
+
+  @Get('categories/:categoryId/guidance')
+  getCategoryGuidance(@Param('categoryId') categoryId: string) {
+    return this.catalog.getCategoryGuidance(categoryId);
+  }
 }
