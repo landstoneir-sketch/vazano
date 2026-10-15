@@ -58,6 +58,7 @@ export function AccountNavigation() {
       {managementLinks.length > 0 && <details className="nav-management">
         <summary>مدیریت</summary>
         <span className="nav-management-panel" aria-label="بخش‌های مدیریتی">
+          {account.globalRoles.some((role) => ['SUPER_ADMIN', 'ADMIN', 'SUPPORT', 'FINANCE', 'CONTENT_MANAGER'].includes(role)) && <Link href={'/admin' as Route}>مرکز مدیریت</Link>}
           {managementLinks.map((item) => <Link aria-label={item.label} href={item.href} key={item.href}>{item.label}</Link>)}
         </span>
       </details>}
