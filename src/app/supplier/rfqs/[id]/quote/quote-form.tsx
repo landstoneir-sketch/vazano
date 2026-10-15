@@ -6,8 +6,15 @@ import { apiRequest } from '../../../../../lib/api';
 import { formatProductSpecifications, type ProductAttributeBinding, type ProductSpecifications } from '../../../../../lib/product-specifications';
 
 type Organization = { id: string; displayName: string; kind: string; status: string };
-type RfqItem = { id: string; title: string; quantity: string; specifications: ProductSpecifications; category: { nameFa: string; attributeBindings: ProductAttributeBinding[] }; unit: { symbolFa: string } };
+type RfqItem = { id: string; title: string; quantity: string; specifications: ProductSpecifications; category: { id: string; nameFa: string; attributeBindings: ProductAttributeBinding[] }; unit: { symbolFa: string } };
 type Rfq = { id: string; code: string; title: string; description: string | null; deliveryProvince: string | null; deliveryCity: string | null; requiredAt: string | null; responseDeadline: string | null; installationRequired: boolean; items: RfqItem[] };
+type GuidanceProfile = { requiredChecks: string[]; comparisonCriteria: string[]; suggestedFamilies: string[] };
+type CategoryGuidance = {
+  profile: string | null;
+  disclaimerFa?: string | null;
+  applications: Array<{ code: string; labelFa: string; profileKey: string; sensitive: boolean }>;
+  profiles: Record<string, GuidanceProfile>;
+};
 type QuotationItem = { rfqItemId: string; quantity: string; unitPriceRial: string; discountRial: string; isAlternative: boolean; offeredDescription: string | null };
 type CreatedQuotation = { id: string; code: string; status: string; finalAmountRial: string; updatedAt: string };
 type SupplierQuotation = CreatedQuotation & {
@@ -60,6 +67,7 @@ export function QuoteForm({ rfqId, initialOrganizationId }: { rfqId: string; ini
   const [draftDirty, setDraftDirty] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [guidanceByCategoryId, setGuidanceByCategoryId] = useState<Record<string, CategoryGuidance>>({});
 
   useEffect(() => {
     let active = true;
@@ -75,6 +83,16 @@ export function QuoteForm({ rfqId, initialOrganizationId }: { rfqId: string; ini
       .catch((reason: unknown) => { if (active) setMessage(reason instanceof Error ? reason.message : 'دریافت اطلاعات انجام نشد.'); });
     return () => { active = false; };
   }, [rfqId]);
+
+  useEffect(() => {
+    if (!rfq) return;
+    let active = true;
+    const categoryIds = [...new Set(rfq.items.map((item) => item.category.id))];
+    void Promise.all(categoryIds.map(async (categoryId) => [categoryId, await apiRequest<CategoryGuidance>(`/catalog/categories/${categoryId}/guidance`)] as const))
+      .then((entries) => { if (active) setGuidanceByCategoryId(Object.fromEntries(entries)); })
+      .catch(() => { if (active) setGuidanceByCategoryId({}); });
+    return () => { active = false; };
+  }, [rfq]);
 
   useEffect(() => {
     if (!organizationId || !rfq) return;
@@ -212,7 +230,27 @@ export function QuoteForm({ rfqId, initialOrganizationId }: { rfqId: string; ini
     <fieldset className="fieldset full rfq-section quote-items"><legend><span>۲</span> اقلام پیشنهادی — تومان، بدون مالیات</legend>{rfq.items.map((item) => {
       const details = formatProductSpecifications(item.specifications, item.category.attributeBindings);
       const included = includedItems[item.id] ?? false;
-      return <div className="quote-line" key={item.id}><div><label className="check-field"><input type="checkbox" checked={included} onChange={(event) => setIncludedItems((current) => ({ ...current, [item.id]: event.target.checked }))} /><span><strong>{item.category.nameFa}</strong> — ارائه پیشنهاد برای این ردیف</span></label><span>{item.title} · درخواست: {item.quantity} {item.unit.symbolFa}</span>{details.length > 0 && <div className="specification-summary">{details.map((detail) => <span key={detail.code}>{detail.label}: {detail.value}</span>)}</div>}</div>{included && <div className="form-columns"><label className="form-field"><span>مقدار قابل تأمین</span><input type="number" min="0.0001" max={item.quantity} step="0.0001" value={quantities[item.id] ?? item.quantity} onChange={(event) => setQuantities((current) => ({ ...current, [item.id]: event.target.value }))} required /></label><label className="form-field"><span>قیمت هر واحد (تومان)</span><input inputMode="numeric" pattern="\d+" value={prices[item.id] ?? ''} onChange={(event) => setPrices((current) => ({ ...current, [item.id]: event.target.value }))} required /></label><label className="form-field"><span>تخفیف این ردیف (تومان)</span><input inputMode="numeric" pattern="\d+" value={lineDiscounts[item.id] ?? '0'} onChange={(event) => setLineDiscounts((current) => ({ ...current, [item.id]: event.target.value }))} /></label><label className="check-field"><input type="checkbox" checked={alternatives[item.id] ?? false} onChange={(event) => setAlternatives((current) => ({ ...current, [item.id]: event.target.checked }))} /><span>محصول جایگزین پیشنهاد می‌شود</span></label><label className="form-field full"><span>شرح محصول پیشنهادی (اختیاری)</span><input value={offeredDescriptions[item.id] ?? ''} maxLength={500} onChange={(event) => setOfferedDescriptions((current) => ({ ...current, [item.id]: event.target.value }))} /></label></div>}</div>;
+      const guidance = resolveItemGuidance(item.specifications.application, guidanceByCategoryId[item.category.id]);
+      return <div className="quote-line" key={item.id}>
+        <div>
+          <label className="check-field"><input type="checkbox" checked={included} onChange={(event) => setIncludedItems((current) => ({ ...current, [item.id]: event.target.checked }))} /><span><strong>{item.category.nameFa}</strong> — ارائه پیشنهاد برای این ردیف</span></label>
+          <span>{item.title} · درخواست: {item.quantity} {item.unit.symbolFa}</span>
+          {details.length > 0 && <div className="specification-summary">{details.map((detail) => <span key={detail.code}>{detail.label}: {detail.value}</span>)}</div>}
+          {guidance && <details className="supplier-knowledge-guide">
+            <summary>راهنمای مدارک فنی این کاربرد{guidance.sensitive ? ' — کاربرد حساس' : ''}</summary>
+            <p>در شرح پیشنهاد یا پیوست‌ها، وضعیت این موارد را شفاف اعلام کنید:</p>
+            <ul>{guidance.requiredChecks.map((check) => <li key={check}>{check}</li>)}</ul>
+            <p className="muted">اگر محصول جایگزین پیشنهاد می‌کنید، تفاوت مشخصات، فرآوری، پارت، زمان تحویل و مبنای قیمت را صریح بنویسید. این راهنما جایگزین آزمون یا تأیید مهندسی پروژه نیست.</p>
+          </details>}
+        </div>
+        {included && <div className="form-columns">
+          <label className="form-field"><span>مقدار قابل تأمین</span><input type="number" min="0.0001" max={item.quantity} step="0.0001" value={quantities[item.id] ?? item.quantity} onChange={(event) => setQuantities((current) => ({ ...current, [item.id]: event.target.value }))} required /></label>
+          <label className="form-field"><span>قیمت هر واحد (تومان)</span><input inputMode="numeric" pattern="\d+" value={prices[item.id] ?? ''} onChange={(event) => setPrices((current) => ({ ...current, [item.id]: event.target.value }))} required /></label>
+          <label className="form-field"><span>تخفیف این ردیف (تومان)</span><input inputMode="numeric" pattern="\d+" value={lineDiscounts[item.id] ?? '0'} onChange={(event) => setLineDiscounts((current) => ({ ...current, [item.id]: event.target.value }))} /></label>
+          <label className="check-field"><input type="checkbox" checked={alternatives[item.id] ?? false} onChange={(event) => setAlternatives((current) => ({ ...current, [item.id]: event.target.checked }))} /><span>محصول جایگزین پیشنهاد می‌شود</span></label>
+          <label className="form-field full"><span>شرح محصول پیشنهادی (اختیاری)</span><input value={offeredDescriptions[item.id] ?? ''} maxLength={500} onChange={(event) => setOfferedDescriptions((current) => ({ ...current, [item.id]: event.target.value }))} /></label>
+        </div>}
+      </div>;
     })}</fieldset>
     <div className="rfq-form-section-title full"><b>۳</b><div><strong>هزینه‌های نهایی و شفاف</strong><span>هر هزینه را جداگانه وارد کنید تا خریدار بتواند پیشنهادها را درست مقایسه کند.</span></div></div>
     <label className="form-field"><span>تخفیف کل (تومان)</span><input inputMode="numeric" pattern="\d+" value={discountToman} onChange={(event) => setDiscountToman(event.target.value)} /></label>
@@ -236,4 +274,13 @@ function attachmentStatusLabel(status: string): string {
   if (status === 'QUARANTINED') return 'قرنطینه‌شده';
   if (status === 'REJECTED') return 'ردشده';
   return 'در انتظار بررسی امنیتی';
+}
+
+function resolveItemGuidance(applicationValue: ProductSpecifications[string], guidance: CategoryGuidance | undefined) {
+  if (!guidance) return null;
+  const labels = Array.isArray(applicationValue) ? applicationValue.filter((item): item is string => typeof item === 'string') : [];
+  const applications = guidance.applications.filter((application) => labels.includes(application.labelFa));
+  const requiredChecks = [...new Set(applications.flatMap((application) => guidance.profiles[application.profileKey]?.requiredChecks ?? []))];
+  if (requiredChecks.length === 0) return null;
+  return { requiredChecks, sensitive: applications.some((application) => application.sensitive) };
 }
