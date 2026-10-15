@@ -21,6 +21,11 @@ export class AdminConfigController {
     return this.config.releaseReadiness(user);
   }
 
+  @Get('delivery-progress')
+  deliveryProgress(@CurrentUser() user: AuthenticatedUser) {
+    return this.config.deliveryProgress(user);
+  }
+
   @Put('settings/:settingId')
   updateSetting(@CurrentUser() user: AuthenticatedUser, @Param('settingId') settingId: string, @Body() input: UpdateSystemSettingDto) {
     return this.config.updateSetting(user, settingId, input);

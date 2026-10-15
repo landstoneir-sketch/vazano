@@ -139,7 +139,7 @@ export function NewRfqForm({ operatorMode = false, draftId }: { operatorMode?: b
   const selectableCategories = useMemo(() => categories.filter((item) => item.industryId === industryId && item.parentId), [categories, industryId]);
 
   useEffect(() => {
-    if (!categoryId) { setCategoryGuidance(null); return; }
+    if (!categoryId) return;
     let active = true;
     void Promise.all([
       apiRequest<ProductAttribute[]>(`/catalog/categories/${categoryId}/attributes`),

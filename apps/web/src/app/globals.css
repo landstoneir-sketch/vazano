@@ -409,6 +409,16 @@ button, input, select, textarea { font: inherit; }
 .readiness-score-heading strong { color: var(--primary); font-size: clamp(2.25rem,7vw,4.5rem); line-height: 1; }
 .readiness-progress-track { height: 14px; overflow: hidden; border-radius: 999px; background: #e9e1d3; }
 .readiness-progress-track span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,var(--primary),var(--accent)); transition: width .25s ease; }
+.delivery-progress-card { display: grid; gap: 18px; }
+.delivery-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
+.delivery-metrics > div { display: grid; gap: 6px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: #fffdf9; }
+.delivery-metrics span { color: var(--muted); font-size: .85rem; }
+.delivery-metrics strong { font-size: 1.15rem; }
+.delivery-table th, .delivery-table td { white-space: nowrap; }
+.delivery-ahead { color: #276749; font-weight: 800; }
+.delivery-behind { color: #b42318; font-weight: 800; }
+.delivery-estimates { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.delivery-estimates p { margin: 0; padding: 14px; border-radius: 12px; background: #f7f3eb; }
 .admin-module-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 16px; }
 .admin-module-card { min-height: 160px; display: grid; align-content: space-between; color: inherit; text-decoration: none; transition: transform .15s ease,box-shadow .15s ease,border-color .15s ease; }
 .admin-module-card:hover { transform: translateY(-2px); border-color: var(--primary); box-shadow: 0 14px 36px rgba(59,45,23,.1); }
@@ -432,6 +442,8 @@ button, input, select, textarea { font: inherit; }
 @media (max-width: 760px) { .auth-shell { padding: 28px 16px; } .auth-layout { grid-template-columns: 1fr; } .auth-intro { padding: 30px 24px; } .auth-intro h1 { font-size: 1.75rem; } .auth-card { padding: 30px 24px; } }
 @media (max-width: 760px) { .nav-management-panel { grid-template-columns: repeat(2,minmax(0,1fr)); max-height: calc(100vh - 145px); overflow-y: auto; } }
 @media (max-width: 760px) { .dashboard-page-heading, .rfq-detail-heading, .comparison-heading { align-items: stretch; flex-direction: column; gap: 16px; } .dashboard-page-heading aside { max-width: none; } .rfq-completion-guide, .rfq-progress { grid-template-columns: repeat(5,max-content); justify-content: start; overflow-x: auto; scrollbar-width: none; } .rfq-completion-guide::-webkit-scrollbar, .rfq-progress::-webkit-scrollbar { display: none; } .rfq-completion-guide li, .rfq-progress li { min-width: 136px; padding: 0 12px; } .rfq-form { padding: 20px 16px; } .rfq-section { padding: 14px 12px; } .rfq-submit { width: 100%; min-width: 0; justify-self: stretch; } .rfq-fact-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .comparison-heading .count-badge { align-self: flex-start; } .quote-key-facts { grid-template-columns: 1fr; } .quote-key-facts > div { min-height: 0; } }
+@media (max-width: 760px) { .delivery-metrics, .delivery-estimates { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 480px) { .delivery-metrics, .delivery-estimates { grid-template-columns: 1fr; } }
 @media (max-width: 760px) { .quote-completion-guide { grid-template-columns: repeat(4,max-content); } .quote-form, .supplier-profile-form { padding: 20px 16px; } .quote-actions, .supplier-profile-heading { align-items: stretch; flex-direction: column; } .quote-actions .button, .supplier-profile-submit { width: 100%; min-width: 0; justify-self: stretch; } .supplier-completion ul { grid-template-columns: 1fr; } .supplier-performance-card > .dashboard-grid { padding: 10px; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *,*::before,*::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; } }
 @media print { body { background: white; } .site-header, .receipt-actions { display: none !important; } .receipt-page { width: 100%; max-width: none; padding: 0; } .receipt-sheet { border: 0; padding: 0; } }

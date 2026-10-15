@@ -10,6 +10,7 @@ import { assertValidSubscriptionPolicySetting } from '../subscriptions/subscript
 import { assertValidProposalFeePolicy, assertValidShortageOverrideSetting } from '../quotations/quotation-policies';
 import { assertValidRfqPolicySetting, resolveRfqPolicySettings } from '../rfqs/rfq-policy-settings.service';
 import { FileSafetyService } from '../attachments/file-safety.service';
+import { getMvpDeliveryPlan } from './mvp-delivery-plan';
 
 @Injectable()
 export class AdminConfigService {
@@ -18,6 +19,11 @@ export class AdminConfigService {
     private readonly environment: ConfigService,
     private readonly fileSafety: FileSafetyService,
   ) {}
+
+  deliveryProgress(user: AuthenticatedUser) {
+    this.requireAnyPermission(user, ['settings.read', 'settings.manage']);
+    return getMvpDeliveryPlan();
+  }
 
   async releaseReadiness(user: AuthenticatedUser) {
     this.requireAnyPermission(user, ['settings.read', 'settings.manage']);
