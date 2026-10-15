@@ -1,5 +1,28 @@
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { RfqsService } from './rfqs.service';
+
+describe('RfqsService tenant isolation', () => {
+  const privateRfq = {
+    id: 'rfq-private', buyerOrganizationId: 'buyer-a', invitations: [], items: [], _count: { quotations: 0 },
+  };
+
+  it('does not disclose an RFQ owned by another organization', async () => {
+    const prisma = { rfq: { findUnique: jest.fn().mockResolvedValue(privateRfq) } };
+    const service = new RfqsService(prisma as never, {} as never, {} as never, {} as never);
+    const foreignBuyer = { memberships: [{ organizationId: 'buyer-b', role: 'BUYER_OWNER' }], permissions: [] };
+
+    await expect(service.getOne(foreignBuyer as never, privateRfq.id)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('allows an explicitly invited supplier to read the RFQ', async () => {
+    const invitedRfq = { ...privateRfq, invitations: [{ supplierOrganizationId: 'supplier-a', status: 'INVITED' }] };
+    const prisma = { rfq: { findUnique: jest.fn().mockResolvedValue(invitedRfq) } };
+    const service = new RfqsService(prisma as never, {} as never, {} as never, {} as never);
+    const supplier = { memberships: [{ organizationId: 'supplier-a', role: 'SUPPLIER_SALES' }], permissions: [] };
+
+    await expect(service.getOne(supplier as never, privateRfq.id)).resolves.toEqual(invitedRfq);
+  });
+});
 
 describe('RfqsService commitment payment callbacks', () => {
   it('does not verify a buyer commitment that is already terminal', async () => {

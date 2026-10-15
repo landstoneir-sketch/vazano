@@ -325,7 +325,7 @@ export class RfqsService implements OnApplicationBootstrap, OnApplicationShutdow
       .filter((membership) => ['SUPPLIER_OWNER', 'SUPPLIER_MANAGER', 'SUPPLIER_SALES'].includes(membership.role))
       .map((membership) => membership.organizationId);
     const supplierAccess = rfq.invitations.some((invitation) => supplierOrganizationIds.includes(invitation.supplierOrganizationId));
-    if (!buyerAccess && !supplierAccess && !user.permissions.includes('rfq.manage')) throw new ForbiddenException('دسترسی به این استعلام مجاز نیست.');
+    if (!buyerAccess && !supplierAccess && !user.permissions.includes('rfq.manage')) throw new NotFoundException('استعلام پیدا نشد.');
     return rfq;
   }
 
@@ -890,7 +890,7 @@ export class RfqsService implements OnApplicationBootstrap, OnApplicationShutdow
     if (!rfq) throw new NotFoundException('استعلام پیدا نشد.');
     const isMember = user.memberships.some((membership) => membership.organizationId === rfq.buyerOrganizationId);
     const isOperator = user.permissions.includes('rfq.create_on_behalf') || user.permissions.includes('rfq.manage');
-    if (!isMember && !isOperator) throw new ForbiddenException('دسترسی به این استعلام مجاز نیست.');
+    if (!isMember && !isOperator) throw new NotFoundException('استعلام پیدا نشد.');
     return rfq;
   }
 
