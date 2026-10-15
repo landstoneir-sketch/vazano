@@ -4,7 +4,7 @@ describe('MVP delivery plan', () => {
   it('keeps milestone weights complete and reports the current comparison', () => {
     const result = getMvpDeliveryPlan();
     expect(result.phases.reduce((total, phase) => total + phase.weight, 0)).toBe(100);
-    expect(result).toMatchObject({ actualPercent: 88, plannedPercent: 87, previousPercent: 87, changeFromPrevious: 1, varianceFromPlan: 1 });
+    expect(result).toMatchObject({ actualPercent: 90, plannedPercent: 89, previousPercent: 89, changeFromPrevious: 1, varianceFromPlan: 1 });
   });
 
   it('publishes bounded working-day estimates for owner reporting', () => {
