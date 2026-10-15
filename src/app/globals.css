@@ -403,6 +403,12 @@ button, input, select, textarea { font: inherit; }
 .catalog-binding-card .form-field { margin: 2px 0; }
 .billing-summary-card { display: flex; align-items: center; justify-content: space-between; box-shadow: none; }
 .billing-summary-card strong { color: var(--primary); font-size: 1.8rem; }
+.readiness-score { display: grid; gap: 16px; background: linear-gradient(135deg,#fffdf9,#f6efe2); }
+.readiness-score-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.readiness-score-heading h2 { margin: 4px 0 0; }
+.readiness-score-heading strong { color: var(--primary); font-size: clamp(2.25rem,7vw,4.5rem); line-height: 1; }
+.readiness-progress-track { height: 14px; overflow: hidden; border-radius: 999px; background: #e9e1d3; }
+.readiness-progress-track span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,var(--primary),var(--accent)); transition: width .25s ease; }
 .subscription-status { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .receipt-page { max-width: 860px; }
 .receipt-actions { display: flex; justify-content: flex-end; }
