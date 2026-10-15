@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="fa" dir="rtl" className={vazirmatn.variable}>
+    <html lang="fa" dir="rtl" className={vazirmatn.variable} data-scroll-behavior="smooth">
       <body>
         <a className="skip-link" href="#main-content">پرش به محتوای اصلی</a>
         <header className="site-header">

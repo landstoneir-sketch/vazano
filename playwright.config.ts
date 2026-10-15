@@ -62,6 +62,7 @@ export default defineConfig({
       env: {
         NEXT_PUBLIC_API_BASE_URL: 'http://localhost:3101/v1',
         API_INTERNAL_URL: 'http://localhost:3101/v1',
+        NEXT_DIST_DIR: '.next-e2e',
       },
     },
   ],

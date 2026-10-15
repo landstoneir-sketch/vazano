@@ -171,7 +171,7 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
 
   await page.goto(`/supplier/profile/${SUPPLIER_ORGANIZATION_ID}`);
   await expect(page.getByRole('heading', { name: 'توانمندی و محدوده تأمین' })).toBeVisible();
-  await expect(page.getByText('وضعیت تأیید: VERIFIED')).toBeVisible();
+  await expect(page.getByText('تأیید شده', { exact: true })).toBeVisible();
   await page.getByLabel('ظرفیت تولید و تأمین').fill('ظرفیت تأمین ماهانه تا ۵۰۰۰ متر مربع با امکان فرآوری سفارشی');
   await page.getByLabel('حداقل سفارش').fill('حداقل ۱۰۰ متر مربع');
   await page.getByLabel('زمان معمول آماده‌سازی').fill('۱۰ تا ۱۵ روز کاری');
@@ -248,6 +248,7 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   await expect(page.getByLabel('نوع فرآوری')).toBeVisible();
   await page.getByLabel('نوع فرآوری').selectOption({ index: 1 });
   await page.getByLabel('ضخامت (میلی‌متر)').fill('20');
+  await page.getByLabel('نمای خارجی', { exact: true }).check();
   await page.getByLabel('شرح محصول').fill('سنگ تراورتن کرم، ضخامت ۲ سانتی‌متر');
   await page.getByLabel('مقدار').fill('120');
   await page.getByLabel('استان تحویل').selectOption({ label: 'تهران' });
@@ -255,7 +256,7 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   await page.getByLabel('شهر تحویل').selectOption({ index: 1 });
   await page.getByLabel(/کنترل کیفیت توسط وازانو/).check();
   await page.getByRole('button', { name: 'ذخیره پیش‌نویس استعلام' }).click();
-  await expect(page.getByText('پیش‌نویس ثبت شد.')).toBeVisible();
+  await expect(page.getByText('پیش‌نویس ذخیره شده است.')).toBeVisible();
   await page.getByRole('button', { name: 'ارسال برای بررسی وازانو' }).click();
   await expect(page.getByText('استعلام در صف بررسی است.')).toBeVisible();
 
@@ -344,7 +345,7 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   page.once('dialog', (dialog) => dialog.accept());
   await page.locator('article').filter({ hasText: 'سنگ نمونه وازانو' }).getByRole('button', { name: 'انتخاب فروشنده' }).click();
   await expect(page.getByText('فروشنده منتخب ثبت شد.')).toBeVisible();
-  await expect(page.getByText('فروشنده منتخب', { exact: true })).toBeVisible();
+  await expect(page.locator('article').filter({ hasText: 'سنگ نمونه وازانو' }).locator('.status-badge', { hasText: 'فروشنده منتخب' })).toBeVisible();
   const rejectedQuotation = await prisma.quotation.findUniqueOrThrow({ where: { id: secondaryQuotation.id } });
   expect(rejectedQuotation.status).toBe('REJECTED');
   const secondaryWalletAfterSelection = await prisma.creditWallet.findUniqueOrThrow({ where: { id: secondaryWallet.id } });
