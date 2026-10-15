@@ -1,17 +1,40 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { SupplierVerificationStatus } from '@prisma/client';
+import { Prisma, SupplierVerificationStatus } from '@prisma/client';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { PrismaService } from '../../shared/prisma/prisma.service';
 import { UpsertSupplierProfileDto } from './upsert-supplier-profile.dto';
 import { VerifySupplierDto } from './verify-supplier.dto';
+import type { PublicSupplierSearchDto } from './public-supplier-search.dto';
 
 @Injectable()
 export class SuppliersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listPublicProfiles() {
+  async listPublicProfiles(search: PublicSupplierSearchDto = {}) {
+    const query = search.q?.trim();
+    const province = search.province?.trim();
+    const supplierProfileWhere: Prisma.SupplierProfileWhereInput = {
+      verificationStatus: 'VERIFIED',
+      ...(search.category ? { categories: { some: { category: { slug: search.category, isActive: true } } } } : {}),
+    };
+    const where: Prisma.OrganizationWhereInput = {
+      kind: 'SUPPLIER',
+      status: 'ACTIVE',
+      supplierProfile: { is: supplierProfileWhere },
+      ...(province ? { OR: [{ province: { contains: province, mode: 'insensitive' } }, { city: { contains: province, mode: 'insensitive' } }] } : {}),
+      ...(query ? {
+        AND: [{
+          OR: [
+            { displayName: { contains: query, mode: 'insensitive' } },
+            { province: { contains: query, mode: 'insensitive' } },
+            { city: { contains: query, mode: 'insensitive' } },
+            { supplierProfile: { is: { categories: { some: { category: { nameFa: { contains: query, mode: 'insensitive' }, isActive: true } } } } } },
+          ],
+        }],
+      } : {}),
+    };
     const organizations = await this.prisma.organization.findMany({
-      where: { kind: 'SUPPLIER', status: 'ACTIVE', supplierProfile: { verificationStatus: 'VERIFIED' } },
+      where,
       select: {
         id: true, displayName: true, province: true, city: true,
         supplierProfile: { select: { description: true, productionCapacityDescription: true, minimumOrderDescription: true, leadTimeDescription: true, officialInvoiceAvailable: true, sampleAvailable: true, installationAvailable: true, nationwideCoverage: true, categories: { select: { category: { select: { id: true, nameFa: true, slug: true } } } } } },

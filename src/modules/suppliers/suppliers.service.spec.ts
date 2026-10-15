@@ -1,9 +1,11 @@
 import { BadRequestException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { validate } from 'class-validator';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { PrismaService } from '../../shared/prisma/prisma.service';
 import { SuppliersService } from './suppliers.service';
 import { UpsertSupplierProfileDto } from './upsert-supplier-profile.dto';
+import { PublicSupplierSearchDto } from './public-supplier-search.dto';
 
 describe('UpsertSupplierProfileDto', () => {
   it('rejects an overlong capacity description and non-boolean capability flag', async () => {
@@ -47,18 +49,31 @@ describe('SuppliersService public directory', () => {
       id: 'supplier-organization-1', displayName: 'سنگ نمونه', province: 'اصفهان', city: 'اصفهان',
       supplierProfile: { description: 'تولیدکننده سنگ ساختمانی', productionCapacityDescription: 'ظرفیت پروژه‌ای', minimumOrderDescription: null, leadTimeDescription: '۱۰ روز کاری', officialInvoiceAvailable: true, sampleAvailable: true, installationAvailable: false, nationwideCoverage: true, categories: [] },
     };
-    const organizationFindMany = jest.fn().mockResolvedValue([organization]);
+    const organizationFindMany = jest.fn<Promise<Array<typeof organization>>, [Prisma.OrganizationFindManyArgs]>().mockResolvedValue([organization]);
     const prisma = {
       organization: { findMany: organizationFindMany },
       supplierReview: { groupBy: jest.fn().mockResolvedValue([{ supplierOrganizationId: organization.id, _count: { _all: 2 }, _avg: { rating: 4.5 } }]) },
     } as unknown as PrismaService;
     const service = new SuppliersService(prisma);
 
-    await expect(service.listPublicProfiles()).resolves.toEqual([{
+    await expect(service.listPublicProfiles({ q: 'تراورتن', province: 'اصفهان', category: 'travertine' })).resolves.toEqual([{
       ...organization, reviewSummary: { count: 2, averageRating: 4.5 },
     }]);
-    expect(organizationFindMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { kind: 'SUPPLIER', status: 'ACTIVE', supplierProfile: { verificationStatus: 'VERIFIED' } },
-    }));
+    const searchWhere = organizationFindMany.mock.calls[0]?.[0]?.where;
+    expect(searchWhere).toMatchObject({
+      kind: 'SUPPLIER',
+      status: 'ACTIVE',
+      supplierProfile: { is: { verificationStatus: 'VERIFIED' } },
+    });
+    expect(Array.isArray(searchWhere?.AND)).toBe(true);
+    expect(Array.isArray(searchWhere?.OR)).toBe(true);
+  });
+
+  it('validates public search input before it reaches the database', async () => {
+    const input = Object.assign(new PublicSupplierSearchDto(), { q: 'ت', category: '../all', province: 'الف'.repeat(81) });
+
+    const errors = await validate(input);
+
+    expect(errors.map((error) => error.property)).toEqual(expect.arrayContaining(['q', 'category', 'province']));
   });
 });
