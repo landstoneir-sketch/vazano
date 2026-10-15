@@ -15,7 +15,7 @@ const phases: Omit<DeliveryPhase, 'variance' | 'status'>[] = [
   { key: 'platform-foundation', title: 'زیرساخت و پایه فنی', weight: 12, plannedPercent: 100, actualPercent: 100 },
   { key: 'identity-access', title: 'ورود، کاربران، سازمان و دسترسی', weight: 15, plannedPercent: 100, actualPercent: 100 },
   { key: 'marketplace-core', title: 'کاتالوگ و چرخه استعلام', weight: 25, plannedPercent: 90, actualPercent: 92 },
-  { key: 'quotations-collaboration', title: 'پیشنهاد، مقایسه، پیام و اعلان', weight: 15, plannedPercent: 85, actualPercent: 84 },
+  { key: 'quotations-collaboration', title: 'پیشنهاد، مقایسه، پیام و اعلان', weight: 15, plannedPercent: 90, actualPercent: 90 },
   { key: 'commercial-foundation', title: 'فروشنده، اشتراک و پرداخت', weight: 10, plannedPercent: 70, actualPercent: 68 },
   { key: 'admin-operations', title: 'مدیریت، محتوا و گزارش', weight: 5, plannedPercent: 80, actualPercent: 82 },
   { key: 'quality-release', title: 'امنیت، آزمون و آماده‌سازی انتشار', weight: 10, plannedPercent: 80, actualPercent: 85 },
@@ -35,15 +35,15 @@ export function getMvpDeliveryPlan() {
 
   return {
     snapshotDate: '2026-10-15',
-    previousPercent: 89,
+    previousPercent: 90,
     actualPercent,
     plannedPercent,
-    changeFromPrevious: actualPercent - 89,
+    changeFromPrevious: actualPercent - 90,
     varianceFromPlan: actualPercent - plannedPercent,
     scheduleStatus: actualPercent >= plannedPercent ? 'ON_TRACK' as const : 'AT_RISK' as const,
     estimates: {
-      pilot: { minWorkingDays: 1, maxWorkingDays: 3 },
-      release: { minWorkingDays: 5, maxWorkingDays: 10 },
+      pilot: { minWorkingDays: 1, maxWorkingDays: 2 },
+      release: { minWorkingDays: 4, maxWorkingDays: 8 },
     },
     phases: deliveryPhases,
   };
