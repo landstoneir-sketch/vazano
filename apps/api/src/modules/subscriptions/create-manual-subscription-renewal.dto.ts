@@ -1,4 +1,4 @@
-import { IsISO8601, IsString, Length, Matches } from 'class-validator';
+import { IsISO8601, IsOptional, IsString, Length, Matches } from 'class-validator';
 
 export class CreateManualSubscriptionRenewalDto {
   @IsString()
@@ -24,4 +24,9 @@ export class CreateManualSubscriptionRenewalDto {
   @IsString()
   @Length(10, 1_000)
   note!: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(10, 40)
+  sourceTicketId?: string;
 }

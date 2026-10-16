@@ -128,6 +128,8 @@ describe('AdminBillingService manual subscription renewal', () => {
     let creditInput: { data: { reasonCode?: string | null } } | undefined;
     let auditInput: { data: { action: string } } | undefined;
     let outboxInput: { data: { eventType: string } } | undefined;
+    let ticketUpdateInput: { where: { id: string }; data: { status: string } } | undefined;
+    const sourceTicket = { id: 'ticket-0001', category: 'BILLING', organizationId: organization.id, status: 'SUBMITTED' };
     const tx = {
       subscription: { findFirst: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue(subscription) },
       manualSubscriptionRenewal: { create: jest.fn((input: { data: { activatedByUserId: string; trackingNumber: string; amountRial: bigint } }) => { renewalInput = input; return Promise.resolve(manualRenewal); }) },
@@ -135,6 +137,7 @@ describe('AdminBillingService manual subscription renewal', () => {
       creditWallet: { upsert: jest.fn().mockResolvedValue({ id: 'wallet-1' }) },
       creditLedgerEntry: { create: jest.fn((input: { data: { reasonCode?: string | null } }) => { creditInput = input; return Promise.resolve({}); }) },
       subscriptionReminder: { updateMany: jest.fn().mockResolvedValue({ count: 0 }), createMany: jest.fn().mockResolvedValue({ count: 10 }) },
+      supportTicket: { updateMany: jest.fn((input: { where: { id: string }; data: { status: string } }) => { ticketUpdateInput = input; return Promise.resolve({ count: 1 }); }) },
       auditLog: { create: jest.fn((input: { data: { action: string } }) => { auditInput = input; return Promise.resolve({}); }) },
       outboxEvent: { create: jest.fn((input: { data: { eventType: string } }) => { outboxInput = input; return Promise.resolve({}); }) },
     };
@@ -142,6 +145,7 @@ describe('AdminBillingService manual subscription renewal', () => {
       manualSubscriptionRenewal: { findUnique: jest.fn().mockResolvedValue(null) },
       organization: { findUnique: jest.fn().mockResolvedValue(organization) },
       subscriptionPlan: { findUnique: jest.fn().mockResolvedValue(plan) },
+      supportTicket: { findUnique: jest.fn().mockResolvedValue(sourceTicket) },
       $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
     };
     const service = new AdminBillingService(prisma as never, {} as never, {} as never, policySettings as never);
@@ -153,6 +157,7 @@ describe('AdminBillingService manual subscription renewal', () => {
       trackingNumber: ' bank-123 ',
       paidAt: new Date(Date.now() - 60_000).toISOString(),
       note: 'واریز بانکی پس از بررسی سند پرداخت ثبت شد.',
+      sourceTicketId: sourceTicket.id,
     })).resolves.toEqual({ manualRenewal, subscription });
 
     expect(renewalInput?.data).toMatchObject({
@@ -162,6 +167,8 @@ describe('AdminBillingService manual subscription renewal', () => {
     });
     expect(creditInput?.data.reasonCode).toBe('SUBSCRIPTION_MANUAL_RENEWAL');
     expect(tx.billingInvoice.create).toHaveBeenCalledTimes(1);
+    expect(ticketUpdateInput?.where.id).toBe(sourceTicket.id);
+    expect(ticketUpdateInput?.data.status).toBe('RESOLVED');
     expect(auditInput?.data.action).toBe('subscription.manual_renewal.create');
     expect(outboxInput?.data.eventType).toBe('ir.vazano.subscription.manual_renewal_activated.v1');
   });

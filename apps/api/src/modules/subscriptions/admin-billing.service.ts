@@ -235,14 +235,21 @@ export class AdminBillingService {
 
     const existing = await this.prisma.manualSubscriptionRenewal.findUnique({ where: { trackingNumber } });
     if (existing) throw new ConflictException('این شماره پیگیری قبلاً برای تمدید دستی ثبت شده است.');
-    const [organization, plan] = await Promise.all([
+    const [organization, plan, sourceTicket] = await Promise.all([
       this.prisma.organization.findUnique({ where: { id: input.organizationId } }),
       this.prisma.subscriptionPlan.findUnique({ where: { id: input.planId } }),
+      input.sourceTicketId ? this.prisma.supportTicket.findUnique({ where: { id: input.sourceTicketId } }) : null,
     ]);
     if (!organization || organization.kind !== 'SUPPLIER' || organization.status !== 'ACTIVE') {
       throw new NotFoundException('سازمان فروشنده فعال پیدا نشد.');
     }
     if (!plan || !plan.isActive || plan.isTrial) throw new NotFoundException('پلن پولی فعال پیدا نشد.');
+    if (input.sourceTicketId && (!sourceTicket || sourceTicket.category !== 'BILLING' || sourceTicket.organizationId !== organization.id)) {
+      throw new NotFoundException('درخواست مالی مرتبط با این سازمان پیدا نشد.');
+    }
+    if (sourceTicket && !['SUBMITTED', 'ACKNOWLEDGED', 'IN_REVIEW', 'WAITING_FOR_REQUESTER'].includes(sourceTicket.status)) {
+      throw new ConflictException('این درخواست مالی قبلاً بسته شده است.');
+    }
     await this.assertFoundingProgramCapacity(organization.id, plan.id, plan.code, policy);
 
     try {
@@ -314,19 +321,33 @@ export class AdminBillingService {
             (['SMS', 'IN_APP'] as const).map((channel) => ({ subscriptionId: subscription.id, offsetDays, scheduledAt, channel }))),
           skipDuplicates: true,
         });
+        if (sourceTicket) {
+          const resolvedTicket = await tx.supportTicket.updateMany({
+            where: {
+              id: sourceTicket.id,
+              status: { in: ['SUBMITTED', 'ACKNOWLEDGED', 'IN_REVIEW', 'WAITING_FOR_REQUESTER'] },
+            },
+            data: {
+              status: 'RESOLVED',
+              resolution: `تمدید دستی با شماره پیگیری ${trackingNumber} ثبت و اشتراک فعال شد.`,
+              resolvedAt: activatedAt,
+            },
+          });
+          if (resolvedTicket.count !== 1) throw new ConflictException('وضعیت درخواست مالی هم‌زمان تغییر کرده است؛ دوباره بررسی کنید.');
+        }
         await tx.auditLog.create({ data: {
           actorUserId: user.id,
           organizationId: organization.id,
           action: 'subscription.manual_renewal.create',
           entityType: 'ManualSubscriptionRenewal',
           entityId: manualRenewal.id,
-          metadata: { subscriptionId: subscription.id, planCode: plan.code, trackingNumber, amountRial: amountRial.toString(), paidAt: paidAt.toISOString(), note },
+          metadata: { subscriptionId: subscription.id, planCode: plan.code, trackingNumber, amountRial: amountRial.toString(), paidAt: paidAt.toISOString(), note, sourceTicketId: sourceTicket?.id ?? null },
         } });
         await tx.outboxEvent.create({ data: {
           aggregateType: 'Subscription',
           aggregateId: subscription.id,
           eventType: 'ir.vazano.subscription.manual_renewal_activated.v1',
-          payload: { subscriptionId: subscription.id, organizationId: organization.id, trackingNumber, expiresAt: expiresAt.toISOString() },
+          payload: { subscriptionId: subscription.id, organizationId: organization.id, trackingNumber, expiresAt: expiresAt.toISOString(), sourceTicketId: sourceTicket?.id ?? null },
         } });
         return { manualRenewal, subscription };
       });
