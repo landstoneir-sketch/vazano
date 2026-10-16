@@ -27,7 +27,7 @@ export class AdminBillingService {
   async overview(user: AuthenticatedUser) {
     this.requireAnyPermission(user, ['billing.read', 'billing.manage']);
     const policy = await this.policySettings.get();
-    const [plans, subscriptions, payments, receipts, statusGroups, reminderGroups, reminders, suppliers, manualRenewals, invoices, discountCodes] = await Promise.all([
+    const [plans, subscriptions, payments, receipts, statusGroups, reminderGroups, reminders, suppliers, manualRenewals, invoices, discountCodes, billingRequests] = await Promise.all([
       this.prisma.subscriptionPlan.findMany({ orderBy: [{ isActive: 'desc' }, { priceRial: 'asc' }] }),
       this.prisma.subscription.findMany({
         include: {
@@ -94,6 +94,27 @@ export class AdminBillingService {
         orderBy: { createdAt: 'desc' },
         take: 100,
       }),
+      this.prisma.supportTicket.findMany({
+        where: {
+          category: 'BILLING',
+          status: { in: ['SUBMITTED', 'ACKNOWLEDGED', 'IN_REVIEW', 'WAITING_FOR_REQUESTER'] },
+        },
+        select: {
+          id: true,
+          code: true,
+          type: true,
+          priority: true,
+          status: true,
+          subject: true,
+          description: true,
+          createdAt: true,
+          requester: { select: { firstName: true, lastName: true, mobile: true } },
+          organization: { select: { id: true, displayName: true, legalName: true } },
+          _count: { select: { comments: true } },
+        },
+        orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+        take: 100,
+      }),
     ]);
     const payerIds = [...new Set(payments.map((payment) => payment.payerOrganizationId).filter((id): id is string => Boolean(id)))];
     const payers = payerIds.length
@@ -125,6 +146,7 @@ export class AdminBillingService {
       manualRenewals,
       invoices,
       discountCodes,
+      billingRequests,
     };
   }
 
