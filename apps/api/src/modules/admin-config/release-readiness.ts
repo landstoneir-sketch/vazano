@@ -20,7 +20,8 @@ export type ReleaseReadinessInput = {
   nodeEnvironment: string;
   otpDebugEnabled: boolean;
   smsConfigured: boolean;
-  subscriptionSmsConfigured: boolean;
+  subscriptionSmsTemplatesConfigured: boolean;
+  subscriptionSmsEnabled: boolean;
   paymentConfigured: boolean;
   fileScanningConfigured: boolean;
   notificationWorkerEnabled: boolean;
@@ -47,7 +48,8 @@ export function evaluateReleaseReadiness(input: ReleaseReadinessInput): { ready:
     check('environment.production', 'حالت اجرای Production', input.nodeEnvironment === 'production', 'محیط روی Production تنظیم شده است.', 'نسخه فعلی در محیط توسعه اجرا می‌شود؛ این وضعیت برای کار محلی طبیعی است.'),
     check('security.otp-debug', 'غیرفعال بودن کد ورود آزمایشی', !input.otpDebugEnabled, 'کد ثابت آزمایشی غیرفعال است.', 'کد ثابت آزمایشی فعال است و در انتشار نهایی مجاز نیست.'),
     check('integration.sms', 'پیامک ورود SMS.ir', input.smsConfigured, 'ارائه‌دهنده، کلید و قالب ورود تنظیم شده‌اند.', 'تنظیمات کامل SMS.ir برای ورود موجود نیست.'),
-    check('integration.subscription-sms', 'پیامک‌های تمدید اشتراک', input.subscriptionSmsConfigured, 'ارسال پیامک تمدید و همه قالب‌های لازم فعال‌اند.', 'پیامک تمدید یا یکی از قالب‌های سیاست تمدید هنوز فعال نشده است.'),
+    check('integration.subscription-sms-templates', 'قالب‌های پیامک تمدید', input.subscriptionSmsTemplatesConfigured, 'هر ۹ شناسه قالب تأییدشده SMS.ir تنظیم شده‌اند.', 'یک یا چند شناسه قالب تمدید و دوره آزمایشی SMS.ir هنوز تنظیم نشده است.'),
+    check('integration.subscription-sms-delivery', 'فعال‌سازی پیامک تمدید', input.subscriptionSmsEnabled, 'ارسال واقعی پیامک تمدید از طریق SMS.ir فعال است.', 'قالب‌ها می‌توانند آماده باشند، اما ارسال واقعی پیامک تمدید هنوز عمداً غیرفعال است.'),
     check('integration.payment', 'درگاه واقعی زرین‌پال', input.paymentConfigured, 'پرداخت واقعی، Merchant و حالت غیرآزمایشی تنظیم شده‌اند.', 'درگاه واقعی زرین‌پال هنوز برای Production فعال نیست.'),
     check('security.file-scan', 'اسکن امنیتی فایل‌ها', input.fileScanningConfigured, 'فایل‌ها با ClamAV بررسی می‌شوند.', 'اسکن ClamAV فعال نیست؛ بارگذاری فایل در Production نباید بدون آن منتشر شود.'),
     check('worker.notifications', 'پردازش اعلان‌ها', input.notificationWorkerEnabled, 'Worker اعلان‌ها فعال است.', 'Worker اعلان‌ها غیرفعال است.'),
