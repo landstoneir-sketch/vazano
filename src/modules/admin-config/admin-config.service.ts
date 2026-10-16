@@ -111,8 +111,9 @@ export class AdminConfigService {
     const smsConfigured = this.environment.get<string>('SMS_PROVIDER') === 'smsir'
       && Boolean(this.environment.get<string>('SMSIR_API_KEY'))
       && Boolean(this.environment.get<string>('SMSIR_TEMPLATE_ID'));
-    const subscriptionSmsConfigured = this.environment.get<string>('SUBSCRIPTION_SMS_ENABLED') === 'true'
-      && renewalTemplateKeys.every((key) => Boolean(this.environment.get<string>(key)));
+    const subscriptionSmsTemplatesConfigured = renewalTemplateKeys.every((key) => Boolean(this.environment.get<string>(key)));
+    const subscriptionSmsEnabled = this.environment.get<string>('SUBSCRIPTION_SMS_ENABLED') === 'true'
+      && this.environment.get<string>('SMS_PROVIDER') === 'smsir';
     const paymentConfigured = this.environment.get<string>('PAYMENT_PROVIDER', 'zarinpal') === 'zarinpal'
       && this.environment.get<string>('ZARINPAL_ENABLED') === 'true'
       && this.environment.get<string>('ZARINPAL_SANDBOX') === 'false'
@@ -126,7 +127,8 @@ export class AdminConfigService {
         nodeEnvironment: this.environment.get<string>('NODE_ENV', 'development'),
         otpDebugEnabled: this.environment.get<string>('OTP_DEBUG_ENABLED') === 'true',
         smsConfigured,
-        subscriptionSmsConfigured,
+        subscriptionSmsTemplatesConfigured,
+        subscriptionSmsEnabled,
         paymentConfigured,
         fileScanningConfigured: fileScanningReady,
         notificationWorkerEnabled: this.environment.get<string>('NOTIFICATION_WORKER_ENABLED', 'true') === 'true',
