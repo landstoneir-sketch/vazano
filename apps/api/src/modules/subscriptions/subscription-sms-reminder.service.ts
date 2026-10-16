@@ -19,6 +19,13 @@ const TRIAL_SMS_TEMPLATE_BY_OFFSET: Readonly<Record<number, SmsTemplateCode>> = 
   [0]: 'SUBSCRIPTION_TRIAL_ENDED',
 };
 
+const SUBSCRIPTION_LINK_PATH = 'supplier/subscription';
+const PATH_PARAMETER_TEMPLATES: ReadonlySet<SmsTemplateCode> = new Set([
+  'SUBSCRIPTION_RENEWAL_14_DAYS',
+  'SUBSCRIPTION_RENEWAL_7_DAYS',
+  'SUBSCRIPTION_TRIAL_3_DAYS',
+]);
+
 @Injectable()
 export class SubscriptionSmsReminderService {
   constructor(
@@ -130,17 +137,22 @@ export class SubscriptionSmsReminderService {
     graceEndsAt: Date | null;
     priceRialSnapshot: bigint;
   }): SmsTemplateParameter[] {
-    const link = `${this.config.getOrThrow<string>('WEB_ORIGIN').replace(/\/$/, '')}/supplier/subscription`;
+    // SMS.ir requires the domain to remain literal in the approved template and
+    // only accepts the trailing path as a variable (vazano.ir/#LINK#).
+    const linkParameter: SmsTemplateParameter = {
+      name: PATH_PARAMETER_TEMPLATES.has(templateCode) ? 'Path' : 'Link',
+      value: SUBSCRIPTION_LINK_PATH,
+    };
     const expiryDate = this.formatDate(subscription.expiresAt);
     if (templateCode === 'SUBSCRIPTION_RENEWAL_14_DAYS') {
-      return [{ name: 'Date', value: expiryDate }, { name: 'Amount', value: (subscription.priceRialSnapshot / 10n).toString() }, { name: 'Link', value: link }];
+      return [{ name: 'Date', value: expiryDate }, { name: 'Amount', value: (subscription.priceRialSnapshot / 10n).toString() }, linkParameter];
     }
-    if (templateCode === 'SUBSCRIPTION_RENEWAL_7_DAYS') return [{ name: 'Date', value: expiryDate }, { name: 'Link', value: link }];
-    if (templateCode === 'SUBSCRIPTION_EXPIRED') return [{ name: 'Date', value: this.formatDate(subscription.graceEndsAt) }, { name: 'Link', value: link }];
+    if (templateCode === 'SUBSCRIPTION_RENEWAL_7_DAYS') return [{ name: 'Date', value: expiryDate }, linkParameter];
+    if (templateCode === 'SUBSCRIPTION_EXPIRED') return [{ name: 'Date', value: this.formatDate(subscription.graceEndsAt) }, linkParameter];
     if (['SUBSCRIPTION_TRIAL_7_DAYS', 'SUBSCRIPTION_TRIAL_3_DAYS', 'SUBSCRIPTION_TRIAL_1_DAY'].includes(templateCode)) {
-      return [{ name: 'Date', value: expiryDate }, { name: 'Link', value: link }];
+      return [{ name: 'Date', value: expiryDate }, linkParameter];
     }
-    return [{ name: 'Link', value: link }];
+    return [linkParameter];
   }
 
   private formatDate(date: Date | null): string {
