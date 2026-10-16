@@ -7,7 +7,16 @@ import { dashboardManagementLinks } from '@/lib/dashboard-access';
 import type { RouteIdentity } from '@/lib/route-access';
 
 type AuthenticatedAccount = RouteIdentity & { id: string; mobile: string; status: string };
-type ReadinessSummary = { total: number; ready: number; warning: number; blocked: number; ownerDecisionRequired: number; percent: number };
+type ReadinessSummary = {
+  total: number;
+  ready: number;
+  warning: number;
+  blocked: number;
+  ownerDecisionRequired: number;
+  technicalActionsRequired: number;
+  operationsActionsRequired: number;
+  percent: number;
+};
 type ReadinessResponse = { generatedAt: string; ready: boolean; summary: ReadinessSummary };
 type DeliveryPhase = { key: string; title: string; previousPercent: number; plannedPercent: number; actualPercent: number; changeFromPrevious: number; variance: number; status: 'COMPLETE' | 'ON_TRACK' | 'AT_RISK' };
 type DeliveryProgress = {
@@ -75,7 +84,7 @@ export function AdminOverview() {
       <div className="readiness-score-heading"><div><span className="eyebrow">وضعیت امروز</span><h2>آمادگی انتشار MVP</h2></div><strong>{readiness.summary.percent.toLocaleString('fa-IR')}٪</strong></div>
       <div className="readiness-progress-track" role="progressbar" aria-label="آمادگی انتشار" aria-valuemin={0} aria-valuemax={100} aria-valuenow={readiness.summary.percent}><span style={{ width: `${readiness.summary.percent}%` }} /></div>
       <p className={readiness.ready ? 'message message-success' : 'message message-error'}>{readiness.ready ? 'همه کنترل‌های الزامی انتشار آماده‌اند.' : `${readiness.summary.blocked.toLocaleString('fa-IR')} مانع انتشار باقی مانده است.`}</p>
-      {!readiness.ready && <p className="muted">از این تعداد، {readiness.summary.ownerDecisionRequired.toLocaleString('fa-IR')} مورد نیازمند تصمیم مستقیم مالک است؛ سایر موارد توسط تیم فنی یا عملیات پیگیری می‌شوند.</p>}
+      {!readiness.ready && <p className="muted">تقسیم پیگیری: {readiness.summary.ownerDecisionRequired.toLocaleString('fa-IR')} تصمیم مالک، {readiness.summary.technicalActionsRequired.toLocaleString('fa-IR')} اقدام فنی و {readiness.summary.operationsActionsRequired.toLocaleString('fa-IR')} اقدام عملیاتی.</p>}
       <div className="actions"><Link className="button button-primary" href="/admin/readiness">مشاهده جزئیات و رفع موانع</Link></div>
     </section>}
 

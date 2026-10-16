@@ -15,14 +15,32 @@ describe('release readiness', () => {
   it('is ready only when every launch blocker is satisfied', () => {
     const result = evaluateReleaseReadiness(readyInput);
     expect(result.ready).toBe(true);
-    expect(result.summary).toEqual({ total: 22, ready: 22, warning: 0, blocked: 0, ownerDecisionRequired: 0, percent: 100 });
+    expect(result.summary).toEqual({
+      total: 22,
+      ready: 22,
+      warning: 0,
+      blocked: 0,
+      ownerDecisionRequired: 0,
+      technicalActionsRequired: 0,
+      operationsActionsRequired: 0,
+      percent: 100,
+    });
     expect(result.checks.every((item) => item.status === 'READY')).toBe(true);
   });
 
   it('reports local development as a warning but legal and provider gaps as blockers', () => {
     const result = evaluateReleaseReadiness({ ...readyInput, nodeEnvironment: 'development', termsPublished: false, paymentConfigured: false });
     expect(result.ready).toBe(false);
-    expect(result.summary).toMatchObject({ total: 22, ready: 19, warning: 1, blocked: 2, ownerDecisionRequired: 2, percent: 89 });
+    expect(result.summary).toMatchObject({
+      total: 22,
+      ready: 19,
+      warning: 1,
+      blocked: 2,
+      ownerDecisionRequired: 2,
+      technicalActionsRequired: 1,
+      operationsActionsRequired: 0,
+      percent: 89,
+    });
     expect(result.checks.find((item) => item.key === 'environment.production')?.status).toBe('WARNING');
     expect(result.checks.find((item) => item.key === 'content.terms')?.status).toBe('BLOCKED');
     expect(result.checks.find((item) => item.key === 'integration.payment')?.status).toBe('BLOCKED');
@@ -66,5 +84,6 @@ describe('release readiness', () => {
     expect(result.checks.find((item) => item.key === 'market.category-supply')?.detail).toContain('تراورتن');
     expect(result.checks.find((item) => item.key === 'market.province-supply')?.detail).toContain('فارس');
     expect(result.checks.find((item) => item.key === 'market.suppliers')?.responsibility).toBe('OPERATIONS');
+    expect(result.summary.operationsActionsRequired).toBe(6);
   });
 });
