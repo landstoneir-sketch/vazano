@@ -15,6 +15,7 @@ describe('release readiness', () => {
   it('is ready only when every launch blocker is satisfied', () => {
     const result = evaluateReleaseReadiness(readyInput);
     expect(result.ready).toBe(true);
+    expect(result.pilotReady).toBe(true);
     expect(result.summary).toEqual({
       total: 22,
       ready: 22,
@@ -23,6 +24,7 @@ describe('release readiness', () => {
       ownerDecisionRequired: 0,
       technicalActionsRequired: 0,
       operationsActionsRequired: 0,
+      pilotBlockers: 0,
       percent: 100,
     });
     expect(result.checks.every((item) => item.status === 'READY')).toBe(true);
@@ -39,6 +41,7 @@ describe('release readiness', () => {
       ownerDecisionRequired: 2,
       technicalActionsRequired: 1,
       operationsActionsRequired: 0,
+      pilotBlockers: 1,
       percent: 89,
     });
     expect(result.checks.find((item) => item.key === 'environment.production')?.status).toBe('WARNING');
@@ -49,6 +52,7 @@ describe('release readiness', () => {
   it('distinguishes approved template configuration from live subscription SMS delivery', () => {
     const result = evaluateReleaseReadiness({ ...readyInput, subscriptionSmsEnabled: false });
     expect(result.ready).toBe(false);
+    expect(result.pilotReady).toBe(true);
     expect(result.checks.find((item) => item.key === 'integration.subscription-sms-templates')?.status).toBe('READY');
     expect(result.checks.find((item) => item.key === 'integration.subscription-sms-delivery')).toMatchObject({ status: 'BLOCKED', responsibility: 'OWNER' });
   });
@@ -62,6 +66,7 @@ describe('release readiness', () => {
   it('blocks launch when RFQ deadline processing is disabled', () => {
     const result = evaluateReleaseReadiness({ ...readyInput, rfqLifecycleWorkerEnabled: false });
     expect(result.ready).toBe(false);
+    expect(result.pilotReady).toBe(false);
     expect(result.checks.find((item) => item.key === 'worker.rfq-lifecycle')?.status).toBe('BLOCKED');
   });
 
@@ -78,6 +83,7 @@ describe('release readiness', () => {
       uncoveredProvinceNames: ['تهران', 'فارس'],
     });
     expect(result.ready).toBe(false);
+    expect(result.pilotReady).toBe(false);
     expect(result.checks.filter((item) => item.status === 'BLOCKED').map((item) => item.key)).toEqual(expect.arrayContaining([
       'catalog.units', 'market.coverage', 'market.buyers', 'market.suppliers', 'market.category-supply', 'market.province-supply',
     ]));
