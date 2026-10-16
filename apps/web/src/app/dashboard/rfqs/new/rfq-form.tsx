@@ -316,7 +316,7 @@ export function NewRfqForm({ operatorMode = false, draftId }: { operatorMode?: b
       {attachments.length > 0 && <ul>{attachments.map((attachment) => <li key={attachment.id}>{attachment.originalName} — {attachmentStatusLabel(attachment.status)}</li>)}</ul>}
     </fieldset>}
     <div className="rfq-form-section-title full"><b>۱</b><div><strong>اطلاعات پروژه و خریدار</strong><span>عنوانی روشن انتخاب کنید تا تأمین‌کننده سریع‌تر نیاز شما را درک کند.</span></div></div>
-    <label className="form-field"><span>حساب خریدار</span><select value={organizationId} disabled={Boolean(created)} onChange={(event) => { const nextId = event.target.value; setOrganizationId(nextId); setBuyerContactUserId(organizations.find((item) => item.id === nextId)?.contacts?.[0]?.id ?? ''); }} required>{organizations.map((item) => <option value={item.id} key={item.id}>{item.displayName}{operatorMode && item.province ? ` — ${item.province}` : ''}</option>)}</select></label>
+    <label className="form-field"><span>حساب خریدار</span><select value={organizationId} disabled={Boolean(created)} onChange={(event) => { const nextId = event.target.value; setOrganizationId(nextId); setBuyerContactUserId(organizations.find((item) => item.id === nextId)?.contacts?.[0]?.id ?? ''); }} required>{organizations.map((item) => <option value={item.id} key={item.id}>{buyerOrganizationLabel(item, operatorMode)}</option>)}</select></label>
     {operatorMode && <label className="form-field"><span>فرد تماس خریدار</span><select value={buyerContactUserId} disabled={Boolean(created)} onChange={(event) => setBuyerContactUserId(event.target.value)} required><option value="">انتخاب کنید</option>{selectedOrganization?.contacts?.map((contact) => <option value={contact.id} key={contact.id}>{contact.displayName} — {contact.mobileMasked}</option>)}</select></label>}
     <label className="form-field"><span>حوزه اصلی</span><select value={industryId} onChange={(event) => { setIndustryId(event.target.value); setCategoryId(''); setProductAttributes([]); setCategoryGuidance(null); setSpecifications({}); }} required>{industries.map((item) => <option value={item.id} key={item.id}>{item.nameFa}</option>)}</select></label>
     <label className="form-field full"><span>عنوان استعلام</span><input value={title} onChange={(event) => setTitle(event.target.value)} required minLength={3} placeholder="مثلاً تأمین سنگ نمای پروژه مسکونی" /></label>
@@ -376,6 +376,13 @@ function legalRoleText(role: RfqPolicy['legalRole'] | undefined): string {
   if (role === 'CONTRACTING_AGENT') return 'وازانو طبق درخواست خریدار می‌تواند نقش نماینده قراردادی داشته باشد.';
   if (role === 'MARKETPLACE_OPERATOR') return 'وازانو بهره‌بردار بازارگاه است.';
   return 'وازانو واسط اطلاعات است.';
+}
+
+function buyerOrganizationLabel(organization: Organization, operatorMode: boolean): string {
+  if (!operatorMode) return organization.displayName;
+  const location = [organization.province, organization.city].filter(Boolean).join('، ');
+  const contact = organization.contacts?.[0]?.mobileMasked;
+  return [organization.displayName, location, contact ? `تماس ${contact}` : null].filter(Boolean).join(' — ');
 }
 
 function attachmentStatusLabel(status: string): string {

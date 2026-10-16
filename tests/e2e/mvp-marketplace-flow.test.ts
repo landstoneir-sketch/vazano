@@ -6,6 +6,7 @@ const TEST_USER_ID = 'e2e-mvp-user';
 const TEST_MOBILE_LOCAL = '09120000099';
 const TEST_MOBILE_NORMALIZED = TEST_MOBILE_LOCAL;
 const TEST_RFQ_TITLE = 'آزمون اجرایی جریان کامل وازانو';
+const OPERATOR_RFQ_TITLE = 'آزمون ثبت استعلام توسط اپراتور وازانو';
 const BUYER_ORGANIZATION_ID = 'demo-buyer-organization';
 const SUPPLIER_ORGANIZATION_ID = 'demo-supplier-organization';
 const SECONDARY_SUPPLIER_ORGANIZATION_ID = 'e2e-secondary-supplier-organization';
@@ -14,7 +15,7 @@ const SECONDARY_QUOTATION_CODE = 'VZ-E2E-SECONDARY-QUOTE';
 async function cleanupTestData() {
   const rfqs = await prisma.rfq.findMany({
     where: {
-      OR: [{ createdByUserId: TEST_USER_ID }, { title: TEST_RFQ_TITLE }],
+      OR: [{ createdByUserId: TEST_USER_ID }, { title: { in: [TEST_RFQ_TITLE, OPERATOR_RFQ_TITLE] } }],
     },
     select: { id: true },
   });
@@ -240,6 +241,35 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   await page.goto('/supplier/subscription');
   await expect(page.getByRole('heading', { name: 'اشتراک و پرداخت' })).toBeVisible();
   await expect(page.getByRole('button', { name: /خرید این پلن|تمدید با این پلن/ }).first()).toBeVisible();
+
+  await page.goto('/admin/rfqs/new');
+  await expect(page.getByRole('heading', { name: 'ثبت استعلام از طرف خریدار' })).toBeVisible();
+  await expect(page.getByLabel('حساب خریدار')).toContainText('خریدار آزمایشی');
+  await page.getByLabel('حساب خریدار').selectOption(BUYER_ORGANIZATION_ID);
+  await page.getByLabel('فرد تماس خریدار').selectOption(TEST_USER_ID);
+  await expect(page.getByLabel('فرد تماس خریدار')).toHaveValue(TEST_USER_ID);
+  await page.getByLabel('عنوان استعلام').fill(OPERATOR_RFQ_TITLE);
+  await page.getByLabel('نوع سنگ').selectOption({ index: 1 });
+  await expect(page.getByLabel('نوع فرآوری')).toBeVisible();
+  await page.getByLabel('نوع فرآوری').selectOption({ index: 1 });
+  await page.getByLabel('ضخامت (میلی‌متر)').fill('20');
+  await page.getByLabel('نمای خارجی', { exact: true }).check();
+  await page.getByLabel('شرح محصول').fill('سنگ تراورتن کرم برای ثبت اپراتوری');
+  await page.getByLabel('مقدار').fill('40');
+  await page.getByLabel('استان تحویل').selectOption({ label: 'تهران' });
+  await page.getByRole('button', { name: 'ثبت پیش‌نویس از طرف خریدار' }).click();
+  await expect(page.getByText('پیش‌نویس ذخیره شده است.')).toBeVisible();
+  const operatorRfq = await prisma.rfq.findFirstOrThrow({ where: { title: OPERATOR_RFQ_TITLE } });
+  expect(operatorRfq).toMatchObject({
+    buyerOrganizationId: BUYER_ORGANIZATION_ID,
+    buyerContactUserId: TEST_USER_ID,
+    createdByUserId: TEST_USER_ID,
+    operatorUserId: TEST_USER_ID,
+    source: 'PLATFORM_OPERATOR',
+  });
+  expect(await prisma.auditLog.count({
+    where: { actorUserId: TEST_USER_ID, action: 'rfq.create_on_behalf', entityType: 'Rfq', entityId: operatorRfq.id },
+  })).toBe(1);
 
   await page.goto('/dashboard/rfqs/new');
   await expect(page.getByLabel('حساب خریدار')).toContainText('خریدار آزمایشی');
