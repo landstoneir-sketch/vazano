@@ -4,7 +4,7 @@ describe('MVP delivery plan', () => {
   it('keeps milestone weights complete and reports the current comparison', () => {
     const result = getMvpDeliveryPlan();
     expect(result.phases.reduce((total, phase) => total + phase.weight, 0)).toBe(100);
-    expect(result).toMatchObject({ actualPercent: 91, plannedPercent: 91, previousPercent: 91, changeFromPrevious: 0, varianceFromPlan: 0 });
+    expect(result).toMatchObject({ actualPercent: 92, plannedPercent: 91, previousPercent: 91, changeFromPrevious: 1, varianceFromPlan: 1 });
     expect(result.phases.find((phase) => phase.key === 'quotations-collaboration')).toMatchObject({
       previousPercent: 90,
       actualPercent: 90,
@@ -12,6 +12,7 @@ describe('MVP delivery plan', () => {
       variance: 0,
     });
     expect(result.phases.find((phase) => phase.key === 'marketplace-core')).toMatchObject({ previousPercent: 92, actualPercent: 93, changeFromPrevious: 1 });
+    expect(result.phases.find((phase) => phase.key === 'commercial-foundation')).toMatchObject({ previousPercent: 68, actualPercent: 70, changeFromPrevious: 2 });
     expect(result.phases.find((phase) => phase.key === 'quality-release')).toMatchObject({ previousPercent: 85, actualPercent: 87, changeFromPrevious: 2 });
   });
 
