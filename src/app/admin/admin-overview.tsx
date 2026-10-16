@@ -15,9 +15,10 @@ type ReadinessSummary = {
   ownerDecisionRequired: number;
   technicalActionsRequired: number;
   operationsActionsRequired: number;
+  pilotBlockers: number;
   percent: number;
 };
-type ReadinessResponse = { generatedAt: string; ready: boolean; summary: ReadinessSummary };
+type ReadinessResponse = { generatedAt: string; ready: boolean; pilotReady: boolean; summary: ReadinessSummary };
 type DeliveryPhase = { key: string; title: string; previousPercent: number; plannedPercent: number; actualPercent: number; changeFromPrevious: number; variance: number; status: 'COMPLETE' | 'ON_TRACK' | 'AT_RISK' };
 type DeliveryProgress = {
   previousPercent: number;
@@ -83,6 +84,7 @@ export function AdminOverview() {
     {readiness && <section className="card readiness-score" aria-label="خلاصه آمادگی انتشار">
       <div className="readiness-score-heading"><div><span className="eyebrow">وضعیت امروز</span><h2>آمادگی انتشار MVP</h2></div><strong>{readiness.summary.percent.toLocaleString('fa-IR')}٪</strong></div>
       <div className="readiness-progress-track" role="progressbar" aria-label="آمادگی انتشار" aria-valuemin={0} aria-valuemax={100} aria-valuenow={readiness.summary.percent}><span style={{ width: `${readiness.summary.percent}%` }} /></div>
+      <p className={readiness.pilotReady ? 'message message-success' : 'message message-error'}>{readiness.pilotReady ? 'پایلوت داخلی آماده استفاده است.' : `${readiness.summary.pilotBlockers.toLocaleString('fa-IR')} مانع ضروری پایلوت داخلی باقی مانده است.`}</p>
       <p className={readiness.ready ? 'message message-success' : 'message message-error'}>{readiness.ready ? 'همه کنترل‌های الزامی انتشار آماده‌اند.' : `${readiness.summary.blocked.toLocaleString('fa-IR')} مانع انتشار باقی مانده است.`}</p>
       {!readiness.ready && <p className="muted">تقسیم پیگیری: {readiness.summary.ownerDecisionRequired.toLocaleString('fa-IR')} تصمیم مالک، {readiness.summary.technicalActionsRequired.toLocaleString('fa-IR')} اقدام فنی و {readiness.summary.operationsActionsRequired.toLocaleString('fa-IR')} اقدام عملیاتی.</p>}
       <div className="actions"><Link className="button button-primary" href="/admin/readiness">مشاهده جزئیات و رفع موانع</Link></div>
