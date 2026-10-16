@@ -8,7 +8,16 @@ import { apiRequest } from '@/lib/api';
 type CheckStatus = 'READY' | 'WARNING' | 'BLOCKED';
 type CheckResponsibility = 'OWNER' | 'TECHNICAL' | 'OPERATIONS';
 type ReadinessCheck = { key: string; title: string; status: CheckStatus; responsibility: CheckResponsibility; detail: string; actionPath?: string };
-type ReadinessSummary = { total: number; ready: number; warning: number; blocked: number; ownerDecisionRequired: number; percent: number };
+type ReadinessSummary = {
+  total: number;
+  ready: number;
+  warning: number;
+  blocked: number;
+  ownerDecisionRequired: number;
+  technicalActionsRequired: number;
+  operationsActionsRequired: number;
+  percent: number;
+};
 type ReadinessResponse = { generatedAt: string; ready: boolean; summary: ReadinessSummary; checks: ReadinessCheck[] };
 
 const statusLabels: Record<CheckStatus, string> = { READY: 'آماده', WARNING: 'هشدار', BLOCKED: 'مسدود' };
@@ -44,6 +53,8 @@ export function ReleaseReadinessPanel() {
       <article className="card billing-summary-card"><span>هشدار</span><strong>{result.summary.warning.toLocaleString('fa-IR')}</strong></article>
       <article className="card billing-summary-card"><span>مسدود</span><strong>{result.summary.blocked.toLocaleString('fa-IR')}</strong></article>
       <article className="card billing-summary-card"><span>نیازمند تصمیم مالک</span><strong>{result.summary.ownerDecisionRequired.toLocaleString('fa-IR')}</strong></article>
+      <article className="card billing-summary-card"><span>اقدام فنی باقی‌مانده</span><strong>{result.summary.technicalActionsRequired.toLocaleString('fa-IR')}</strong></article>
+      <article className="card billing-summary-card"><span>اقدام عملیاتی باقی‌مانده</span><strong>{result.summary.operationsActionsRequired.toLocaleString('fa-IR')}</strong></article>
     </div>
     <div className="stack">{orderedChecks.map((item) => <article className="card admin-card-title" key={item.key}><div><h2>{item.title}</h2><p>{item.detail}</p><code>{item.key}</code></div><div><span className={`status-badge ${statusClasses[item.status]}`}>{statusLabels[item.status]}</span><p className="muted">{responsibilityLabels[item.responsibility]}</p>{item.actionPath && item.status !== 'READY' && <div><Link className="button button-ghost" href={item.actionPath as Route}>رفع مانع</Link></div>}</div></article>)}</div>
     <p className="muted">آخرین کنترل: {new Date(result.generatedAt).toLocaleString('fa-IR')}</p>
