@@ -20,14 +20,14 @@ type Ticket = {
   _count: { comments: number };
 };
 
-export function SupportCenter() {
+export function SupportCenter({ initialRequest, initialOrganizationId }: { initialRequest?: 'MANUAL_RENEWAL'; initialOrganizationId?: string }) {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [type, setType] = useState('QUESTION');
-  const [category, setCategory] = useState('OTHER');
+  const [type, setType] = useState(initialRequest === 'MANUAL_RENEWAL' ? 'SERVICE_REQUEST' : 'QUESTION');
+  const [category, setCategory] = useState(initialRequest === 'MANUAL_RENEWAL' ? 'BILLING' : 'OTHER');
   const [organizationId, setOrganizationId] = useState('');
-  const [subject, setSubject] = useState('');
-  const [description, setDescription] = useState('');
+  const [subject, setSubject] = useState(initialRequest === 'MANUAL_RENEWAL' ? 'درخواست تمدید دستی اشتراک' : '');
+  const [description, setDescription] = useState(initialRequest === 'MANUAL_RENEWAL' ? 'لطفاً راهنمای پرداخت و تمدید دستی اشتراک این حساب را اعلام کنید.' : '');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -46,12 +46,16 @@ export function SupportCenter() {
       apiRequest<Ticket[]>('/support/tickets/mine'),
       apiRequest<Organization[]>('/organizations/mine'),
     ]).then(([ticketData, organizationData]) => {
-      if (active) { setTickets(ticketData); setOrganizations(organizationData); }
+      if (active) {
+        setTickets(ticketData);
+        setOrganizations(organizationData);
+        if (initialOrganizationId && organizationData.some((item) => item.id === initialOrganizationId)) setOrganizationId(initialOrganizationId);
+      }
     }).catch((reason: unknown) => {
       if (active) setMessage(reason instanceof Error ? reason.message : 'دریافت اطلاعات پشتیبانی انجام نشد.');
     });
     return () => { active = false; };
-  }, []);
+  }, [initialOrganizationId]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
