@@ -42,7 +42,6 @@ describe('SubscriptionSmsReminderService', () => {
     };
     const config = {
       get: jest.fn((key: string) => key === 'SUBSCRIPTION_SMS_ENABLED' ? 'true' : undefined),
-      getOrThrow: jest.fn().mockReturnValue('https://vazano.ir'),
     };
     const sms = { sendTemplate: jest.fn().mockResolvedValue(undefined) };
     const service = new SubscriptionSmsReminderService(prisma as never, config as never, sms as never, policySettings as never);
@@ -50,7 +49,7 @@ describe('SubscriptionSmsReminderService', () => {
     await expect(service.process(new Date('2026-10-12T08:00:00.000Z'))).resolves.toBe(1);
     expect(sms.sendTemplate).toHaveBeenCalledWith('09120000000', 'SUBSCRIPTION_RENEWAL_14_DAYS', expect.arrayContaining([
       { name: 'Amount', value: '3000000' },
-      { name: 'Link', value: 'https://vazano.ir/supplier/subscription' },
+      { name: 'Path', value: 'supplier/subscription' },
     ]));
     expect(prisma.auditLog.create).toHaveBeenCalled();
   });
@@ -75,14 +74,13 @@ describe('SubscriptionSmsReminderService', () => {
     };
     const config = {
       get: jest.fn((key: string) => key === 'SUBSCRIPTION_SMS_ENABLED' ? 'true' : undefined),
-      getOrThrow: jest.fn().mockReturnValue('https://vazano.ir'),
     };
     const sms = { sendTemplate: jest.fn().mockResolvedValue(undefined) };
     const service = new SubscriptionSmsReminderService(prisma as never, config as never, sms as never, policySettings as never);
 
     await expect(service.process(new Date('2026-10-12T08:00:00.000Z'))).resolves.toBe(1);
     expect(sms.sendTemplate).toHaveBeenCalledWith('09120000000', 'SUBSCRIPTION_TRIAL_1_DAY', expect.arrayContaining([
-      { name: 'Link', value: 'https://vazano.ir/supplier/subscription' },
+      { name: 'Link', value: 'supplier/subscription' },
     ]));
   });
 });

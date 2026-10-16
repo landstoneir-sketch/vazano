@@ -5,9 +5,10 @@ This module owns seller plan purchase, payment activation, credits, renewal sche
 - Activation creates the approved MVP reminder schedule at -14, -7, -3, 0, and +7 days.
 - Renewal cancels all pending reminders from older subscriptions for the organization.
 - A background lifecycle worker moves `ACTIVE → GRACE → EXPIRED` and emits idempotently claimed in-app reminder events.
-- SMS reminder rows remain pending until `SUBSCRIPTION_SMS_ENABLED=true` and all five dedicated SMS.ir renewal template identifiers are configured; OTP template identifiers are never reused for billing messages.
+- SMS reminder rows remain pending until `SUBSCRIPTION_SMS_ENABLED=true` and all nine dedicated SMS.ir renewal/trial template identifiers are configured; OTP template identifiers are never reused for billing messages.
+- Approved SMS.ir templates keep `vazano.ir/` literal and receive only the relative `supplier/subscription` path through their `Link` or `Path` parameter.
 - Renewal SMS delivery is limited to 09:00–20:00 Asia/Tehran, one message per organization in 24 hours, and the active supplier owner for the MVP. If several reminders are overdue, only the newest one is sent and older reminders are cancelled.
-- SMS.ir renewal templates use the canonical parameters `Date`, `Amount`, and `Link`. Provider template identifiers stay in environment configuration and are validated before startup when renewal SMS is enabled.
+- SMS.ir renewal templates use `Date`, `Amount`, and a provider-approved relative-path parameter named `Link` or `Path`. Provider template identifiers stay in environment configuration and are validated before startup when renewal SMS is enabled.
 - Finance managers can inspect reminder delivery status and requeue a failed SMS. Requeueing is audited and never bypasses the delivery window or the 24-hour organization limit.
 - Trial plans have a configurable 1–90 day duration, cost zero, no grace period, and can be activated only once per supplier organization. Trial reminders run at -7, -3, -1, and 0 days with dedicated provider templates.
 - `/v1/admin/billing/overview` gives finance users a unified view of plans, recent subscriptions, payments, and lifecycle counts.
