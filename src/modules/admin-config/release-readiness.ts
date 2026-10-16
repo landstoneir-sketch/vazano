@@ -16,6 +16,8 @@ export type ReleaseReadinessSummary = {
   warning: number;
   blocked: number;
   ownerDecisionRequired: number;
+  technicalActionsRequired: number;
+  operationsActionsRequired: number;
   percent: number;
 };
 
@@ -85,7 +87,10 @@ export function evaluateReleaseReadiness(input: ReleaseReadinessInput): { ready:
   const ready = checks.filter((item) => item.status === 'READY').length;
   const warning = checks.filter((item) => item.status === 'WARNING').length;
   const blocked = checks.filter((item) => item.status === 'BLOCKED').length;
-  const ownerDecisionRequired = checks.filter((item) => item.status === 'BLOCKED' && item.responsibility === 'OWNER').length;
+  const pendingChecks = checks.filter((item) => item.status !== 'READY');
+  const ownerDecisionRequired = pendingChecks.filter((item) => item.responsibility === 'OWNER').length;
+  const technicalActionsRequired = pendingChecks.filter((item) => item.responsibility === 'TECHNICAL').length;
+  const operationsActionsRequired = pendingChecks.filter((item) => item.responsibility === 'OPERATIONS').length;
   const total = checks.length;
 
   return {
@@ -96,6 +101,8 @@ export function evaluateReleaseReadiness(input: ReleaseReadinessInput): { ready:
       warning,
       blocked,
       ownerDecisionRequired,
+      technicalActionsRequired,
+      operationsActionsRequired,
       percent: total === 0 ? 0 : Math.round(((ready + warning * 0.5) / total) * 100),
     },
     checks,
