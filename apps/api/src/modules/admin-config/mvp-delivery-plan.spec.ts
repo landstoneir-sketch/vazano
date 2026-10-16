@@ -12,7 +12,7 @@ describe('MVP delivery plan', () => {
       variance: 0,
     });
     expect(result.phases.find((phase) => phase.key === 'marketplace-core')).toMatchObject({ previousPercent: 93, actualPercent: 93, changeFromPrevious: 0 });
-    expect(result.phases.find((phase) => phase.key === 'commercial-foundation')).toMatchObject({ previousPercent: 70, actualPercent: 72, changeFromPrevious: 2 });
+    expect(result.phases.find((phase) => phase.key === 'commercial-foundation')).toMatchObject({ previousPercent: 72, actualPercent: 74, changeFromPrevious: 2 });
     expect(result.phases.find((phase) => phase.key === 'admin-operations')).toMatchObject({ previousPercent: 84, actualPercent: 84, changeFromPrevious: 0 });
     expect(result.phases.find((phase) => phase.key === 'quality-release')).toMatchObject({ previousPercent: 90, actualPercent: 90, changeFromPrevious: 0 });
   });
