@@ -16,9 +16,10 @@ type ReadinessSummary = {
   ownerDecisionRequired: number;
   technicalActionsRequired: number;
   operationsActionsRequired: number;
+  pilotBlockers: number;
   percent: number;
 };
-type ReadinessResponse = { generatedAt: string; ready: boolean; summary: ReadinessSummary; checks: ReadinessCheck[] };
+type ReadinessResponse = { generatedAt: string; ready: boolean; pilotReady: boolean; summary: ReadinessSummary; checks: ReadinessCheck[] };
 
 const statusLabels: Record<CheckStatus, string> = { READY: 'آماده', WARNING: 'هشدار', BLOCKED: 'مسدود' };
 const statusClasses: Record<CheckStatus, string> = { READY: 'severity-low', WARNING: 'severity-medium', BLOCKED: 'severity-critical' };
@@ -47,6 +48,7 @@ export function ReleaseReadinessPanel() {
       <div className="readiness-progress-track" role="progressbar" aria-label="درصد آمادگی انتشار" aria-valuemin={0} aria-valuemax={100} aria-valuenow={result.summary.percent}><span style={{ width: `${result.summary.percent}%` }} /></div>
       <p className="muted">این درصد فقط پیش‌نیازهای قابل‌کنترل انتشار را نشان می‌دهد و با درصد تکمیل کل محصول یکسان نیست.</p>
     </section>
+    <div className={result.pilotReady ? 'message message-success' : 'message message-error'}>{result.pilotReady ? 'پایلوت داخلی آماده استفاده است؛ موانع باقی‌مانده به انتشار عمومی مربوط‌اند.' : `${result.summary.pilotBlockers.toLocaleString('fa-IR')} مانع ضروری برای پایلوت داخلی باقی مانده است.`}</div>
     <div className={result.ready ? 'message message-success' : 'message message-error'}>{result.ready ? 'همه پیش‌نیازهای الزامی انتشار آماده‌اند.' : `${result.summary.blocked.toLocaleString('fa-IR')} مانع انتشار باید برطرف شود.`}</div>
     <div className="dashboard-grid">
       <article className="card billing-summary-card"><span>آماده</span><strong>{result.summary.ready.toLocaleString('fa-IR')}</strong></article>

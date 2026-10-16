@@ -18,8 +18,17 @@ export type ReleaseReadinessSummary = {
   ownerDecisionRequired: number;
   technicalActionsRequired: number;
   operationsActionsRequired: number;
+  pilotBlockers: number;
   percent: number;
 };
+
+const INTERNAL_PILOT_DEFERRED_CHECKS = new Set([
+  'environment.production',
+  'security.otp-debug',
+  'integration.sms',
+  'integration.subscription-sms-delivery',
+  'integration.payment',
+]);
 
 export type ReleaseReadinessInput = {
   nodeEnvironment: string;
@@ -48,7 +57,7 @@ export type ReleaseReadinessInput = {
   activeSuperAdminCount: number;
 };
 
-export function evaluateReleaseReadiness(input: ReleaseReadinessInput): { ready: boolean; summary: ReleaseReadinessSummary; checks: ReleaseReadinessCheck[] } {
+export function evaluateReleaseReadiness(input: ReleaseReadinessInput): { ready: boolean; pilotReady: boolean; summary: ReleaseReadinessSummary; checks: ReleaseReadinessCheck[] } {
   const checks: ReleaseReadinessCheck[] = [
     check('environment.production', 'حالت اجرای Production', input.nodeEnvironment === 'production', 'محیط روی Production تنظیم شده است.', 'نسخه فعلی در محیط توسعه اجرا می‌شود؛ این وضعیت برای کار محلی طبیعی است.'),
     check('security.otp-debug', 'غیرفعال بودن کد ورود آزمایشی', !input.otpDebugEnabled, 'کد ثابت آزمایشی غیرفعال است.', 'کد ثابت آزمایشی فعال است و در انتشار نهایی مجاز نیست.'),
@@ -91,10 +100,12 @@ export function evaluateReleaseReadiness(input: ReleaseReadinessInput): { ready:
   const ownerDecisionRequired = pendingChecks.filter((item) => item.responsibility === 'OWNER').length;
   const technicalActionsRequired = pendingChecks.filter((item) => item.responsibility === 'TECHNICAL').length;
   const operationsActionsRequired = pendingChecks.filter((item) => item.responsibility === 'OPERATIONS').length;
+  const pilotBlockers = checks.filter((item) => item.status === 'BLOCKED' && !INTERNAL_PILOT_DEFERRED_CHECKS.has(item.key)).length;
   const total = checks.length;
 
   return {
     ready: blocked === 0,
+    pilotReady: pilotBlockers === 0,
     summary: {
       total,
       ready,
@@ -103,6 +114,7 @@ export function evaluateReleaseReadiness(input: ReleaseReadinessInput): { ready:
       ownerDecisionRequired,
       technicalActionsRequired,
       operationsActionsRequired,
+      pilotBlockers,
       percent: total === 0 ? 0 : Math.round(((ready + warning * 0.5) / total) * 100),
     },
     checks,
