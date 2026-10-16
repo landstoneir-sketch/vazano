@@ -68,6 +68,7 @@ export function QuoteForm({ rfqId, initialOrganizationId }: { rfqId: string; ini
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [guidanceByCategoryId, setGuidanceByCategoryId] = useState<Record<string, CategoryGuidance>>({});
+  const [quotationHistoryState, setQuotationHistoryState] = useState<'LOADING' | 'READY' | 'ERROR'>('LOADING');
 
   function populateQuotationFields(quotation: SupplierQuotation, currentRfq: Rfq) {
     setPrices(Object.fromEntries(quotation.items.map((item) => [item.rfqItemId, fromRial(item.unitPriceRial)])));
@@ -134,16 +135,21 @@ export function QuoteForm({ rfqId, initialOrganizationId }: { rfqId: string; ini
             populateQuotationFields(latestSubmitted, rfq);
             setAttachments([]);
             setMessage(`اطلاعات نسخه ${latestSubmitted.version.toLocaleString('fa-IR')} برای ساخت نسخه جدید کپی شد. پیوست‌های قبلی کپی نمی‌شوند و ارسال نهایی نسخه جدید دوباره مشمول هزینه اعتبار است.`);
-            return;
+          } else {
+            resetQuotationFields(rfq);
+            setAttachments([]); setMessage('');
           }
-          resetQuotationFields(rfq);
-          setAttachments([]); setMessage('');
-          return;
+        } else {
+          populateQuotationFields(draft, rfq);
+          setMessage('پیش‌نویس ذخیره‌شده بازیابی شد و قابل ویرایش است.');
         }
-        populateQuotationFields(draft, rfq);
-        setMessage('پیش‌نویس ذخیره‌شده بازیابی شد و قابل ویرایش است.');
+        setQuotationHistoryState('READY');
       })
-      .catch((reason: unknown) => { if (active) setMessage(reason instanceof Error ? reason.message : 'بررسی پیش‌نویس قبلی انجام نشد.'); });
+      .catch((reason: unknown) => {
+        if (!active) return;
+        setMessage(reason instanceof Error ? reason.message : 'بررسی پیش‌نویس قبلی انجام نشد.');
+        setQuotationHistoryState('ERROR');
+      });
     return () => { active = false; };
   }, [organizationId, rfq, rfqId]);
 
@@ -234,14 +240,14 @@ export function QuoteForm({ rfqId, initialOrganizationId }: { rfqId: string; ini
     finally { setBusy(false); }
   }
 
-  if (!rfq) return <div className="card">{message || 'در حال دریافت استعلام…'}</div>;
+  if (!rfq || quotationHistoryState !== 'READY') return <div className={`card ${quotationHistoryState === 'ERROR' ? 'message message-error' : ''}`}>{message || 'در حال بررسی نسخه‌های قبلی پیشنهاد…'}</div>;
   return <form className="card form-grid quote-form" onSubmit={save} onChangeCapture={(event) => {
     if (created?.status === 'DRAFT' && (!(event.target instanceof HTMLInputElement) || event.target.type !== 'file')) setDraftDirty(true);
   }}>
     {message && <div className={`message ${created?.status === 'SUBMITTED' ? 'message-success' : ''}`}>{message}</div>}
     <div className="full quote-rfq-summary"><div className="eyebrow">{rfq.code}</div><h2>{rfq.title}</h2>{rfq.description && <p>{rfq.description}</p>}<div className="specification-summary"><span>تحویل: {rfq.deliveryProvince ?? 'نامشخص'}، {rfq.deliveryCity ?? 'نامشخص'}</span><span>مهلت پاسخ: {rfq.responseDeadline ? new Date(rfq.responseDeadline).toLocaleString('fa-IR') : 'تعیین نشده'}</span><span>زمان موردنیاز: {rfq.requiredAt ? new Date(rfq.requiredAt).toLocaleString('fa-IR') : 'تعیین نشده'}</span><span>نصب: {rfq.installationRequired ? 'موردنیاز است' : 'موردنیاز نیست'}</span></div></div>
     <div className="rfq-form-section-title full"><b>۱</b><div><strong>حساب فروشنده و شرایط تحویل</strong><span>اعتبار زمانی و روش پرداخت این پیشنهاد را مشخص کنید.</span></div></div>
-    <label className="form-field"><span>حساب فروشنده</span><select value={organizationId} disabled={Boolean(created)} onChange={(event) => setOrganizationId(event.target.value)} required>{organizations.map((item) => <option key={item.id} value={item.id}>{item.displayName} · {item.status}</option>)}</select></label>
+    <label className="form-field"><span>حساب فروشنده</span><select value={organizationId} disabled={Boolean(created)} onChange={(event) => { setQuotationHistoryState('LOADING'); setOrganizationId(event.target.value); }} required>{organizations.map((item) => <option key={item.id} value={item.id}>{item.displayName} · {item.status}</option>)}</select></label>
     <label className="form-field"><span>مدت آماده‌سازی (روز)</span><input type="number" min="0" value={preparationDays} onChange={(event) => setPreparationDays(event.target.value)} required /></label>
     <label className="form-field"><span>تاریخ تحویل (اختیاری)</span><input type="date" value={deliveryDate} onChange={(event) => setDeliveryDate(event.target.value)} /></label>
     <label className="form-field"><span>اعتبار پیشنهاد تا</span><input type="date" value={validUntil} onChange={(event) => setValidUntil(event.target.value)} required /></label>
