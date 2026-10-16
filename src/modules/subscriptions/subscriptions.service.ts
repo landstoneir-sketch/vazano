@@ -1,13 +1,14 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { PrismaService } from '../../shared/prisma/prisma.service';
 
 @Injectable()
 export class SubscriptionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly config: ConfigService) {}
 
-  listPublicPlans() {
-    return this.prisma.subscriptionPlan.findMany({
+  async listPublicPlans() {
+    const plans = await this.prisma.subscriptionPlan.findMany({
       where: { isActive: true, isPublic: true },
       orderBy: { priceRial: 'asc' },
       select: {
@@ -27,6 +28,10 @@ export class SubscriptionsService {
         version: true,
       },
     });
+    const onlinePaymentAvailable = this.config.get<string>('PAYMENT_PROVIDER', 'zarinpal') === 'zarinpal'
+      && this.config.get<string>('ZARINPAL_ENABLED') === 'true'
+      && Boolean(this.config.get<string>('ZARINPAL_MERCHANT_ID'));
+    return plans.map((plan) => ({ ...plan, checkoutAvailable: plan.isTrial || onlinePaymentAvailable }));
   }
 
   listForOrganization(user: AuthenticatedUser, organizationId: string) {
