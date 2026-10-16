@@ -9,7 +9,7 @@ import type { RouteIdentity } from '@/lib/route-access';
 type AuthenticatedAccount = RouteIdentity & { id: string; mobile: string; status: string };
 type ReadinessSummary = { total: number; ready: number; warning: number; blocked: number; percent: number };
 type ReadinessResponse = { generatedAt: string; ready: boolean; summary: ReadinessSummary };
-type DeliveryPhase = { key: string; title: string; plannedPercent: number; actualPercent: number; variance: number; status: 'COMPLETE' | 'ON_TRACK' | 'AT_RISK' };
+type DeliveryPhase = { key: string; title: string; previousPercent: number; plannedPercent: number; actualPercent: number; changeFromPrevious: number; variance: number; status: 'COMPLETE' | 'ON_TRACK' | 'AT_RISK' };
 type DeliveryProgress = {
   previousPercent: number;
   actualPercent: number;
@@ -66,7 +66,7 @@ export function AdminOverview() {
         <div><span>برنامه فعلی</span><strong>{delivery.plannedPercent.toLocaleString('fa-IR')}٪</strong></div>
         <div><span>انحراف از برنامه</span><strong>{formatVariance(delivery.varianceFromPlan)}٪</strong></div>
       </div>
-      <div className="table-wrap"><table className="data-table delivery-table"><thead><tr><th>مرحله</th><th>برنامه</th><th>واقعی</th><th>اختلاف</th></tr></thead><tbody>{delivery.phases.map((phase) => <tr key={phase.key}><td>{phase.title}</td><td>{phase.plannedPercent.toLocaleString('fa-IR')}٪</td><td>{phase.actualPercent.toLocaleString('fa-IR')}٪</td><td className={phase.variance < 0 ? 'delivery-behind' : 'delivery-ahead'}>{formatVariance(phase.variance)}٪</td></tr>)}</tbody></table></div>
+      <div className="table-wrap"><table className="data-table delivery-table"><thead><tr><th>مرحله</th><th>مرحله قبل</th><th>واقعی فعلی</th><th>تغییر</th><th>برنامه فعلی</th><th>اختلاف با برنامه</th></tr></thead><tbody>{delivery.phases.map((phase) => <tr key={phase.key}><td>{phase.title}</td><td>{phase.previousPercent.toLocaleString('fa-IR')}٪</td><td>{phase.actualPercent.toLocaleString('fa-IR')}٪</td><td className={phase.changeFromPrevious < 0 ? 'delivery-behind' : 'delivery-ahead'}>{formatVariance(phase.changeFromPrevious)}٪</td><td>{phase.plannedPercent.toLocaleString('fa-IR')}٪</td><td className={phase.variance < 0 ? 'delivery-behind' : 'delivery-ahead'}>{formatVariance(phase.variance)}٪</td></tr>)}</tbody></table></div>
       <div className="delivery-estimates"><p><strong>نسخه پایلوت قابل استفاده:</strong> {formatRange(delivery.estimates.pilot)} روز کاری باقی‌مانده</p><p><strong>نسخه MVP آماده انتشار:</strong> {formatRange(delivery.estimates.release)} روز کاری باقی‌مانده</p></div>
       <p className={delivery.scheduleStatus === 'ON_TRACK' ? 'message message-success' : 'message message-error'}>{delivery.scheduleStatus === 'ON_TRACK' ? 'پیشرفت واقعی مطابق یا جلوتر از برنامه فعلی است.' : 'پیشرفت واقعی از برنامه عقب‌تر است و نیاز به بازتنظیم دارد.'}</p>
     </section>}
