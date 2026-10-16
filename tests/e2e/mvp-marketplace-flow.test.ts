@@ -283,9 +283,24 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   await page.getByRole('button', { name: 'ارسال نهایی پیشنهاد' }).click();
   await expect(page.getByText(/پیشنهاد قیمت با موفقیت ارسال شد/)).toBeVisible();
 
-  const primaryQuotation = await prisma.quotation.findFirstOrThrow({
+  let primaryQuotation = await prisma.quotation.findFirstOrThrow({
     where: { rfqId: rfqId!, supplierOrganizationId: SUPPLIER_ORGANIZATION_ID, status: 'SUBMITTED' },
   });
+  await page.goto('/supplier');
+  const submittedQuotationCard = page.locator('.supplier-performance-card .list-card').filter({ hasText: primaryQuotation.code });
+  await submittedQuotationCard.getByRole('link', { name: 'ثبت نسخه جدید' }).click();
+  await expect(page.getByText(/اطلاعات نسخه ۱ برای ساخت نسخه جدید کپی شد/)).toBeVisible();
+  await expect(page.getByLabel('قیمت هر واحد (تومان)')).toHaveValue('1000000');
+  await expect(page.getByLabel('حمل (تومان)')).toHaveValue('5000000');
+  await page.getByRole('button', { name: 'ذخیره پیش‌نویس' }).click();
+  await expect(page.getByText(/پیش‌نویس پیشنهاد ذخیره شد/)).toBeVisible();
+  await page.getByRole('button', { name: 'ارسال نهایی پیشنهاد' }).click();
+  await expect(page.getByText(/پیشنهاد قیمت با موفقیت ارسال شد/)).toBeVisible();
+  expect((await prisma.quotation.findUniqueOrThrow({ where: { id: primaryQuotation.id } })).status).toBe('REVISED');
+  primaryQuotation = await prisma.quotation.findFirstOrThrow({
+    where: { rfqId: rfqId!, supplierOrganizationId: SUPPLIER_ORGANIZATION_ID, status: 'SUBMITTED' },
+  });
+  expect(primaryQuotation.version).toBe(2);
   const secondarySupplier = await prisma.organization.create({
     data: {
       id: SECONDARY_SUPPLIER_ORGANIZATION_ID,
