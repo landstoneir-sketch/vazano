@@ -56,13 +56,20 @@ type DiscountCode = {
   maxRedemptions: number | null; validFrom: string; validUntil: string; isActive: boolean;
   applicablePlan: { id: string; code: string; nameFa: string } | null; _count: { redemptions: number };
 };
+type BillingRequest = {
+  id: string; code: string; type: string; priority: 'P1' | 'P2' | 'P3' | 'P4'; status: string;
+  subject: string; description: string; createdAt: string;
+  requester: { firstName: string | null; lastName: string | null; mobile: string };
+  organization: SupplierOption | null; _count: { comments: number };
+};
 type Overview = {
   summary: Record<string, number>; reminderSummary: Record<string, number>; plans: Plan[]; subscriptions: Subscription[];
   payments: Payment[]; receipts: PaymentReceipt[]; reminders: SubscriptionReminder[];
   reminderDelivery: { enabled: boolean; provider: 'SMSIR' | 'DEBUG'; templatesConfigured: boolean; liveReady: boolean; deliveryWindow: string };
   suppliers: SupplierOption[]; manualRenewals: ManualRenewal[]; invoices: BillingInvoice[]; discountCodes: DiscountCode[];
+  billingRequests: BillingRequest[];
 };
-type Tab = 'plans' | 'discounts' | 'subscriptions' | 'manual-renewals' | 'invoices' | 'payments' | 'receipts' | 'reminders';
+type Tab = 'plans' | 'discounts' | 'subscriptions' | 'requests' | 'manual-renewals' | 'invoices' | 'payments' | 'receipts' | 'reminders';
 type ReconciliationResult = { payment: { reconciliationStatus: Payment['reconciliationStatus'] }; provider: { success: boolean; code: number; referenceId: string | null } };
 
 type PlanDraft = {
@@ -231,6 +238,21 @@ export function BillingManager() {
     finally { setBusy(false); }
   }
 
+  function beginManualRenewal(request: BillingRequest) {
+    if (!request.organization) return;
+    setManualRenewal({
+      organizationId: request.organization.id,
+      planId: '',
+      amountToman: '',
+      trackingNumber: '',
+      paidAt: currentLocalDateTime(),
+      note: `درخواست مالی ${request.code}: ${request.subject}`,
+    });
+    setTab('manual-renewals');
+    setError('');
+    setMessage(`سازمان درخواست ${request.code} انتخاب شد؛ پس از کنترل سند پرداخت، پلن و شماره پیگیری را وارد کنید.`);
+  }
+
   async function createDiscount(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError(''); setMessage('');
     try {
@@ -266,17 +288,22 @@ export function BillingManager() {
 
   return <div className="stack">
     {error && <div className="message message-error">{error}</div>}{message && <div className="message message-success">{message}</div>}
-    <div className="dashboard-grid">{statusCards.map(([status, label]) => <article className="card billing-summary-card" key={status}><span>{label}</span><strong>{(overview?.summary[status] ?? 0).toLocaleString('fa-IR')}</strong></article>)}</div>
-    <div className="tab-list" role="tablist" aria-label="بخش مالی"><button className={tab === 'plans' ? 'tab-active' : ''} type="button" onClick={() => setTab('plans')}>پلن‌ها</button><button className={tab === 'discounts' ? 'tab-active' : ''} type="button" onClick={() => setTab('discounts')}>کدهای تخفیف</button><button className={tab === 'subscriptions' ? 'tab-active' : ''} type="button" onClick={() => setTab('subscriptions')}>اشتراک‌ها</button><button className={tab === 'manual-renewals' ? 'tab-active' : ''} type="button" onClick={() => setTab('manual-renewals')}>تمدید دستی</button><button className={tab === 'invoices' ? 'tab-active' : ''} type="button" onClick={() => setTab('invoices')}>صورتحساب‌ها</button><button className={tab === 'payments' ? 'tab-active' : ''} type="button" onClick={() => setTab('payments')}>پرداخت‌ها</button><button className={tab === 'receipts' ? 'tab-active' : ''} type="button" onClick={() => setTab('receipts')}>رسیدها</button><button className={tab === 'reminders' ? 'tab-active' : ''} type="button" onClick={() => setTab('reminders')}>اخطارهای تمدید</button></div>
+    <div className="dashboard-grid">{statusCards.map(([status, label]) => <article className="card billing-summary-card" key={status}><span>{label}</span><strong>{(overview?.summary[status] ?? 0).toLocaleString('fa-IR')}</strong></article>)}<article className="card billing-summary-card"><span>درخواست مالی باز</span><strong>{(overview?.billingRequests.length ?? 0).toLocaleString('fa-IR')}</strong></article></div>
+    <div className="tab-list" role="tablist" aria-label="بخش مالی"><button className={tab === 'plans' ? 'tab-active' : ''} type="button" onClick={() => setTab('plans')}>پلن‌ها</button><button className={tab === 'discounts' ? 'tab-active' : ''} type="button" onClick={() => setTab('discounts')}>کدهای تخفیف</button><button className={tab === 'subscriptions' ? 'tab-active' : ''} type="button" onClick={() => setTab('subscriptions')}>اشتراک‌ها</button><button className={tab === 'requests' ? 'tab-active' : ''} type="button" onClick={() => setTab('requests')}>درخواست‌های مالی ({(overview?.billingRequests.length ?? 0).toLocaleString('fa-IR')})</button><button className={tab === 'manual-renewals' ? 'tab-active' : ''} type="button" onClick={() => setTab('manual-renewals')}>تمدید دستی</button><button className={tab === 'invoices' ? 'tab-active' : ''} type="button" onClick={() => setTab('invoices')}>صورتحساب‌ها</button><button className={tab === 'payments' ? 'tab-active' : ''} type="button" onClick={() => setTab('payments')}>پرداخت‌ها</button><button className={tab === 'receipts' ? 'tab-active' : ''} type="button" onClick={() => setTab('receipts')}>رسیدها</button><button className={tab === 'reminders' ? 'tab-active' : ''} type="button" onClick={() => setTab('reminders')}>اخطارهای تمدید</button></div>
     {tab === 'plans' && overview && <section className="card stack"><div className="admin-card-title"><div><h2>مدیریت پلن‌ها</h2><p>قیمت را به تومان وارد کنید؛ مبلغ در دیتابیس با واحد ریال و به‌صورت عدد صحیح ذخیره می‌شود.</p></div><button className="button button-secondary" type="button" onClick={() => { setDraft(emptyPlan); setError(''); setMessage(''); }}>پلن جدید</button></div><div className="content-item-list">{overview.plans.map((plan) => <button className={draft.id === plan.id ? 'content-item-active' : ''} type="button" key={plan.id} onClick={() => { setDraft(fromPlan(plan)); setError(''); setMessage(''); }}><strong>{plan.nameFa}</strong><span>{plan.isTrial ? 'آزمایشی رایگان' : formatToman(plan.priceRial)} · {plan.isActive ? 'فعال' : 'غیرفعال'}</span></button>)}</div><PlanForm draft={draft} setDraft={setDraft} busy={busy} onSubmit={savePlan} /></section>}
     {tab === 'discounts' && overview && <DiscountManager items={overview.discountCodes} plans={overview.plans} draft={discount} setDraft={setDiscount} busy={busy} onSubmit={createDiscount} onToggle={toggleDiscount} />}
     {tab === 'subscriptions' && overview && <SubscriptionList items={overview.subscriptions} />}
+    {tab === 'requests' && overview && <BillingRequestList items={overview.billingRequests} onBeginManualRenewal={beginManualRenewal} />}
     {tab === 'manual-renewals' && overview && <ManualRenewalManager suppliers={overview.suppliers} plans={overview.plans} items={overview.manualRenewals} draft={manualRenewal} setDraft={setManualRenewal} busy={busy} onSubmit={createManualRenewal} />}
     {tab === 'invoices' && overview && <InvoiceList items={overview.invoices} />}
     {tab === 'payments' && overview && <PaymentList items={overview.payments} reconcilingId={reconcilingPaymentId} resolvingId={resolvingPaymentId} onReconcile={reconcilePayment} onResolve={resolvePayment} />}
     {tab === 'receipts' && overview && <ReceiptList items={overview.receipts} />}
     {tab === 'reminders' && overview && <ReminderList items={overview.reminders} summary={overview.reminderSummary} delivery={overview.reminderDelivery} retryingId={retryingReminderId} onRetry={retryReminder} />}
   </div>;
+}
+
+function BillingRequestList({ items, onBeginManualRenewal }: { items: BillingRequest[]; onBeginManualRenewal: (request: BillingRequest) => void }) {
+  return <section className="stack"><div><h2>درخواست‌های مالی باز</h2><p className="muted">درخواست‌های تمدید و مسائل مالی از صف پشتیبانی در اینجا دیده می‌شوند. تمدید فقط پس از بررسی سند پرداخت ثبت شود.</p></div>{items.length === 0 && <div className="card">درخواست مالی بازی وجود ندارد.</div>}{items.map((item) => { const requesterName = [item.requester.firstName, item.requester.lastName].filter(Boolean).join(' ') || item.requester.mobile; return <article className="card admin-card-title" key={item.id}><div><div className="eyebrow">{item.code} · {supportPriorityLabel(item.priority)}</div><h3>{item.subject}</h3><p>{item.organization ? item.organization.displayName || item.organization.legalName : 'بدون سازمان مرتبط'} · درخواست‌کننده: {requesterName}</p><p className="muted">{item.description}</p><p className="muted">ثبت {new Date(item.createdAt).toLocaleString('fa-IR')} · {item._count.comments.toLocaleString('fa-IR')} پاسخ</p></div><div><span className={`status-badge ${item.priority === 'P1' ? 'status-suspended' : 'severity-medium'}`}>{supportStatusLabel(item.status)}</span><button className="button button-primary" type="button" disabled={!item.organization} onClick={() => onBeginManualRenewal(item)}>{item.organization ? 'آماده‌سازی تمدید دستی' : 'سازمان مشخص نشده'}</button></div></article>; })}</section>;
 }
 
 function DiscountManager({ items, plans, draft, setDraft, busy, onSubmit, onToggle }: {
@@ -364,3 +391,5 @@ function resolutionLabel(resolution: PaymentResolution | null): string { return 
 function reminderStatusLabel(status: SubscriptionReminder['status']): string { return ({ PENDING: 'در انتظار', SENT: 'ارسال‌شده', FAILED: 'ناموفق', CANCELLED: 'لغوشده' } as const)[status]; }
 function reminderOffsetLabel(offsetDays: number): string { return offsetDays < 0 ? `${Math.abs(offsetDays).toLocaleString('fa-IR')} روز پیش از انقضا` : offsetDays === 0 ? 'روز انقضا' : `${offsetDays.toLocaleString('fa-IR')} روز پس از انقضا`; }
 function invoiceStatusLabel(status: BillingInvoice['status']): string { return ({ ISSUED: 'صادرشده', PAID: 'پرداخت‌شده', OVERDUE: 'سررسیدگذشته', CANCELLED: 'لغوشده' } as const)[status]; }
+function supportPriorityLabel(priority: BillingRequest['priority']): string { return ({ P1: 'فوری', P2: 'زیاد', P3: 'عادی', P4: 'کم' } as const)[priority]; }
+function supportStatusLabel(status: string): string { return ({ SUBMITTED: 'ثبت‌شده', ACKNOWLEDGED: 'دریافت‌شده', IN_REVIEW: 'در حال بررسی', WAITING_FOR_REQUESTER: 'در انتظار پاسخ کاربر' } as Record<string, string>)[status] ?? status; }
