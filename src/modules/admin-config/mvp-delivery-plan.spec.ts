@@ -13,8 +13,8 @@ describe('MVP delivery plan', () => {
     });
     expect(result.phases.find((phase) => phase.key === 'marketplace-core')).toMatchObject({ previousPercent: 93, actualPercent: 93, changeFromPrevious: 0 });
     expect(result.phases.find((phase) => phase.key === 'commercial-foundation')).toMatchObject({ previousPercent: 70, actualPercent: 70, changeFromPrevious: 0 });
-    expect(result.phases.find((phase) => phase.key === 'admin-operations')).toMatchObject({ previousPercent: 83, actualPercent: 83, changeFromPrevious: 0 });
-    expect(result.phases.find((phase) => phase.key === 'quality-release')).toMatchObject({ previousPercent: 88, actualPercent: 89, changeFromPrevious: 1 });
+    expect(result.phases.find((phase) => phase.key === 'admin-operations')).toMatchObject({ previousPercent: 83, actualPercent: 84, changeFromPrevious: 1 });
+    expect(result.phases.find((phase) => phase.key === 'quality-release')).toMatchObject({ previousPercent: 89, actualPercent: 90, changeFromPrevious: 1 });
   });
 
   it('publishes bounded working-day estimates for owner reporting', () => {
