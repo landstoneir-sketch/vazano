@@ -520,4 +520,3 @@ export class NotificationsService {
     } as Record<string, string>)[purpose] ?? 'خدمت وازانو';
   }
 }
-
