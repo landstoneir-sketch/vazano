@@ -11,7 +11,9 @@ export function validateEnvironment(environment: Environment): Environment {
   for (const key of ['API_RATE_LIMIT_REQUESTS_PER_MINUTE', 'API_MUTATION_RATE_LIMIT_REQUESTS_PER_MINUTE', 'PAYMENT_CALLBACK_RATE_LIMIT_REQUESTS_PER_MINUTE']) {
     if (environment[key]) requirePositiveInteger(environment, key);
   }
-  if (environment.RFQ_LIFECYCLE_WORKER_INTERVAL_MS) requirePositiveInteger(environment, 'RFQ_LIFECYCLE_WORKER_INTERVAL_MS');
+  for (const key of ['NOTIFICATION_WORKER_INTERVAL_MS', 'SUBSCRIPTION_LIFECYCLE_WORKER_INTERVAL_MS', 'RFQ_LIFECYCLE_WORKER_INTERVAL_MS']) {
+    if (environment[key]) requirePositiveInteger(environment, key);
+  }
   const paymentProvider = environment.PAYMENT_PROVIDER ?? 'zarinpal';
   const smsProvider = environment.SMS_PROVIDER ?? 'debug';
   if (!['zarinpal', 'mock'].includes(paymentProvider)) throw new Error('PAYMENT_PROVIDER must be zarinpal or mock.');
@@ -40,6 +42,12 @@ export function validateEnvironment(environment: Environment): Environment {
     if (webOrigin.protocol !== 'https:') throw new Error('WEB_ORIGIN must use HTTPS in production.');
     if (environment.OTP_DEBUG_ENABLED === 'true') throw new Error('OTP debug mode must be disabled in production.');
     if (environment.SEED_DEMO_DATA === 'true') throw new Error('Development demo data must be disabled in production.');
+    for (const key of ['NOTIFICATION_WORKER_ENABLED', 'SUBSCRIPTION_LIFECYCLE_WORKER_ENABLED', 'RFQ_LIFECYCLE_WORKER_ENABLED']) {
+      requireEnabled(environment, key);
+    }
+    for (const key of ['NOTIFICATION_WORKER_INTERVAL_MS', 'SUBSCRIPTION_LIFECYCLE_WORKER_INTERVAL_MS', 'RFQ_LIFECYCLE_WORKER_INTERVAL_MS']) {
+      requirePositiveInteger(environment, key);
+    }
     requireIranianMobile(environment, 'SEED_ADMIN_MOBILE');
     requirePositiveInteger(environment, 'TRUST_PROXY_HOPS');
     if (smsProvider !== 'smsir') throw new Error('A production SMS provider must be configured.');
@@ -82,6 +90,10 @@ function requirePositiveInteger(environment: Environment, key: string): number {
   const value = Number(requireValue(environment, key));
   if (!Number.isInteger(value) || value <= 0) throw new Error(`${key} must be a positive integer.`);
   return value;
+}
+
+function requireEnabled(environment: Environment, key: string): void {
+  if (requireValue(environment, key) !== 'true') throw new Error(`${key} must be explicitly enabled in production.`);
 }
 
 function requireProductionSecret(environment: Environment, key: string, minimumLength = 1): string {
