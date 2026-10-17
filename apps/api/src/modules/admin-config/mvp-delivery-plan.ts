@@ -18,9 +18,9 @@ const phases: Omit<DeliveryPhase, 'changeFromPrevious' | 'variance' | 'status'>[
   { key: 'identity-access', title: 'ورود، کاربران، سازمان و دسترسی', weight: 15, previousPercent: 100, plannedPercent: 100, actualPercent: 100 },
   { key: 'marketplace-core', title: 'کاتالوگ و چرخه استعلام', weight: 25, previousPercent: 93, plannedPercent: 92, actualPercent: 93 },
   { key: 'quotations-collaboration', title: 'پیشنهاد، مقایسه، پیام و اعلان', weight: 15, previousPercent: 90, plannedPercent: 90, actualPercent: 90 },
-  { key: 'commercial-foundation', title: 'فروشنده، اشتراک و پرداخت', weight: 10, previousPercent: 76, plannedPercent: 70, actualPercent: 79 },
-  { key: 'admin-operations', title: 'مدیریت، محتوا و گزارش', weight: 5, previousPercent: 85, plannedPercent: 82, actualPercent: 86 },
-  { key: 'quality-release', title: 'امنیت، آزمون و آماده‌سازی انتشار', weight: 10, previousPercent: 90, plannedPercent: 85, actualPercent: 90 },
+  { key: 'commercial-foundation', title: 'فروشنده، اشتراک و پرداخت', weight: 10, previousPercent: 79, plannedPercent: 70, actualPercent: 82 },
+  { key: 'admin-operations', title: 'مدیریت، محتوا و گزارش', weight: 5, previousPercent: 86, plannedPercent: 82, actualPercent: 87 },
+  { key: 'quality-release', title: 'امنیت، آزمون و آماده‌سازی انتشار', weight: 10, previousPercent: 90, plannedPercent: 85, actualPercent: 91 },
 ];
 
 export function getMvpDeliveryPlan() {
