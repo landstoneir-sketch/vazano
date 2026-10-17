@@ -24,6 +24,7 @@ describe('SubscriptionBillingService trial activation', () => {
       reminderRows = input.data;
       return Promise.resolve({ count: input.data.length });
     });
+    let activationEvent: { data: { eventType: string; payload: { activationSource?: string } } } | undefined;
     const tx = {
       subscription: {
         findUnique: jest.fn().mockResolvedValue(null),
@@ -38,7 +39,7 @@ describe('SubscriptionBillingService trial activation', () => {
         createMany: reminderCreateMany,
       },
       auditLog: { create: jest.fn().mockResolvedValue({}) },
-      outboxEvent: { create: jest.fn().mockResolvedValue({}) },
+      outboxEvent: { create: jest.fn((input: { data: { eventType: string; payload: { activationSource?: string } } }) => { activationEvent = input; return Promise.resolve({}); }) },
     };
     const prisma = {
       organization: { findUnique: jest.fn().mockResolvedValue({ id: 'supplier-1', kind: 'SUPPLIER', status: 'ACTIVE' }) },
@@ -70,6 +71,8 @@ describe('SubscriptionBillingService trial activation', () => {
     expect(reminderCreateMany).toHaveBeenCalledTimes(1);
     expect([...new Set(reminderRows.map((item) => item.offsetDays))]).toEqual([-7, -3, -1, 0]);
     expect(reminderRows).toHaveLength(8);
+    expect(activationEvent?.data.eventType).toBe('ir.vazano.subscription.activated.v1');
+    expect(activationEvent?.data.payload.activationSource).toBe('TRIAL');
   });
 });
 
