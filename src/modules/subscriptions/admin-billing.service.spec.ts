@@ -129,7 +129,7 @@ describe('AdminBillingService manual subscription renewal', () => {
     let auditInput: { data: { action: string } } | undefined;
     let outboxInput: { data: { eventType: string } } | undefined;
     let ticketUpdateInput: { where: { id: string }; data: { status: string } } | undefined;
-    const sourceTicket = { id: 'ticket-0001', category: 'BILLING', organizationId: organization.id, status: 'SUBMITTED' };
+    const sourceTicket = { id: 'ticket-0001', category: 'BILLING', organizationId: organization.id, status: 'SUBMITTED', attachments: [{ id: 'receipt-1' }] };
     const tx = {
       subscription: { findFirst: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue(subscription) },
       manualSubscriptionRenewal: { create: jest.fn((input: { data: { activatedByUserId: string; trackingNumber: string; amountRial: bigint } }) => { renewalInput = input; return Promise.resolve(manualRenewal); }) },
@@ -183,6 +183,32 @@ describe('AdminBillingService manual subscription renewal', () => {
       organizationId: 'organization-1', planId: 'plan-1', amountRial: '1000', trackingNumber: 'BANK-123',
       paidAt: new Date(Date.now() - 60_000).toISOString(), note: 'شماره پیگیری تکراری برای آزمون ثبت شد.',
     })).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('rejects ticket-based renewal until a clean payment receipt exists', async () => {
+    const organization = { id: 'organization-1', kind: 'SUPPLIER', status: 'ACTIVE' };
+    const plan = { id: 'plan-1', code: 'PRO', isActive: true, isTrial: false, durationIso: 'P1M', grantCredits: 20n, version: 3 };
+    const prisma = {
+      manualSubscriptionRenewal: { findUnique: jest.fn().mockResolvedValue(null) },
+      organization: { findUnique: jest.fn().mockResolvedValue(organization) },
+      subscriptionPlan: { findUnique: jest.fn().mockResolvedValue(plan) },
+      supportTicket: { findUnique: jest.fn().mockResolvedValue({
+        id: 'ticket-0001', category: 'BILLING', organizationId: organization.id, status: 'SUBMITTED', attachments: [],
+      }) },
+      $transaction: jest.fn(),
+    };
+    const service = new AdminBillingService(prisma as never, {} as never, {} as never, policySettings as never);
+
+    await expect(service.createManualRenewal(financeUser, {
+      organizationId: organization.id,
+      planId: plan.id,
+      amountRial: '300000000',
+      trackingNumber: 'BANK-NO-RECEIPT',
+      paidAt: new Date(Date.now() - 60_000).toISOString(),
+      note: 'تلاش برای تمدید بدون رسید سالم باید رد شود.',
+      sourceTicketId: 'ticket-0001',
+    })).rejects.toThrow('رسید پرداخت سالم و بررسی‌شده');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('rejects a new founding member after the configured capacity is reached', async () => {
