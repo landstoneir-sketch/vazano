@@ -19,6 +19,7 @@ if (-not (Test-Path -LiteralPath $resolvedEnvironmentFile -PathType Leaf)) {
 }
 
 Assert-VazanoReleaseImages -EnvironmentFile $resolvedEnvironmentFile
+$expectedReleaseSha = Get-VazanoImageGitSha -Reference (Get-VazanoEnvironmentValue -Path $resolvedEnvironmentFile -Key 'VAZANO_API_IMAGE')
 
 try {
   Set-Location -LiteralPath $projectRoot
@@ -40,7 +41,7 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'Rolled-back application containers did not become healthy.' }
 
   $readinessUrl = Wait-VazanoGatewayReadiness -GatewayUrl $GatewayUrl -TimeoutSeconds $ReadinessTimeoutSeconds
-  $smokeResult = Invoke-VazanoReleaseSmokeChecks -GatewayUrl $GatewayUrl
+  $smokeResult = Invoke-VazanoReleaseSmokeChecks -GatewayUrl $GatewayUrl -ExpectedReleaseSha $expectedReleaseSha
 
   Write-Output ([pscustomobject]@{
     RolledBack = $true
@@ -51,6 +52,7 @@ try {
     ActiveCategories = $smokeResult.ActiveCategories
     ActiveUnits = $smokeResult.ActiveUnits
     ActiveProvinces = $smokeResult.ActiveProvinces
+    ReleaseRevision = $smokeResult.ReleaseRevision
     CheckedAt = (Get-Date).ToUniversalTime().ToString('o')
   })
 }

@@ -77,6 +77,7 @@ function Assert-VerifiedBackup {
 $verifiedBackup = Assert-VerifiedBackup -Path $VerifiedBackupPath -MaximumAgeHours $MaximumBackupAgeHours
 
 Assert-VazanoReleaseImages -EnvironmentFile $resolvedEnvironmentFile
+$expectedReleaseSha = Get-VazanoImageGitSha -Reference (Get-VazanoEnvironmentValue -Path $resolvedEnvironmentFile -Key 'VAZANO_API_IMAGE')
 if ($resolvedPreviousEnvironmentFile) {
   Assert-VazanoReleaseImages -EnvironmentFile $resolvedPreviousEnvironmentFile
 }
@@ -109,7 +110,7 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'Application containers did not become healthy.' }
 
   $readinessUrl = Wait-VazanoGatewayReadiness -GatewayUrl $GatewayUrl -TimeoutSeconds $ReadinessTimeoutSeconds
-  $smokeResult = Invoke-VazanoReleaseSmokeChecks -GatewayUrl $GatewayUrl
+  $smokeResult = Invoke-VazanoReleaseSmokeChecks -GatewayUrl $GatewayUrl -ExpectedReleaseSha $expectedReleaseSha
 
   Write-Output ([pscustomobject]@{
     Deployed = $true
@@ -120,6 +121,7 @@ try {
     ActiveCategories = $smokeResult.ActiveCategories
     ActiveUnits = $smokeResult.ActiveUnits
     ActiveProvinces = $smokeResult.ActiveProvinces
+    ReleaseRevision = $smokeResult.ReleaseRevision
     CheckedAt = (Get-Date).ToUniversalTime().ToString('o')
   })
 }

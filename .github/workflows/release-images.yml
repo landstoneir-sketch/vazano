@@ -87,6 +87,7 @@ jobs:
           docker buildx build
           --platform linux/amd64
           --target api-runner
+          --build-arg "VAZANO_RELEASE_SHA=${GITHUB_SHA}"
           --tag "${API_IMAGE}:${GITHUB_SHA}"
           --tag "${API_IMAGE}:${GITHUB_REF_NAME}"
           --provenance=mode=max
@@ -98,6 +99,7 @@ jobs:
           docker buildx build
           --platform linux/amd64
           --target web-runner
+          --build-arg "VAZANO_RELEASE_SHA=${GITHUB_SHA}"
           --tag "${WEB_IMAGE}:${GITHUB_SHA}"
           --tag "${WEB_IMAGE}:${GITHUB_REF_NAME}"
           --provenance=mode=max
@@ -109,6 +111,7 @@ jobs:
           docker buildx build
           --platform linux/amd64
           --target migration-runner
+          --build-arg "VAZANO_RELEASE_SHA=${GITHUB_SHA}"
           --tag "${MIGRATION_IMAGE}:${GITHUB_SHA}"
           --tag "${MIGRATION_IMAGE}:${GITHUB_REF_NAME}"
           --provenance=mode=max

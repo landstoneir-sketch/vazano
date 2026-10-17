@@ -46,6 +46,13 @@ function Assert-VazanoReleaseImages {
     -DigestOnly
 }
 
+function Get-VazanoImageGitSha {
+  param([string]$Reference)
+
+  if ($Reference -match '(?i):([0-9a-f]{40})$') { return $Matches[1].ToLowerInvariant() }
+  return $null
+}
+
 function Wait-VazanoGatewayReadiness {
   param(
     [string]$GatewayUrl,
@@ -79,7 +86,7 @@ function Get-VazanoResponseData {
 }
 
 function Invoke-VazanoReleaseSmokeChecks {
-  param([string]$GatewayUrl)
+  param([string]$GatewayUrl, [string]$ExpectedReleaseSha)
 
   $gatewayBaseUrl = $GatewayUrl.TrimEnd('/')
   $smokePaths = @('/healthz', '/', '/login', '/v1/catalog/categories', '/v1/catalog/units', '/v1/locations/provinces')
@@ -92,6 +99,14 @@ function Invoke-VazanoReleaseSmokeChecks {
     catch {
       throw "Post-deployment smoke check failed for $path. $($_.Exception.Message)"
     }
+  }
+
+  $readinessResponse = Invoke-RestMethod -Uri "$gatewayBaseUrl/v1/health/ready" -Method Get -TimeoutSec 10
+  $readiness = Get-VazanoResponseData -Response $readinessResponse
+  $releaseRevision = [string]$readiness.releaseRevision
+  if (-not $releaseRevision) { throw 'Post-deployment readiness response did not identify the application release.' }
+  if ($ExpectedReleaseSha -and $releaseRevision.ToLowerInvariant() -ne $ExpectedReleaseSha.ToLowerInvariant()) {
+    throw "Post-deployment release mismatch: expected $ExpectedReleaseSha but API reported $releaseRevision."
   }
 
   $categoriesResponse = Invoke-RestMethod -Uri "$gatewayBaseUrl/v1/catalog/categories" -Method Get -TimeoutSec 10
@@ -113,5 +128,6 @@ function Invoke-VazanoReleaseSmokeChecks {
     ActiveCategories = $categories.Count
     ActiveUnits = $units.Count
     ActiveProvinces = $provinces.Count
+    ReleaseRevision = $releaseRevision
   }
 }

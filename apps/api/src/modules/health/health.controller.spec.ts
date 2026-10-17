@@ -4,6 +4,7 @@ import { ObjectStorageService } from '../attachments/object-storage.service';
 import { FileSafetyService } from '../attachments/file-safety.service';
 import { HealthController } from './health.controller';
 import { RedisRuntime } from '../../common/request-security';
+import { ConfigService } from '@nestjs/config';
 
 function createController(
   databaseCheck: () => Promise<unknown>,
@@ -11,21 +12,23 @@ function createController(
   redisCheck: () => Promise<void> = () => Promise.resolve(),
   scannerRequired = false,
   scannerCheck: () => Promise<void> = () => Promise.resolve(),
+  releaseRevision = 'development',
 ) {
   const prisma = { $queryRaw: databaseCheck } as unknown as PrismaService;
   const storage = { checkHealth: storageCheck } as unknown as ObjectStorageService;
   const redis = { ping: redisCheck } as unknown as RedisRuntime;
   const fileSafety = { requiresContent: () => scannerRequired, checkHealth: scannerCheck } as unknown as FileSafetyService;
-  return new HealthController(prisma, storage, redis, fileSafety);
+  const environment = { get: (_key: string, defaultValue: string) => releaseRevision || defaultValue } as unknown as ConfigService;
+  return new HealthController(prisma, storage, redis, fileSafety, environment);
 }
 
 describe('HealthController', () => {
   it('keeps liveness independent from external dependencies', () => {
-    expect(createController(() => Promise.reject(new Error('down')), () => Promise.reject(new Error('down'))).live().status).toBe('ok');
+    expect(createController(() => Promise.reject(new Error('down')), () => Promise.reject(new Error('down'))).live()).toMatchObject({ status: 'ok', releaseRevision: 'development' });
   });
 
   it('reports readiness only when database and object storage are available', async () => {
-    await expect(createController(() => Promise.resolve(1), () => Promise.resolve()).ready()).resolves.toMatchObject({ status: 'ok', dependencies: { database: 'ok', objectStorage: 'ok', redis: 'ok' } });
+    await expect(createController(() => Promise.resolve(1), () => Promise.resolve(), undefined, false, undefined, 'a'.repeat(40)).ready()).resolves.toMatchObject({ status: 'ok', releaseRevision: 'a'.repeat(40), dependencies: { database: 'ok', objectStorage: 'ok', redis: 'ok' } });
   });
 
   it('rejects readiness when a required dependency is unavailable', async () => {

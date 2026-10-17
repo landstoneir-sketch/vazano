@@ -23,7 +23,10 @@ RUN npm prune --omit=dev
 
 FROM dependencies AS migration-runner
 WORKDIR /app
+ARG VAZANO_RELEASE_SHA=development
 ENV NODE_ENV=production
+ENV VAZANO_RELEASE_SHA=$VAZANO_RELEASE_SHA
+LABEL org.opencontainers.image.revision=$VAZANO_RELEASE_SHA
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 vazano
 COPY --chown=vazano:nodejs apps/api/prisma ./apps/api/prisma
 COPY --chown=vazano:nodejs apps/api/src/modules/auth/domain/mobile.ts ./apps/api/src/modules/auth/domain/mobile.ts
@@ -33,7 +36,10 @@ CMD ["npm", "run", "prisma:deploy"]
 
 FROM ${NODE_IMAGE} AS api-runner
 WORKDIR /app
+ARG VAZANO_RELEASE_SHA=development
 ENV NODE_ENV=production
+ENV VAZANO_RELEASE_SHA=$VAZANO_RELEASE_SHA
+LABEL org.opencontainers.image.revision=$VAZANO_RELEASE_SHA
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 vazano
 COPY --from=production-dependencies --chown=vazano:nodejs /app/node_modules ./node_modules
 COPY --from=production-dependencies --chown=vazano:nodejs /app/apps/api/node_modules ./apps/api/node_modules
@@ -48,10 +54,13 @@ CMD ["node", "apps/api/dist/src/main.js"]
 
 FROM ${NODE_IMAGE} AS web-runner
 WORKDIR /app
+ARG VAZANO_RELEASE_SHA=development
 ENV NODE_ENV=production
+ENV VAZANO_RELEASE_SHA=$VAZANO_RELEASE_SHA
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+LABEL org.opencontainers.image.revision=$VAZANO_RELEASE_SHA
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
