@@ -169,6 +169,8 @@ describe('AdminBillingService manual subscription renewal', () => {
     expect(tx.billingInvoice.create).toHaveBeenCalledTimes(1);
     expect(ticketUpdateInput?.where.id).toBe(sourceTicket.id);
     expect(ticketUpdateInput?.data.status).toBe('RESOLVED');
+    expect(tx.auditLog.create).toHaveBeenCalledTimes(2);
+    expect(tx.outboxEvent.create).toHaveBeenCalledTimes(2);
     expect(auditInput?.data.action).toBe('subscription.manual_renewal.create');
     expect(outboxInput?.data.eventType).toBe('ir.vazano.subscription.activated.v1');
   });

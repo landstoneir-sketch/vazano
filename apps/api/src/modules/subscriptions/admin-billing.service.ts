@@ -339,6 +339,20 @@ export class AdminBillingService {
             },
           });
           if (resolvedTicket.count !== 1) throw new ConflictException('وضعیت درخواست مالی هم‌زمان تغییر کرده است؛ دوباره بررسی کنید.');
+          await tx.auditLog.create({ data: {
+            actorUserId: user.id,
+            organizationId: organization.id,
+            action: 'support_ticket.status.update',
+            entityType: 'SupportTicket',
+            entityId: sourceTicket.id,
+            metadata: { from: sourceTicket.status, to: 'RESOLVED', source: 'MANUAL_SUBSCRIPTION_RENEWAL', trackingNumber },
+          } });
+          await tx.outboxEvent.create({ data: {
+            aggregateType: 'SupportTicket',
+            aggregateId: sourceTicket.id,
+            eventType: 'ir.vazano.support.ticket.status_changed.v1',
+            payload: { ticketId: sourceTicket.id, from: sourceTicket.status, to: 'RESOLVED' },
+          } });
         }
         await tx.auditLog.create({ data: {
           actorUserId: user.id,
