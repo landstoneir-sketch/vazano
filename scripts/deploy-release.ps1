@@ -2,6 +2,7 @@ param(
   [string]$EnvironmentFile = '.env.production',
   [Parameter(Mandatory = $true)]
   [string]$VerifiedBackupPath,
+  [string]$PreviousEnvironmentFile,
   [string]$GatewayUrl = 'http://127.0.0.1:8080',
   [ValidateRange(1, 168)]
   [int]$MaximumBackupAgeHours = 24,
@@ -13,12 +14,22 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $composeFile = Join-Path $projectRoot 'compose.production.yml'
 $resolvedEnvironmentFile = [System.IO.Path]::GetFullPath((Join-Path $projectRoot $EnvironmentFile))
+$resolvedPreviousEnvironmentFile = $null
 $originalLocation = Get-Location
 $originalVazanoEnvironmentFile = [Environment]::GetEnvironmentVariable('VAZANO_ENV_FILE', 'Process')
 . (Join-Path $PSScriptRoot 'release-common.ps1')
 
 if (-not (Test-Path -LiteralPath $resolvedEnvironmentFile -PathType Leaf)) {
   throw "Production environment file was not found: $resolvedEnvironmentFile"
+}
+if ($PreviousEnvironmentFile) {
+  $resolvedPreviousEnvironmentFile = [System.IO.Path]::GetFullPath((Join-Path $projectRoot $PreviousEnvironmentFile))
+  if (-not (Test-Path -LiteralPath $resolvedPreviousEnvironmentFile -PathType Leaf)) {
+    throw "Previous release environment file was not found: $resolvedPreviousEnvironmentFile"
+  }
+  if ($resolvedPreviousEnvironmentFile -eq $resolvedEnvironmentFile) {
+    throw 'The current and previous release environment files must be different.'
+  }
 }
 
 function Assert-VerifiedBackup {
@@ -66,7 +77,11 @@ function Assert-VerifiedBackup {
 $verifiedBackup = Assert-VerifiedBackup -Path $VerifiedBackupPath -MaximumAgeHours $MaximumBackupAgeHours
 
 Assert-VazanoReleaseImages -EnvironmentFile $resolvedEnvironmentFile
+if ($resolvedPreviousEnvironmentFile) {
+  Assert-VazanoReleaseImages -EnvironmentFile $resolvedPreviousEnvironmentFile
+}
 
+$rolloutStarted = $false
 try {
   Set-Location -LiteralPath $projectRoot
   $env:VAZANO_ENV_FILE = $resolvedEnvironmentFile
@@ -89,6 +104,7 @@ try {
   & docker @composeArguments --profile operations run --rm bootstrap
   if ($LASTEXITCODE -ne 0) { throw 'Production reference-data bootstrap failed; application rollout was not started.' }
 
+  $rolloutStarted = $true
   & docker @composeArguments up -d --remove-orphans --wait --wait-timeout $ReadinessTimeoutSeconds api web gateway
   if ($LASTEXITCODE -ne 0) { throw 'Application containers did not become healthy.' }
 
@@ -106,6 +122,21 @@ try {
     ActiveProvinces = $smokeResult.ActiveProvinces
     CheckedAt = (Get-Date).ToUniversalTime().ToString('o')
   })
+}
+catch {
+  $releaseFailure = $_.Exception.Message
+  if ($rolloutStarted -and $resolvedPreviousEnvironmentFile) {
+    Write-Warning 'Release failed after application rollout started. Automatic application rollback is starting.'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'rollback-release.ps1') `
+      -PreviousEnvironmentFile $resolvedPreviousEnvironmentFile `
+      -GatewayUrl $GatewayUrl `
+      -ReadinessTimeoutSeconds $ReadinessTimeoutSeconds
+    if ($LASTEXITCODE -eq 0) {
+      throw "Release failed and the previous application version was restored automatically. Original failure: $releaseFailure"
+    }
+    throw "Release failed and automatic application rollback also failed. Original failure: $releaseFailure"
+  }
+  throw
 }
 finally {
   if ($null -eq $originalVazanoEnvironmentFile) {

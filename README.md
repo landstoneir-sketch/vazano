@@ -76,8 +76,10 @@ Image وب به‌صورت پیش‌فرض API را از مسیر هم‌دام�
 برای انتشار نسخه‌دار، فایل `.env.production.example` را روی سرور به `.env.production` تبدیل و فقط با Secretهای واقعی محیط تکمیل کنید. Imageهای API، وب، Migration و Gateway باید با Tag یا Digest غیرقابل‌تغییر تعیین شوند. پیش از انتشار باید Backup گرفته و بازیابی آن با اسکریپت بالا آزموده شود؛ فایل رسید `.verified.json` به‌صورت خودکار کنار Backup ایجاد می‌شود. سپس اسکریپت انتشار با مسیر همان Backup اجرا می‌شود و پیش از Migration، Hash و تازگی رسید بازیابی را کنترل می‌کند:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\deploy-release.ps1 -VerifiedBackupPath .\backups\vazano-postgres-YYYYMMDD-HHMMSS.dump
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy-release.ps1 -VerifiedBackupPath .\backups\vazano-postgres-YYYYMMDD-HHMMSS.dump -PreviousEnvironmentFile .env.production.previous
 ```
+
+اگر `PreviousEnvironmentFile` داده شود و Rollout یا Smoke Test نسخه جدید شکست بخورد، API، وب و Gateway نسخه سالم قبلی خودکار بازگردانده می‌شوند. در اولین انتشار که نسخه قبلی وجود ندارد این پارامتر را حذف کنید؛ در آن حالت Rollback خودکار برنامه در دسترس نیست.
 
 برای بازگرداندن نسخه برنامه، فایل تنظیمات نسخه سالم قبلی را با نامی مانند `.env.production.previous` نگه دارید و دستور زیر را اجرا کنید. این فرایند فقط Imageهای قبلی API، وب و Gateway را فعال می‌کند، Migration معکوس اجرا نمی‌کند و پس از بازگشت کنترل سلامت و داده‌های مرجع را تکرار می‌کند:
 
