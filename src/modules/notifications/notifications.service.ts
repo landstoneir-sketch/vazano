@@ -13,6 +13,7 @@ const SUPPORTED_EVENT_TYPES = [
   'ir.vazano.quality_control.completed.v1',
   'ir.vazano.quality_control.cancelled.v1',
   'ir.vazano.supplier.review_published.v1',
+  'ir.vazano.buyer.commitment.held.v1',
   'ir.vazano.rfq.submitted.v1',
   'ir.vazano.rfq.reviewed.v1',
   'ir.vazano.rfq.distributed.v1',
@@ -333,6 +334,30 @@ export class NotificationsService {
           variables: {
             rfqCode: review.rfq.code,
             rating: review.rating.toLocaleString('fa-IR'),
+          },
+        }));
+      }
+      case 'ir.vazano.buyer.commitment.held.v1': {
+        const rfq = await tx.rfq.findUnique({
+          where: { id: event.aggregateId },
+          select: {
+            id: true,
+            code: true,
+            buyerOrganizationId: true,
+            buyerOrganization: {
+              select: { members: { where: { status: 'ACTIVE' }, select: { userId: true } } },
+            },
+          },
+        });
+        if (!rfq) return [];
+        return rfq.buyerOrganization.members.map(({ userId }) => ({
+          userId,
+          organizationId: rfq.buyerOrganizationId,
+          actionPath: `/dashboard/rfqs/${rfq.id}`,
+          variables: {
+            rfqId: rfq.id,
+            rfqCode: rfq.code,
+            receiptNumber: jsonStringField(event.payload, 'receiptNumber') ?? '—',
           },
         }));
       }
