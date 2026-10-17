@@ -19,6 +19,7 @@ type Ticket = {
   organization: Organization | null;
   _count: { comments: number };
 };
+type UploadIntent = { attachment: { id: string }; upload: { url: string; method: string; headers: Record<string, string> } };
 
 export function SupportCenter({ initialRequest, initialOrganizationId }: { initialRequest?: 'MANUAL_RENEWAL'; initialOrganizationId?: string }) {
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -29,6 +30,7 @@ export function SupportCenter({ initialRequest, initialOrganizationId }: { initi
   const [subject, setSubject] = useState(initialRequest === 'MANUAL_RENEWAL' ? 'درخواست تمدید دستی اشتراک' : '');
   const [description, setDescription] = useState(initialRequest === 'MANUAL_RENEWAL' ? 'لطفاً راهنمای پرداخت و تمدید دستی اشتراک این حساب را اعلام کنید.' : '');
   const [message, setMessage] = useState('');
+  const [paymentReceipt, setPaymentReceipt] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -65,8 +67,18 @@ export function SupportCenter({ initialRequest, initialOrganizationId }: { initi
         method: 'POST',
         body: JSON.stringify({ type, category, subject, description, organizationId: organizationId || undefined }),
       });
+      if (initialRequest === 'MANUAL_RENEWAL' && paymentReceipt) {
+        const intent = await apiRequest<UploadIntent>(`/attachments/support-tickets/${created.id}/upload-intent`, {
+          method: 'POST',
+          body: JSON.stringify({ fileName: paymentReceipt.name, mimeType: paymentReceipt.type, sizeBytes: paymentReceipt.size, purpose: 'PAYMENT_RECEIPT' }),
+        });
+        const uploaded = await fetch(intent.upload.url, { method: intent.upload.method, headers: intent.upload.headers, body: paymentReceipt });
+        if (!uploaded.ok) throw new Error(`درخواست ${created.code} ثبت شد، اما بارگذاری رسید انجام نشد؛ در پاسخ همان درخواست موضوع را به پشتیبانی اطلاع دهید.`);
+        await apiRequest(`/attachments/${intent.attachment.id}/complete`, { method: 'POST' });
+      }
       setSubject(''); setDescription('');
-      setMessage(`درخواست شما با کد ${created.code} ثبت شد.`);
+      setPaymentReceipt(null);
+      setMessage(initialRequest === 'MANUAL_RENEWAL' ? `درخواست شما با کد ${created.code} همراه رسید امن ثبت شد.` : `درخواست شما با کد ${created.code} ثبت شد.`);
       await load();
     } catch (reason: unknown) {
       setMessage(reason instanceof Error ? reason.message : 'ثبت درخواست انجام نشد.');
@@ -79,9 +91,10 @@ export function SupportCenter({ initialRequest, initialOrganizationId }: { initi
       <h2>ثبت درخواست جدید</h2>
       <label className="form-field"><span>نوع درخواست</span><select value={type} onChange={(event) => setType(event.target.value)}>{Object.entries(ticketTypeLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
       <label className="form-field"><span>موضوع مرتبط</span><select value={category} onChange={(event) => setCategory(event.target.value)}>{Object.entries(ticketCategoryLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
-      <label className="form-field"><span>حساب سازمانی مرتبط (اختیاری)</span><select value={organizationId} onChange={(event) => setOrganizationId(event.target.value)}><option value="">حساب شخصی</option>{organizations.map((organization) => <option value={organization.id} key={organization.id}>{organization.displayName}</option>)}</select></label>
+      <label className="form-field"><span>حساب سازمانی مرتبط {initialRequest === 'MANUAL_RENEWAL' ? '' : '(اختیاری)'}</span><select value={organizationId} onChange={(event) => setOrganizationId(event.target.value)} required={initialRequest === 'MANUAL_RENEWAL'}><option value="">{initialRequest === 'MANUAL_RENEWAL' ? 'سازمان فروشنده را انتخاب کنید' : 'حساب شخصی'}</option>{organizations.map((organization) => <option value={organization.id} key={organization.id}>{organization.displayName}</option>)}</select></label>
       <label className="form-field"><span>عنوان کوتاه</span><input value={subject} onChange={(event) => setSubject(event.target.value)} minLength={3} maxLength={160} required /></label>
       <label className="form-field full"><span>شرح کامل</span><textarea value={description} onChange={(event) => setDescription(event.target.value)} minLength={10} maxLength={5000} rows={5} required /></label>
+      {initialRequest === 'MANUAL_RENEWAL' && <label className="form-field full"><span>رسید پرداخت</span><input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" onChange={(event) => setPaymentReceipt(event.target.files?.[0] ?? null)} required /><small>PDF یا تصویر تا سقف مجاز؛ فایل پیش از نمایش به واحد مالی با ClamAV بررسی می‌شود.</small></label>}
       <button className="button button-primary" disabled={busy}>{busy ? 'در حال ثبت…' : type === 'VIOLATION_REPORT' ? 'ثبت گزارش تخلف' : 'ثبت درخواست'}</button>
     </form>
 
