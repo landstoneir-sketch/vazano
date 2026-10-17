@@ -155,9 +155,9 @@ export class AttachmentsService {
   async createSupportTicketUploadIntent(user: AuthenticatedUser, ticketId: string, input: CreateUploadIntentDto) {
     const ticket = await this.prisma.supportTicket.findUnique({
       where: { id: ticketId },
-      select: { id: true, requesterUserId: true, organizationId: true, category: true, status: true },
+      select: { id: true, requesterUserId: true, organizationId: true, type: true, category: true, status: true },
     });
-    if (!ticket || ticket.requesterUserId !== user.id || ticket.category !== 'BILLING' || !ticket.organizationId) {
+    if (!ticket || ticket.requesterUserId !== user.id || ticket.type !== 'SERVICE_REQUEST' || ticket.category !== 'BILLING' || !ticket.organizationId) {
       throw new NotFoundException('درخواست مالی پیدا نشد.');
     }
     if (['RESOLVED', 'CLOSED', 'REJECTED'].includes(ticket.status)) {
