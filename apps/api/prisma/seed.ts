@@ -304,6 +304,13 @@ const inAppNotificationTemplates = [
     actionPathTemplate: '/supplier',
   },
   {
+    code: 'IN_APP_RFQ_INVITATION_DECLINED_FA_V1',
+    eventType: 'ir.vazano.rfq.invitation.declined.v1',
+    titleTemplate: 'یک فروشنده فرصت استعلام را رد کرد',
+    bodyTemplate: 'فروشنده «{{supplierName}}» امکان پاسخ‌گویی به استعلام {{rfqCode}} را ندارد.',
+    actionPathTemplate: '/dashboard/rfqs/{{rfqId}}',
+  },
+  {
     code: 'IN_APP_RFQ_CANCELLED_FA_V1',
     eventType: 'ir.vazano.rfq.cancelled.v1',
     titleTemplate: 'استعلام توسط خریدار لغو شد',

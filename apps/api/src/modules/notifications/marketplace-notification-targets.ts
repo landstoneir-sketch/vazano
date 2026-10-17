@@ -61,6 +61,32 @@ export async function resolveMarketplaceNotificationTargets(
         variables: { rfqCode: rfq.code, rfqTitle: rfq.title },
       }))));
     }
+    case 'ir.vazano.rfq.invitation.declined.v1': {
+      const invitation = await tx.rfqInvitation.findUnique({
+        where: { id: event.aggregateId },
+        select: {
+          supplierOrganization: { select: { displayName: true } },
+          rfq: {
+            select: {
+              id: true,
+              code: true,
+              buyerContactUserId: true,
+              buyerOrganizationId: true,
+            },
+          },
+        },
+      });
+      if (!invitation) return [];
+      return [{
+        userId: invitation.rfq.buyerContactUserId,
+        organizationId: invitation.rfq.buyerOrganizationId,
+        actionPath: `/dashboard/rfqs/${invitation.rfq.id}`,
+        variables: {
+          rfqCode: invitation.rfq.code,
+          supplierName: invitation.supplierOrganization.displayName,
+        },
+      }];
+    }
     case 'ir.vazano.rfq.cancelled.v1': {
       const supplierOrganizationIds = jsonStringArrayField(event.payload, 'supplierOrganizationIds');
       if (supplierOrganizationIds.length === 0) return [];
