@@ -15,7 +15,7 @@ describe('AttachmentsService support payment receipts', () => {
   it('creates an isolated payment-receipt upload intent for the ticket requester', async () => {
     const ticket = {
       id: 'support-ticket-1', requesterUserId: requester.id, organizationId: 'supplier-organization',
-      category: 'BILLING', status: 'SUBMITTED',
+      type: 'SERVICE_REQUEST', category: 'BILLING', status: 'SUBMITTED',
     };
     const attachment = {
       id: 'attachment-1', organizationId: ticket.organizationId, uploadedByUserId: requester.id,
@@ -46,7 +46,7 @@ describe('AttachmentsService support payment receipts', () => {
     const prisma = {
       supportTicket: { findUnique: jest.fn().mockResolvedValue({
         id: 'support-ticket-1', requesterUserId: 'another-user', organizationId: 'supplier-organization',
-        category: 'BILLING', status: 'SUBMITTED',
+        type: 'SERVICE_REQUEST', category: 'BILLING', status: 'SUBMITTED',
       }) },
       attachment: { create: jest.fn() },
     };
