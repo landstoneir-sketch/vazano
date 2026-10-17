@@ -60,7 +60,9 @@ type BillingRequest = {
   id: string; code: string; type: string; priority: 'P1' | 'P2' | 'P3' | 'P4'; status: string;
   subject: string; description: string; createdAt: string;
   requester: { firstName: string | null; lastName: string | null; mobile: string };
-  organization: SupplierOption | null; _count: { comments: number };
+  organization: SupplierOption | null;
+  attachments: { id: string; originalName: string; sizeBytes: number; uploadedAt: string | null }[];
+  _count: { comments: number };
 };
 type Overview = {
   summary: Record<string, number>; reminderSummary: Record<string, number>; plans: Plan[]; subscriptions: Subscription[];
@@ -255,6 +257,16 @@ export function BillingManager() {
     setMessage(`سازمان درخواست ${request.code} انتخاب شد؛ پس از کنترل سند پرداخت، پلن و شماره پیگیری را وارد کنید.`);
   }
 
+  async function viewBillingReceipt(attachmentId: string) {
+    setError('');
+    try {
+      const result = await apiRequest<{ url: string }>(`/attachments/${attachmentId}/download-url`);
+      window.open(result.url, '_blank', 'noopener,noreferrer');
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : 'دریافت رسید پرداخت انجام نشد.');
+    }
+  }
+
   async function createDiscount(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError(''); setMessage('');
     try {
@@ -295,7 +307,7 @@ export function BillingManager() {
     {tab === 'plans' && overview && <section className="card stack"><div className="admin-card-title"><div><h2>مدیریت پلن‌ها</h2><p>قیمت را به تومان وارد کنید؛ مبلغ در دیتابیس با واحد ریال و به‌صورت عدد صحیح ذخیره می‌شود.</p></div><button className="button button-secondary" type="button" onClick={() => { setDraft(emptyPlan); setError(''); setMessage(''); }}>پلن جدید</button></div><div className="content-item-list">{overview.plans.map((plan) => <button className={draft.id === plan.id ? 'content-item-active' : ''} type="button" key={plan.id} onClick={() => { setDraft(fromPlan(plan)); setError(''); setMessage(''); }}><strong>{plan.nameFa}</strong><span>{plan.isTrial ? 'آزمایشی رایگان' : formatToman(plan.priceRial)} · {plan.isActive ? 'فعال' : 'غیرفعال'}</span></button>)}</div><PlanForm draft={draft} setDraft={setDraft} busy={busy} onSubmit={savePlan} /></section>}
     {tab === 'discounts' && overview && <DiscountManager items={overview.discountCodes} plans={overview.plans} draft={discount} setDraft={setDiscount} busy={busy} onSubmit={createDiscount} onToggle={toggleDiscount} />}
     {tab === 'subscriptions' && overview && <SubscriptionList items={overview.subscriptions} />}
-    {tab === 'requests' && overview && <BillingRequestList items={overview.billingRequests} onBeginManualRenewal={beginManualRenewal} />}
+    {tab === 'requests' && overview && <BillingRequestList items={overview.billingRequests} onBeginManualRenewal={beginManualRenewal} onViewReceipt={viewBillingReceipt} />}
     {tab === 'manual-renewals' && overview && <ManualRenewalManager suppliers={overview.suppliers} plans={overview.plans} items={overview.manualRenewals} draft={manualRenewal} setDraft={setManualRenewal} busy={busy} onSubmit={createManualRenewal} />}
     {tab === 'invoices' && overview && <InvoiceList items={overview.invoices} />}
     {tab === 'payments' && overview && <PaymentList items={overview.payments} reconcilingId={reconcilingPaymentId} resolvingId={resolvingPaymentId} onReconcile={reconcilePayment} onResolve={resolvePayment} />}
@@ -304,8 +316,8 @@ export function BillingManager() {
   </div>;
 }
 
-function BillingRequestList({ items, onBeginManualRenewal }: { items: BillingRequest[]; onBeginManualRenewal: (request: BillingRequest) => void }) {
-  return <section className="stack"><div><h2>درخواست‌های مالی باز</h2><p className="muted">درخواست‌های تمدید و مسائل مالی از صف پشتیبانی در اینجا دیده می‌شوند. تمدید فقط پس از بررسی سند پرداخت ثبت شود.</p></div>{items.length === 0 && <div className="card">درخواست مالی بازی وجود ندارد.</div>}{items.map((item) => { const requesterName = [item.requester.firstName, item.requester.lastName].filter(Boolean).join(' ') || item.requester.mobile; return <article className="card admin-card-title" key={item.id}><div><div className="eyebrow">{item.code} · {supportPriorityLabel(item.priority)}</div><h3>{item.subject}</h3><p>{item.organization ? item.organization.displayName || item.organization.legalName : 'بدون سازمان مرتبط'} · درخواست‌کننده: {requesterName}</p><p className="muted">{item.description}</p><p className="muted">ثبت {new Date(item.createdAt).toLocaleString('fa-IR')} · {item._count.comments.toLocaleString('fa-IR')} پاسخ</p></div><div><span className={`status-badge ${item.priority === 'P1' ? 'status-suspended' : 'severity-medium'}`}>{supportStatusLabel(item.status)}</span><button className="button button-primary" type="button" disabled={!item.organization} onClick={() => onBeginManualRenewal(item)}>{item.organization ? 'آماده‌سازی تمدید دستی' : 'سازمان مشخص نشده'}</button></div></article>; })}</section>;
+function BillingRequestList({ items, onBeginManualRenewal, onViewReceipt }: { items: BillingRequest[]; onBeginManualRenewal: (request: BillingRequest) => void; onViewReceipt: (attachmentId: string) => Promise<void> }) {
+  return <section className="stack"><div><h2>درخواست‌های مالی باز</h2><p className="muted">درخواست‌های تمدید و مسائل مالی از صف پشتیبانی در اینجا دیده می‌شوند. تمدید فقط پس از بررسی سند پرداخت ثبت شود.</p></div>{items.length === 0 && <div className="card">درخواست مالی بازی وجود ندارد.</div>}{items.map((item) => { const requesterName = [item.requester.firstName, item.requester.lastName].filter(Boolean).join(' ') || item.requester.mobile; return <article className="card admin-card-title" key={item.id}><div><div className="eyebrow">{item.code} · {supportPriorityLabel(item.priority)}</div><h3>{item.subject}</h3><p>{item.organization ? item.organization.displayName || item.organization.legalName : 'بدون سازمان مرتبط'} · درخواست‌کننده: {requesterName}</p><p className="muted">{item.description}</p><p className="muted">ثبت {new Date(item.createdAt).toLocaleString('fa-IR')} · {item._count.comments.toLocaleString('fa-IR')} پاسخ</p>{item.attachments.length > 0 ? <div className="stack">{item.attachments.map((attachment) => <button className="button button-secondary" type="button" key={attachment.id} onClick={() => void onViewReceipt(attachment.id)}>مشاهده رسید: {attachment.originalName}</button>)}</div> : <p className="message message-error">رسید پرداخت تأییدشده‌ای به این درخواست پیوست نشده است.</p>}</div><div><span className={`status-badge ${item.priority === 'P1' ? 'status-suspended' : 'severity-medium'}`}>{supportStatusLabel(item.status)}</span><button className="button button-primary" type="button" disabled={!item.organization || item.attachments.length === 0} onClick={() => onBeginManualRenewal(item)}>{!item.organization ? 'سازمان مشخص نشده' : item.attachments.length === 0 ? 'در انتظار رسید پرداخت' : 'آماده‌سازی تمدید دستی'}</button></div></article>; })}</section>;
 }
 
 function DiscountManager({ items, plans, draft, setDraft, busy, onSubmit, onToggle }: {
