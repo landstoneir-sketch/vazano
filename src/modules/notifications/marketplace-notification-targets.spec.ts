@@ -38,4 +38,24 @@ describe('marketplace notification targets', () => {
       expect.objectContaining({ userId: 'supplier-owner', actionPath: '/supplier' }),
     ]));
   });
+
+  it('notifies the buyer contact when a supplier declines an RFQ invitation', async () => {
+    const tx = {
+      rfqInvitation: { findUnique: jest.fn().mockResolvedValue({
+        supplierOrganization: { displayName: 'سنگ نمونه' },
+        rfq: { id: 'rfq-1', code: 'VZR-1', buyerContactUserId: 'buyer-owner', buyerOrganizationId: 'buyer-1' },
+      }) },
+    };
+
+    const targets = await resolveMarketplaceNotificationTargets(tx as never, {
+      id: 'event-3', eventType: 'ir.vazano.rfq.invitation.declined.v1', aggregateType: 'RfqInvitation', aggregateId: 'invitation-1', payload: {},
+    });
+
+    expect(targets).toEqual([{
+      userId: 'buyer-owner',
+      organizationId: 'buyer-1',
+      actionPath: '/dashboard/rfqs/rfq-1',
+      variables: { rfqCode: 'VZR-1', supplierName: 'سنگ نمونه' },
+    }]);
+  });
 });

@@ -23,6 +23,7 @@ const SUPPORTED_EVENT_TYPES = [
   'ir.vazano.rfq.submitted.v1',
   'ir.vazano.rfq.reviewed.v1',
   'ir.vazano.rfq.distributed.v1',
+  'ir.vazano.rfq.invitation.declined.v1',
   'ir.vazano.rfq.cancelled.v1',
   'ir.vazano.rfq.quote_window_closed.v1',
   'ir.vazano.quotation.submitted.v1',
