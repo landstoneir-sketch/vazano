@@ -17,10 +17,10 @@ const phases: Omit<DeliveryPhase, 'changeFromPrevious' | 'variance' | 'status'>[
   { key: 'platform-foundation', title: 'زیرساخت و پایه فنی', weight: 12, previousPercent: 100, plannedPercent: 100, actualPercent: 100 },
   { key: 'identity-access', title: 'ورود، کاربران، سازمان و دسترسی', weight: 15, previousPercent: 100, plannedPercent: 100, actualPercent: 100 },
   { key: 'marketplace-core', title: 'کاتالوگ و چرخه استعلام', weight: 25, previousPercent: 93, plannedPercent: 92, actualPercent: 93 },
-  { key: 'quotations-collaboration', title: 'پیشنهاد، مقایسه، پیام و اعلان', weight: 15, previousPercent: 90, plannedPercent: 90, actualPercent: 90 },
-  { key: 'commercial-foundation', title: 'فروشنده، اشتراک و پرداخت', weight: 10, previousPercent: 82, plannedPercent: 70, actualPercent: 83 },
-  { key: 'admin-operations', title: 'مدیریت، محتوا و گزارش', weight: 5, previousPercent: 87, plannedPercent: 82, actualPercent: 88 },
-  { key: 'quality-release', title: 'امنیت، آزمون و آماده‌سازی انتشار', weight: 10, previousPercent: 91, plannedPercent: 85, actualPercent: 92 },
+  { key: 'quotations-collaboration', title: 'پیشنهاد، مقایسه، پیام و اعلان', weight: 15, previousPercent: 90, plannedPercent: 90, actualPercent: 94 },
+  { key: 'commercial-foundation', title: 'فروشنده، اشتراک و پرداخت', weight: 10, previousPercent: 83, plannedPercent: 70, actualPercent: 85 },
+  { key: 'admin-operations', title: 'مدیریت، محتوا و گزارش', weight: 5, previousPercent: 88, plannedPercent: 82, actualPercent: 90 },
+  { key: 'quality-release', title: 'امنیت، آزمون و آماده‌سازی انتشار', weight: 10, previousPercent: 92, plannedPercent: 85, actualPercent: 93 },
 ];
 
 export function getMvpDeliveryPlan() {
@@ -38,15 +38,15 @@ export function getMvpDeliveryPlan() {
 
   return {
     snapshotDate: '2026-10-17',
-    previousPercent: 93,
+    previousPercent: 94,
     actualPercent,
     plannedPercent,
-    changeFromPrevious: actualPercent - 93,
+    changeFromPrevious: actualPercent - 94,
     varianceFromPlan: actualPercent - plannedPercent,
     scheduleStatus: actualPercent >= plannedPercent ? 'ON_TRACK' as const : 'AT_RISK' as const,
     estimates: {
       pilot: { minWorkingDays: 0, maxWorkingDays: 1 },
-      release: { minWorkingDays: 4, maxWorkingDays: 8 },
+      release: { minWorkingDays: 3, maxWorkingDays: 7 },
     },
     phases: deliveryPhases,
   };
