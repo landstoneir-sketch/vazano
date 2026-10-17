@@ -243,7 +243,16 @@ export class AdminBillingService {
     const [organization, plan, sourceTicket] = await Promise.all([
       this.prisma.organization.findUnique({ where: { id: input.organizationId } }),
       this.prisma.subscriptionPlan.findUnique({ where: { id: input.planId } }),
-      input.sourceTicketId ? this.prisma.supportTicket.findUnique({ where: { id: input.sourceTicketId } }) : null,
+      input.sourceTicketId ? this.prisma.supportTicket.findUnique({
+        where: { id: input.sourceTicketId },
+        include: {
+          attachments: {
+            where: { purpose: 'PAYMENT_RECEIPT', status: 'READY' },
+            select: { id: true },
+            take: 1,
+          },
+        },
+      }) : null,
     ]);
     if (!organization || organization.kind !== 'SUPPLIER' || organization.status !== 'ACTIVE') {
       throw new NotFoundException('سازمان فروشنده فعال پیدا نشد.');
@@ -254,6 +263,9 @@ export class AdminBillingService {
     }
     if (sourceTicket && !['SUBMITTED', 'ACKNOWLEDGED', 'IN_REVIEW', 'WAITING_FOR_REQUESTER'].includes(sourceTicket.status)) {
       throw new ConflictException('این درخواست مالی قبلاً بسته شده است.');
+    }
+    if (sourceTicket && sourceTicket.attachments.length === 0) {
+      throw new ConflictException('ثبت تمدید از روی درخواست مالی، به رسید پرداخت سالم و بررسی‌شده نیاز دارد.');
     }
     await this.assertFoundingProgramCapacity(organization.id, plan.id, plan.code, policy);
 
