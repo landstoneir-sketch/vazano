@@ -353,6 +353,13 @@ const inAppNotificationTemplates = [
     actionPathTemplate: '/admin/contracts',
   },
   {
+    code: 'IN_APP_CONTRACT_UNDER_REVIEW_FA_V1',
+    eventType: 'ir.vazano.contract.under_review.v1',
+    titleTemplate: 'بررسی درخواست قرارداد آغاز شد',
+    bodyTemplate: 'درخواست {{contractCode}} برای استعلام {{rfqCode}} در حال بررسی است.',
+    actionPathTemplate: '/dashboard/rfqs/{{rfqId}}',
+  },
+  {
     code: 'IN_APP_CONTRACT_TERMS_PREPARED_FA_V1',
     eventType: 'ir.vazano.contract.terms_prepared.v1',
     titleTemplate: 'شرایط قرارداد آماده بررسی است',
@@ -365,6 +372,20 @@ const inAppNotificationTemplates = [
     titleTemplate: 'شرایط قرارداد تأیید شد',
     bodyTemplate: 'خریدار شرایط درخواست {{contractCode}} برای استعلام {{rfqCode}} را تأیید کرد.',
     actionPathTemplate: '/admin/contracts',
+  },
+  {
+    code: 'IN_APP_CONTRACT_COMPLETED_FA_V1',
+    eventType: 'ir.vazano.contract.completed.v1',
+    titleTemplate: 'هماهنگی قرارداد تکمیل شد',
+    bodyTemplate: 'درخواست {{contractCode}} برای استعلام {{rfqCode}} تکمیل شد.',
+    actionPathTemplate: '/dashboard/rfqs/{{rfqId}}',
+  },
+  {
+    code: 'IN_APP_CONTRACT_CANCELLED_FA_V1',
+    eventType: 'ir.vazano.contract.cancelled.v1',
+    titleTemplate: 'درخواست قرارداد لغو شد',
+    bodyTemplate: 'درخواست {{contractCode}} برای استعلام {{rfqCode}} لغو شد. توضیح: {{note}}',
+    actionPathTemplate: '/dashboard/rfqs/{{rfqId}}',
   },
   {
     code: 'IN_APP_MESSAGE_SENT_FA_V1',

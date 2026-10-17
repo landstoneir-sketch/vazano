@@ -135,7 +135,7 @@ export class ContractsService {
       });
       if (changed.count !== 1) throw new ConflictException('وضعیت درخواست هم‌زمان تغییر کرده است؛ فهرست را دوباره بارگذاری کنید.');
       await tx.auditLog.create({ data: { actorUserId: user.id, organizationId: request.buyerOrganizationId, action: `contract_request.status.${input.status.toLowerCase()}`, entityType: 'ContractRequest', entityId: request.id, metadata: { previousStatus: request.status, note } } });
-      await tx.outboxEvent.create({ data: { aggregateType: 'ContractRequest', aggregateId: request.id, eventType: `ir.vazano.contract.${input.status.toLowerCase()}.v1`, payload: { requestId: request.id, rfqId: request.rfqId, buyerOrganizationId: request.buyerOrganizationId, supplierOrganizationId: request.supplierOrganizationId } } });
+      await tx.outboxEvent.create({ data: { aggregateType: 'ContractRequest', aggregateId: request.id, eventType: `ir.vazano.contract.${input.status.toLowerCase()}.v1`, payload: { requestId: request.id, rfqId: request.rfqId, buyerOrganizationId: request.buyerOrganizationId, supplierOrganizationId: request.supplierOrganizationId, note } } });
       return tx.contractRequest.findUniqueOrThrow({ where: { id: request.id }, include: contractInclude });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
