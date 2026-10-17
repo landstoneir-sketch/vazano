@@ -53,6 +53,16 @@ const SUPPORTED_EVENT_TYPES = [
   'ir.vazano.payment.retry_requested.v1',
 ] as const;
 
+const FAILED_DISPATCH_RETRY_DELAY_MS = 5 * 60 * 1_000;
+
+const EVENT_SELECTION = {
+  id: true,
+  eventType: true,
+  aggregateType: true,
+  aggregateId: true,
+  payload: true,
+} as const;
+
 @Injectable()
 export class NotificationsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -99,16 +109,37 @@ export class NotificationsService {
   }
 
   async processPendingEvents(limit = 50): Promise<{ events: number; notifications: number }> {
-    const events = await this.prisma.outboxEvent.findMany({
+    const normalizedLimit = Math.min(Math.max(limit, 1), 100);
+    const freshEvents = await this.prisma.outboxEvent.findMany({
       where: {
         eventType: { in: [...SUPPORTED_EVENT_TYPES] },
         availableAt: { lte: new Date() },
         notificationDispatches: { none: { channel: 'IN_APP' } },
       },
-      select: { id: true, eventType: true, aggregateType: true, aggregateId: true, payload: true },
+      select: EVENT_SELECTION,
       orderBy: { createdAt: 'asc' },
-      take: Math.min(Math.max(limit, 1), 100),
+      take: normalizedLimit,
     });
+    const retryCapacity = normalizedLimit - freshEvents.length;
+    const failedEvents = retryCapacity > 0
+      ? await this.prisma.outboxEvent.findMany({
+        where: {
+          eventType: { in: [...SUPPORTED_EVENT_TYPES] },
+          availableAt: { lte: new Date() },
+          notificationDispatches: {
+            some: {
+              channel: 'IN_APP',
+              status: 'FAILED',
+              processedAt: { lte: new Date(Date.now() - FAILED_DISPATCH_RETRY_DELAY_MS) },
+            },
+          },
+        },
+        select: EVENT_SELECTION,
+        orderBy: { createdAt: 'asc' },
+        take: retryCapacity,
+      })
+      : [];
+    const events = [...new Map([...freshEvents, ...failedEvents].map((event) => [event.id, event])).values()];
 
     let notificationCount = 0;
     let processedEvents = 0;
@@ -127,7 +158,7 @@ export class NotificationsService {
       const existing = await tx.notificationDispatch.findUnique({
         where: { sourceEventId_channel: { sourceEventId: event.id, channel: 'IN_APP' } },
       });
-      if (existing) return null;
+      if (existing?.status === 'PROCESSED') return null;
 
       const template = await tx.notificationTemplate.findUnique({
         where: {
@@ -139,14 +170,24 @@ export class NotificationsService {
         },
       });
       if (!template?.isActive) {
-        await tx.notificationDispatch.create({
-          data: {
-            sourceEventId: event.id,
-            channel: 'IN_APP',
-            status: 'FAILED',
-            failureReason: 'ACTIVE_TEMPLATE_NOT_FOUND',
-          },
-        });
+        const data = {
+          status: 'FAILED' as const,
+          recipientCount: 0,
+          failureReason: 'ACTIVE_TEMPLATE_NOT_FOUND',
+          processedAt: new Date(),
+        };
+        if (existing) {
+          await tx.notificationDispatch.update({ where: { id: existing.id }, data });
+        }
+        else {
+          await tx.notificationDispatch.create({
+            data: {
+              sourceEventId: event.id,
+              channel: 'IN_APP',
+              ...data,
+            },
+          });
+        }
         return 0;
       }
 
@@ -176,9 +217,20 @@ export class NotificationsService {
           skipDuplicates: true,
         });
       }
-      await tx.notificationDispatch.create({
-        data: { sourceEventId: event.id, channel: 'IN_APP', status: 'PROCESSED', recipientCount: targets.length },
-      });
+      const dispatchData = {
+        status: 'PROCESSED' as const,
+        recipientCount: targets.length,
+        failureReason: null,
+        processedAt: new Date(),
+      };
+      if (existing) {
+        await tx.notificationDispatch.update({ where: { id: existing.id }, data: dispatchData });
+      }
+      else {
+        await tx.notificationDispatch.create({
+          data: { sourceEventId: event.id, channel: 'IN_APP', ...dispatchData },
+        });
+      }
       return targets.length;
     });
   }

@@ -239,3 +239,51 @@ describe('NotificationsService contract lifecycle routing', () => {
     expect(notificationsInput?.data[0]?.body).toContain('به درخواست خریدار');
   });
 });
+
+describe('NotificationsService failed dispatch recovery', () => {
+  it('retries a failed dispatch and marks it processed without creating a duplicate dispatch', async () => {
+    const event = {
+      id: 'event-retry', eventType: 'ir.vazano.rfq.invitation.declined.v1',
+      aggregateType: 'RfqInvitation', aggregateId: 'invitation-1', payload: {},
+    };
+    let dispatchUpdateInput: {
+      where: { id: string };
+      data: { status: string; recipientCount: number; failureReason: string | null; processedAt: Date };
+    } | undefined;
+    const dispatchUpdate = jest.fn((input: NonNullable<typeof dispatchUpdateInput>) => {
+      dispatchUpdateInput = input;
+      return Promise.resolve({});
+    });
+    const dispatchCreate = jest.fn().mockResolvedValue({});
+    const tx = {
+      notificationDispatch: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'dispatch-1', status: 'FAILED' }),
+        update: dispatchUpdate,
+        create: dispatchCreate,
+      },
+      notificationTemplate: { findUnique: jest.fn().mockResolvedValue({
+        id: 'template-declined', code: 'RFQ_INVITATION_DECLINED', version: 1, isActive: true,
+        titleTemplate: 'فرصت رد شد', bodyTemplate: '{{supplierName}} · {{rfqCode}}', actionPathTemplate: null,
+      }) },
+      rfqInvitation: { findUnique: jest.fn().mockResolvedValue({
+        supplierOrganization: { displayName: 'سنگ نمونه' },
+        rfq: { id: 'rfq-1', code: 'VZR-1', buyerContactUserId: 'buyer-owner', buyerOrganizationId: 'buyer-1' },
+      }) },
+      notification: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    };
+    const prisma = {
+      outboxEvent: {
+        findMany: jest.fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([event]),
+      },
+      $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
+    };
+    const service = new NotificationsService(prisma as never);
+
+    await expect(service.processPendingEvents()).resolves.toEqual({ events: 1, notifications: 1 });
+    expect(dispatchCreate).not.toHaveBeenCalled();
+    expect(dispatchUpdateInput?.where).toEqual({ id: 'dispatch-1' });
+    expect(dispatchUpdateInput?.data).toMatchObject({ status: 'PROCESSED', recipientCount: 1, failureReason: null });
+  });
+});
