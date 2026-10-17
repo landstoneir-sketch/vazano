@@ -7,6 +7,9 @@ const productionEnvironment = {
   CLAMAV_HOST: 'clamav', CLAMAV_PORT: '3310', CLAMAV_TIMEOUT_MS: '15000',
   S3_ENDPOINT: 'https://storage.vazano.ir', S3_BUCKET: 'vazano', S3_ACCESS_KEY: 'access-key', S3_SECRET_KEY: '0123456789012345',
   ZARINPAL_ENABLED: 'false', TRUST_PROXY_HOPS: '1', SEED_DEMO_DATA: 'false', SEED_ADMIN_MOBILE: '09120000000',
+  NOTIFICATION_WORKER_ENABLED: 'true', NOTIFICATION_WORKER_INTERVAL_MS: '15000',
+  SUBSCRIPTION_LIFECYCLE_WORKER_ENABLED: 'true', SUBSCRIPTION_LIFECYCLE_WORKER_INTERVAL_MS: '60000',
+  RFQ_LIFECYCLE_WORKER_ENABLED: 'true', RFQ_LIFECYCLE_WORKER_INTERVAL_MS: '60000',
   VAZANO_API_IMAGE: `ghcr.io/vazano/api:${'a'.repeat(40)}`,
   VAZANO_WEB_IMAGE: `ghcr.io/vazano/web:${'b'.repeat(40)}`,
   VAZANO_MIGRATION_IMAGE: `ghcr.io/vazano/migration:${'c'.repeat(40)}`,
@@ -26,6 +29,10 @@ describe('production environment validation', () => {
     ['SEED_DEMO_DATA', 'true'],
     ['TRUST_PROXY_HOPS', '0'],
     ['SEED_ADMIN_MOBILE', '02100000000'],
+    ['NOTIFICATION_WORKER_ENABLED', 'false'],
+    ['SUBSCRIPTION_LIFECYCLE_WORKER_ENABLED', 'false'],
+    ['RFQ_LIFECYCLE_WORKER_ENABLED', 'false'],
+    ['NOTIFICATION_WORKER_INTERVAL_MS', '0'],
   ])('rejects unsafe %s', (key, value) => {
     expect(() => validateEnvironment({ ...productionEnvironment, [key]: value })).toThrow();
   });
