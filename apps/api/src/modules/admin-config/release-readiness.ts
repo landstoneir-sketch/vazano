@@ -39,6 +39,7 @@ export type ReleaseReadinessInput = {
   paymentConfigured: boolean;
   fileScanningConfigured: boolean;
   notificationWorkerEnabled: boolean;
+  failedNotificationDispatchCount: number;
   subscriptionWorkerEnabled: boolean;
   rfqLifecycleWorkerEnabled: boolean;
   termsPublished: boolean;
@@ -67,6 +68,14 @@ export function evaluateReleaseReadiness(input: ReleaseReadinessInput): { ready:
     check('integration.payment', 'درگاه واقعی زرین‌پال', input.paymentConfigured, 'پرداخت واقعی، Merchant و حالت غیرآزمایشی تنظیم شده‌اند.', 'درگاه واقعی زرین‌پال هنوز برای Production فعال نیست.', undefined, 'OWNER'),
     check('security.file-scan', 'اسکن امنیتی فایل‌ها', input.fileScanningConfigured, 'فایل‌ها با ClamAV بررسی می‌شوند.', 'اسکن ClamAV فعال نیست؛ بارگذاری فایل در Production نباید بدون آن منتشر شود.'),
     check('worker.notifications', 'پردازش اعلان‌ها', input.notificationWorkerEnabled, 'Worker اعلان‌ها فعال است.', 'Worker اعلان‌ها غیرفعال است.'),
+    check(
+      'worker.notification-failures',
+      'صف اعلان‌های ناموفق',
+      input.failedNotificationDispatchCount === 0,
+      'هیچ اعلان ناموفقی در صف باقی نمانده است.',
+      `${input.failedNotificationDispatchCount.toLocaleString('fa-IR')} اعلان ناموفق باقی مانده است؛ قالب‌ها و Worker را بررسی و Retry کنید.`,
+      '/admin/settings',
+    ),
     check('worker.subscriptions', 'چرخه عمر اشتراک', input.subscriptionWorkerEnabled, 'Worker انقضا و تمدید اشتراک فعال است.', 'Worker چرخه عمر اشتراک غیرفعال است.'),
     check('worker.rfq-lifecycle', 'چرخه مهلت استعلام', input.rfqLifecycleWorkerEnabled, 'Worker پایان مهلت دریافت پیشنهاد فعال است.', 'Worker پایان مهلت استعلام غیرفعال است.'),
     check('content.terms', 'قوانین و شرایط استفاده', input.termsPublished, 'صفحه قوانین منتشر شده است.', 'صفحه قوانین هنوز پیش‌نویس است و باید پس از تأیید مالک/حقوقی منتشر شود.', '/admin/content', 'OWNER'),

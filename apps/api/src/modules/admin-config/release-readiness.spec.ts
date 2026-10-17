@@ -4,6 +4,7 @@ const readyInput: ReleaseReadinessInput = {
   nodeEnvironment: 'production', otpDebugEnabled: false, smsConfigured: true,
   subscriptionSmsTemplatesConfigured: true, subscriptionSmsEnabled: true,
   paymentConfigured: true, fileScanningConfigured: true, notificationWorkerEnabled: true, subscriptionWorkerEnabled: true, rfqLifecycleWorkerEnabled: true,
+  failedNotificationDispatchCount: 0,
   termsPublished: true, privacyPublished: true, paidPlanCount: 2, activeCategoryCount: 15, activeUnitCount: 6,
   activeProvinceCount: 31, marketCoverageConfigured: true, activeBuyerOrganizationCount: 2, eligibleSupplierCount: 5,
   uncoveredCategoryCount: 0, uncoveredProvinceCount: 0,
@@ -17,8 +18,8 @@ describe('release readiness', () => {
     expect(result.ready).toBe(true);
     expect(result.pilotReady).toBe(true);
     expect(result.summary).toEqual({
-      total: 22,
-      ready: 22,
+      total: 23,
+      ready: 23,
       warning: 0,
       blocked: 0,
       ownerDecisionRequired: 0,
@@ -34,8 +35,8 @@ describe('release readiness', () => {
     const result = evaluateReleaseReadiness({ ...readyInput, nodeEnvironment: 'development', termsPublished: false, paymentConfigured: false });
     expect(result.ready).toBe(false);
     expect(result.summary).toMatchObject({
-      total: 22,
-      ready: 19,
+      total: 23,
+      ready: 20,
       warning: 1,
       blocked: 2,
       ownerDecisionRequired: 2,
@@ -68,6 +69,18 @@ describe('release readiness', () => {
     expect(result.ready).toBe(false);
     expect(result.pilotReady).toBe(false);
     expect(result.checks.find((item) => item.key === 'worker.rfq-lifecycle')?.status).toBe('BLOCKED');
+  });
+
+  it('blocks launch while failed notification dispatches remain', () => {
+    const result = evaluateReleaseReadiness({ ...readyInput, failedNotificationDispatchCount: 3 });
+    expect(result.ready).toBe(false);
+    expect(result.pilotReady).toBe(false);
+    expect(result.checks.find((item) => item.key === 'worker.notification-failures')).toMatchObject({
+      status: 'BLOCKED',
+      responsibility: 'TECHNICAL',
+      actionPath: '/admin/settings',
+    });
+    expect(result.checks.find((item) => item.key === 'worker.notification-failures')?.detail).toContain('۳');
   });
 
   it('blocks launch when marketplace reference data or pilot liquidity is missing', () => {
