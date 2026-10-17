@@ -24,8 +24,11 @@ const SUPPORTED_EVENT_TYPES = [
   'ir.vazano.quotation.rejected.v1',
   'ir.vazano.quotation.withdrawn.v1',
   'ir.vazano.contract.requested.v1',
+  'ir.vazano.contract.under_review.v1',
   'ir.vazano.contract.terms_prepared.v1',
   'ir.vazano.contract.accepted.v1',
+  'ir.vazano.contract.completed.v1',
+  'ir.vazano.contract.cancelled.v1',
   'ir.vazano.message.sent.v1',
   'ir.vazano.support.ticket.created.v1',
   'ir.vazano.support.ticket.status_changed.v1',
@@ -552,6 +555,47 @@ export class NotificationsService {
           variables: { contractCode: request.code, rfqCode: request.rfq.code, buyerName: request.buyerOrganization.displayName },
         }));
       }
+      case 'ir.vazano.contract.under_review.v1':
+      case 'ir.vazano.contract.completed.v1':
+      case 'ir.vazano.contract.cancelled.v1': {
+        const request = await tx.contractRequest.findUnique({
+          where: { id: event.aggregateId },
+          select: {
+            code: true,
+            status: true,
+            requestedByUserId: true,
+            buyerOrganizationId: true,
+            supplierOrganizationId: true,
+            rfq: { select: { id: true, code: true } },
+            supplierOrganization: {
+              select: { members: { where: { status: 'ACTIVE' }, select: { userId: true } } },
+            },
+          },
+        });
+        if (!request) return [];
+        const variables = {
+          contractCode: request.code,
+          rfqCode: request.rfq.code,
+          contractStatus: this.contractStatusLabel(request.status),
+          note: jsonStringField(event.payload, 'note') ?? 'بدون توضیح تکمیلی',
+        };
+        const buyerTarget = {
+          userId: request.requestedByUserId,
+          organizationId: request.buyerOrganizationId,
+          actionPath: `/dashboard/rfqs/${request.rfq.id}`,
+          variables,
+        };
+        if (event.eventType === 'ir.vazano.contract.under_review.v1') return [buyerTarget];
+        return this.uniqueTargets([
+          buyerTarget,
+          ...request.supplierOrganization.members.map(({ userId }) => ({
+            userId,
+            organizationId: request.supplierOrganizationId,
+            actionPath: '/supplier',
+            variables,
+          })),
+        ]);
+      }
       case 'ir.vazano.contract.terms_prepared.v1': {
         const request = await tx.contractRequest.findUnique({
           where: { id: event.aggregateId },
@@ -840,6 +884,14 @@ export class NotificationsService {
       QUOTED: 'آماده پرداخت',
       ACCEPTED: 'پرداخت‌شده و آماده اجرا',
       IN_PROGRESS: 'در حال انجام',
+      COMPLETED: 'تکمیل‌شده',
+      CANCELLED: 'لغوشده',
+    } as Record<string, string>)[status] ?? status;
+  }
+
+  private contractStatusLabel(status: string): string {
+    return ({
+      UNDER_REVIEW: 'در حال بررسی',
       COMPLETED: 'تکمیل‌شده',
       CANCELLED: 'لغوشده',
     } as Record<string, string>)[status] ?? status;

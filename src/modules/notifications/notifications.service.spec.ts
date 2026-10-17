@@ -198,3 +198,44 @@ describe('NotificationsService buyer commitment routing', () => {
     expect(notificationsInput?.data[0]?.body).toContain('VZR-1001');
   });
 });
+
+describe('NotificationsService contract lifecycle routing', () => {
+  it('notifies both buyer requester and supplier members when a request is cancelled', async () => {
+    const event = {
+      id: 'event-contract', eventType: 'ir.vazano.contract.cancelled.v1',
+      aggregateType: 'ContractRequest', aggregateId: 'contract-1', payload: { note: 'به درخواست خریدار' },
+    };
+    let notificationsInput: { data: Array<{ recipientUserId: string; body: string }> } | undefined;
+    const tx = {
+      notificationDispatch: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({}),
+      },
+      notificationTemplate: { findUnique: jest.fn().mockResolvedValue({
+        id: 'template-contract', code: 'CONTRACT_CANCELLED', version: 1, isActive: true,
+        titleTemplate: 'لغو قرارداد', bodyTemplate: '{{contractCode}}: {{note}}', actionPathTemplate: null,
+      }) },
+      contractRequest: { findUnique: jest.fn().mockResolvedValue({
+        code: 'VZC-1', status: 'CANCELLED', requestedByUserId: 'buyer-owner', buyerOrganizationId: 'buyer-org-1',
+        supplierOrganizationId: 'supplier-org-1', rfq: { id: 'rfq-1', code: 'VZR-1' },
+        supplierOrganization: { members: [{ userId: 'supplier-owner' }] },
+      }) },
+      notification: { createMany: jest.fn((input: { data: Array<{ recipientUserId: string; body: string }> }) => {
+        notificationsInput = input;
+        return Promise.resolve({ count: input.data.length });
+      }) },
+    };
+    const prisma = {
+      outboxEvent: { findMany: jest.fn().mockResolvedValue([event]) },
+      $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
+    };
+    const service = new NotificationsService(prisma as never);
+
+    await expect(service.processPendingEvents()).resolves.toEqual({ events: 1, notifications: 2 });
+    expect(notificationsInput?.data).toEqual(expect.arrayContaining([
+      expect.objectContaining({ recipientUserId: 'buyer-owner' }),
+      expect.objectContaining({ recipientUserId: 'supplier-owner' }),
+    ]));
+    expect(notificationsInput?.data[0]?.body).toContain('به درخواست خریدار');
+  });
+});
