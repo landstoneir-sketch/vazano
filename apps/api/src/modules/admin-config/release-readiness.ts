@@ -48,6 +48,9 @@ export type ReleaseReadinessInput = {
   activeCategoryCount: number;
   activeUnitCount: number;
   activeProvinceCount: number;
+  activeCityCount: number;
+  provincesWithoutActiveCityCount: number;
+  provincesWithoutActiveCityNames: string[];
   marketCoverageConfigured: boolean;
   activeBuyerOrganizationCount: number;
   eligibleSupplierCount: number;
@@ -84,6 +87,15 @@ export function evaluateReleaseReadiness(input: ReleaseReadinessInput): { ready:
     check('catalog.categories', 'دسته‌بندی قابل استفاده', input.activeCategoryCount > 0, `${input.activeCategoryCount.toLocaleString('fa-IR')} دسته فعال وجود دارد.`, 'دسته‌بندی فعالی برای ثبت استعلام وجود ندارد.', '/admin/catalog', 'OPERATIONS'),
     check('catalog.units', 'واحدهای اندازه‌گیری', input.activeUnitCount > 0, `${input.activeUnitCount.toLocaleString('fa-IR')} واحد اندازه‌گیری فعال وجود دارد.`, 'هیچ واحد فعالی برای اقلام استعلام وجود ندارد.', '/admin/catalog', 'OPERATIONS'),
     check('locations.provinces', 'پوشش استان‌های ایران', input.activeProvinceCount >= 31, `${input.activeProvinceCount.toLocaleString('fa-IR')} استان فعال ثبت شده است.`, `فقط ${input.activeProvinceCount.toLocaleString('fa-IR')} استان فعال ثبت شده است.`, '/admin/locations', 'OPERATIONS'),
+    check(
+      'locations.cities',
+      'شهر پایه هر استان',
+      input.activeCityCount >= input.activeProvinceCount && input.provincesWithoutActiveCityCount === 0,
+      `برای همه استان‌های فعال حداقل یک شهر ثبت شده است (${input.activeCityCount.toLocaleString('fa-IR')} شهر فعال).`,
+      locationGapDetail(input.provincesWithoutActiveCityCount, input.provincesWithoutActiveCityNames),
+      '/admin/locations',
+      'OPERATIONS',
+    ),
     check('market.coverage', 'پوشش فعال بازار', input.marketCoverageConfigured, 'پوشش جغرافیایی بازار معتبر و با استان‌های فعال همخوان است.', 'تنظیم پوشش بازار نامعتبر است یا به استان غیرفعال اشاره می‌کند.', '/admin/settings', 'OPERATIONS'),
     check('market.buyers', 'خریدار پایلوت فعال', input.activeBuyerOrganizationCount > 0, `${input.activeBuyerOrganizationCount.toLocaleString('fa-IR')} سازمان خریدار فعال و دارای عضو وجود دارد.`, 'هنوز هیچ سازمان خریدار فعال و دارای عضو برای پایلوت وجود ندارد.', '/admin/users', 'OPERATIONS'),
     check('market.suppliers', 'فروشنده واجد شرایط', input.eligibleSupplierCount > 0, `${input.eligibleSupplierCount.toLocaleString('fa-IR')} فروشنده تأییدشده با اشتراک، دسته و پوشش فعال وجود دارد.`, 'هیچ فروشنده‌ای هم‌زمان تأییدشده، دارای اشتراک معتبر، دسته و پوشش فعال وجود ندارد.', '/admin/suppliers', 'OPERATIONS'),
@@ -128,6 +140,13 @@ export function evaluateReleaseReadiness(input: ReleaseReadinessInput): { ready:
     },
     checks,
   };
+}
+
+function locationGapDetail(count: number, names: string[]): string {
+  if (count === 0) return 'تعداد شهرهای فعال از تعداد استان‌های فعال کمتر است.';
+  const visibleNames = names.slice(0, 8);
+  const remainingCount = Math.max(0, count - visibleNames.length);
+  return `${count.toLocaleString('fa-IR')} استان فعال شهر قابل‌انتخاب ندارد: ${visibleNames.join('، ')}${remainingCount > 0 ? ` و ${remainingCount.toLocaleString('fa-IR')} استان دیگر` : ''}.`;
 }
 
 function coverageGapDetail(count: number, subject: string, names: string[]): string {
