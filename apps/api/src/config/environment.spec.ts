@@ -11,8 +11,8 @@ const productionEnvironment = {
   SUBSCRIPTION_LIFECYCLE_WORKER_ENABLED: 'true', SUBSCRIPTION_LIFECYCLE_WORKER_INTERVAL_MS: '60000',
   RFQ_LIFECYCLE_WORKER_ENABLED: 'true', RFQ_LIFECYCLE_WORKER_INTERVAL_MS: '60000',
   VAZANO_API_IMAGE: `ghcr.io/vazano/api:${'a'.repeat(40)}`,
-  VAZANO_WEB_IMAGE: `ghcr.io/vazano/web:${'b'.repeat(40)}`,
-  VAZANO_MIGRATION_IMAGE: `ghcr.io/vazano/migration:${'c'.repeat(40)}`,
+  VAZANO_WEB_IMAGE: `ghcr.io/vazano/web:${'a'.repeat(40)}`,
+  VAZANO_MIGRATION_IMAGE: `ghcr.io/vazano/migration:${'a'.repeat(40)}`,
   VAZANO_GATEWAY_IMAGE: `nginx@sha256:${'d'.repeat(64)}`,
 };
 
@@ -79,6 +79,29 @@ describe('production environment validation', () => {
     ['VAZANO_GATEWAY_IMAGE', 'nginx:1.27.4-alpine'],
   ])('rejects mutable production image reference for %s', (key, value) => {
     expect(() => validateEnvironment({ ...productionEnvironment, [key]: value })).toThrow();
+  });
+
+  it('rejects application images built from different Git commits', () => {
+    expect(() => validateEnvironment({
+      ...productionEnvironment,
+      VAZANO_WEB_IMAGE: `ghcr.io/vazano/web:${'e'.repeat(40)}`,
+    })).toThrow(/same Git commit/);
+  });
+
+  it('rejects mixed Git SHA tags and image digests', () => {
+    expect(() => validateEnvironment({
+      ...productionEnvironment,
+      VAZANO_WEB_IMAGE: `ghcr.io/vazano/web@sha256:${'e'.repeat(64)}`,
+    })).toThrow(/mixed reference styles/);
+  });
+
+  it('accepts digest-pinned application images', () => {
+    expect(() => validateEnvironment({
+      ...productionEnvironment,
+      VAZANO_API_IMAGE: `ghcr.io/vazano/api@sha256:${'a'.repeat(64)}`,
+      VAZANO_WEB_IMAGE: `ghcr.io/vazano/web@sha256:${'b'.repeat(64)}`,
+      VAZANO_MIGRATION_IMAGE: `ghcr.io/vazano/migration@sha256:${'c'.repeat(64)}`,
+    })).not.toThrow();
   });
 
   it('requires every renewal template before subscription SMS is enabled', () => {

@@ -35,6 +35,7 @@ export function validateEnvironment(environment: Environment): Environment {
     requireReleaseImage(environment, 'VAZANO_API_IMAGE');
     requireReleaseImage(environment, 'VAZANO_WEB_IMAGE');
     requireReleaseImage(environment, 'VAZANO_MIGRATION_IMAGE');
+    requireConsistentApplicationImages(environment);
     requireDigestImage(environment, 'VAZANO_GATEWAY_IMAGE');
     assertNotPlaceholder('DATABASE_URL', environment.DATABASE_URL!);
     assertNotPlaceholder('REDIS_URL', environment.REDIS_URL!);
@@ -135,6 +136,20 @@ function requireReleaseImage(environment: Environment, key: string): string {
     throw new Error(`${key} must use a full Git SHA tag or sha256 digest.`);
   }
   return value;
+}
+
+function requireConsistentApplicationImages(environment: Environment): void {
+  const references = ['VAZANO_API_IMAGE', 'VAZANO_WEB_IMAGE', 'VAZANO_MIGRATION_IMAGE']
+    .map((key) => requireValue(environment, key));
+  const gitShaTags = references.map((reference) => reference.match(/:([0-9a-f]{40})$/i)?.[1]?.toLowerCase() ?? null);
+  const digestCount = references.filter((reference) => /@sha256:[0-9a-f]{64}$/i.test(reference)).length;
+
+  if (digestCount > 0 && digestCount < references.length) {
+    throw new Error('Application images must all use Git SHA tags or all use sha256 digests; mixed reference styles are not allowed.');
+  }
+  if (digestCount === 0 && new Set(gitShaTags).size !== 1) {
+    throw new Error('API, web and migration images must reference the same Git commit.');
+  }
 }
 
 function requireDigestImage(environment: Environment, key: string): string {
