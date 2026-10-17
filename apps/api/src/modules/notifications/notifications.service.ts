@@ -7,6 +7,11 @@ const SUPPORTED_EVENT_TYPES = [
   'ir.vazano.organization.member_invited.v1',
   'ir.vazano.supplier.profile.submitted.v1',
   'ir.vazano.supplier.verification.changed.v1',
+  'ir.vazano.quality_control.quoted.v1',
+  'ir.vazano.quality_control.accepted.v1',
+  'ir.vazano.quality_control.in_progress.v1',
+  'ir.vazano.quality_control.completed.v1',
+  'ir.vazano.quality_control.cancelled.v1',
   'ir.vazano.rfq.submitted.v1',
   'ir.vazano.rfq.reviewed.v1',
   'ir.vazano.rfq.distributed.v1',
@@ -253,6 +258,59 @@ export class NotificationsService {
             verificationReason: profile.verificationReason || 'بدون توضیح تکمیلی',
           },
         }));
+      }
+      case 'ir.vazano.quality_control.quoted.v1':
+      case 'ir.vazano.quality_control.accepted.v1':
+      case 'ir.vazano.quality_control.in_progress.v1':
+      case 'ir.vazano.quality_control.completed.v1':
+      case 'ir.vazano.quality_control.cancelled.v1': {
+        const request = await tx.qualityControlRequest.findUnique({
+          where: { id: event.aggregateId },
+          select: {
+            status: true,
+            feeAmountRial: true,
+            rfq: {
+              select: {
+                id: true,
+                code: true,
+                title: true,
+                buyerOrganizationId: true,
+                buyerOrganization: {
+                  select: { members: { where: { status: 'ACTIVE' }, select: { userId: true } } },
+                },
+              },
+            },
+          },
+        });
+        if (!request) return [];
+        const variables = {
+          rfqId: request.rfq.id,
+          rfqCode: request.rfq.code,
+          rfqTitle: request.rfq.title,
+          qualityStatus: this.qualityControlStatusLabel(request.status),
+          feeAmountToman: ((request.feeAmountRial ?? 0n) / 10n).toLocaleString('fa-IR'),
+          note: jsonStringField(event.payload, 'note') ?? 'بدون توضیح تکمیلی',
+        };
+        const buyerTargets = request.rfq.buyerOrganization.members.map(({ userId }) => ({
+          userId,
+          organizationId: request.rfq.buyerOrganizationId,
+          actionPath: `/dashboard/rfqs/${request.rfq.id}`,
+          variables,
+        }));
+        if (event.eventType !== 'ir.vazano.quality_control.accepted.v1') {
+          return buyerTargets;
+        }
+        const operators = await tx.user.findMany({
+          where: {
+            status: 'ACTIVE',
+            userRoles: { some: { organizationId: null, role: { key: { in: ['SUPER_ADMIN', 'ADMIN', 'SUPPORT'] } } } },
+          },
+          select: { id: true },
+        });
+        return this.uniqueTargets([
+          ...buyerTargets,
+          ...operators.map(({ id }) => ({ userId: id, actionPath: '/admin/quality-control', variables })),
+        ]);
       }
       case 'ir.vazano.rfq.submitted.v1': {
         const [rfq, admins] = await Promise.all([
@@ -725,6 +783,16 @@ export class NotificationsService {
       NEEDS_CORRECTION: 'نیازمند اصلاح است',
       REJECTED: 'رد شد',
       SUSPENDED: 'تعلیق شد',
+    } as Record<string, string>)[status] ?? status;
+  }
+
+  private qualityControlStatusLabel(status: string): string {
+    return ({
+      QUOTED: 'آماده پرداخت',
+      ACCEPTED: 'پرداخت‌شده و آماده اجرا',
+      IN_PROGRESS: 'در حال انجام',
+      COMPLETED: 'تکمیل‌شده',
+      CANCELLED: 'لغوشده',
     } as Record<string, string>)[status] ?? status;
   }
 

@@ -80,3 +80,46 @@ describe('NotificationsService supplier verification routing', () => {
     expect(notificationsInput?.data[0]?.body).toContain('نیازمند اصلاح است');
   });
 });
+
+describe('NotificationsService quality control routing', () => {
+  it('notifies both the buyer and operations when payment activates the service', async () => {
+    const event = {
+      id: 'event-quality-control', eventType: 'ir.vazano.quality_control.accepted.v1',
+      aggregateType: 'QualityControlRequest', aggregateId: 'quality-1', payload: {},
+    };
+    let notificationsInput: { data: Array<{ recipientUserId: string; actionPath?: string }> } | undefined;
+    const tx = {
+      notificationDispatch: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({}),
+      },
+      notificationTemplate: { findUnique: jest.fn().mockResolvedValue({
+        id: 'template-quality', code: 'QUALITY_ACCEPTED', version: 1, isActive: true,
+        titleTemplate: 'درخواست فعال شد', bodyTemplate: 'استعلام {{rfqCode}}', actionPathTemplate: null,
+      }) },
+      qualityControlRequest: { findUnique: jest.fn().mockResolvedValue({
+        status: 'ACCEPTED', feeAmountRial: 3_000_000n,
+        rfq: {
+          id: 'rfq-1', code: 'VZR-1', title: 'سنگ نمای پروژه', buyerOrganizationId: 'buyer-org-1',
+          buyerOrganization: { members: [{ userId: 'buyer-owner' }] },
+        },
+      }) },
+      user: { findMany: jest.fn().mockResolvedValue([{ id: 'operations-user' }]) },
+      notification: { createMany: jest.fn((input: { data: Array<{ recipientUserId: string; actionPath?: string }> }) => {
+        notificationsInput = input;
+        return Promise.resolve({ count: input.data.length });
+      }) },
+    };
+    const prisma = {
+      outboxEvent: { findMany: jest.fn().mockResolvedValue([event]) },
+      $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
+    };
+    const service = new NotificationsService(prisma as never);
+
+    await expect(service.processPendingEvents()).resolves.toEqual({ events: 1, notifications: 2 });
+    expect(notificationsInput?.data).toEqual(expect.arrayContaining([
+      expect.objectContaining({ recipientUserId: 'buyer-owner', actionPath: '/dashboard/rfqs/rfq-1' }),
+      expect.objectContaining({ recipientUserId: 'operations-user', actionPath: '/admin/quality-control' }),
+    ]));
+  });
+});
