@@ -351,8 +351,8 @@ export class AdminBillingService {
         await tx.outboxEvent.create({ data: {
           aggregateType: 'Subscription',
           aggregateId: subscription.id,
-          eventType: 'ir.vazano.subscription.manual_renewal_activated.v1',
-          payload: { subscriptionId: subscription.id, organizationId: organization.id, trackingNumber, expiresAt: expiresAt.toISOString(), sourceTicketId: sourceTicket?.id ?? null },
+          eventType: 'ir.vazano.subscription.activated.v1',
+          payload: { subscriptionId: subscription.id, organizationId: organization.id, activationSource: 'MANUAL_RENEWAL', trackingNumber, expiresAt: expiresAt.toISOString(), sourceTicketId: sourceTicket?.id ?? null },
         } });
         return { manualRenewal, subscription };
       });
