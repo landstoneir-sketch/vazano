@@ -161,3 +161,40 @@ describe('NotificationsService supplier review routing', () => {
     expect(notificationsInput?.data[0]?.body).toContain('۵ از ۵');
   });
 });
+
+describe('NotificationsService buyer commitment routing', () => {
+  it('notifies the buyer organization after the commitment payment is held', async () => {
+    const event = {
+      id: 'event-commitment', eventType: 'ir.vazano.buyer.commitment.held.v1',
+      aggregateType: 'Rfq', aggregateId: 'rfq-1', payload: { receiptNumber: 'VZR-1001' },
+    };
+    let notificationsInput: { data: Array<{ recipientUserId: string; body: string }> } | undefined;
+    const tx = {
+      notificationDispatch: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({}),
+      },
+      notificationTemplate: { findUnique: jest.fn().mockResolvedValue({
+        id: 'template-commitment', code: 'BUYER_COMMITMENT', version: 1, isActive: true,
+        titleTemplate: 'سپرده ثبت شد', bodyTemplate: '{{rfqCode}}: {{receiptNumber}}', actionPathTemplate: null,
+      }) },
+      rfq: { findUnique: jest.fn().mockResolvedValue({
+        id: 'rfq-1', code: 'VZR-22', buyerOrganizationId: 'buyer-org-1',
+        buyerOrganization: { members: [{ userId: 'buyer-owner' }] },
+      }) },
+      notification: { createMany: jest.fn((input: { data: Array<{ recipientUserId: string; body: string }> }) => {
+        notificationsInput = input;
+        return Promise.resolve({ count: input.data.length });
+      }) },
+    };
+    const prisma = {
+      outboxEvent: { findMany: jest.fn().mockResolvedValue([event]) },
+      $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
+    };
+    const service = new NotificationsService(prisma as never);
+
+    await expect(service.processPendingEvents()).resolves.toEqual({ events: 1, notifications: 1 });
+    expect(notificationsInput?.data[0]).toEqual(expect.objectContaining({ recipientUserId: 'buyer-owner' }));
+    expect(notificationsInput?.data[0]?.body).toContain('VZR-1001');
+  });
+});

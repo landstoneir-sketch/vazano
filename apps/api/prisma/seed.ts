@@ -269,6 +269,13 @@ const inAppNotificationTemplates = [
     actionPathTemplate: '/supplier',
   },
   {
+    code: 'IN_APP_BUYER_COMMITMENT_HELD_FA_V1',
+    eventType: 'ir.vazano.buyer.commitment.held.v1',
+    titleTemplate: 'سپرده تعهد خریدار ثبت شد',
+    bodyTemplate: 'پرداخت سپرده استعلام {{rfqCode}} قطعی شد. شماره رسید: {{receiptNumber}}',
+    actionPathTemplate: '/dashboard/rfqs/{{rfqId}}',
+  },
+  {
     code: 'IN_APP_ORGANIZATION_MEMBER_INVITED_FA_V1',
     eventType: 'ir.vazano.organization.member_invited.v1',
     titleTemplate: 'دعوت به سازمان {{organizationName}}',
