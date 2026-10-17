@@ -5,6 +5,8 @@ import { renderNotificationTemplate } from './template-renderer';
 
 const SUPPORTED_EVENT_TYPES = [
   'ir.vazano.organization.member_invited.v1',
+  'ir.vazano.supplier.profile.submitted.v1',
+  'ir.vazano.supplier.verification.changed.v1',
   'ir.vazano.rfq.submitted.v1',
   'ir.vazano.rfq.reviewed.v1',
   'ir.vazano.rfq.distributed.v1',
@@ -202,6 +204,55 @@ export class NotificationsService {
             memberRole: this.memberRoleLabel(membership.role),
           },
         }];
+      }
+      case 'ir.vazano.supplier.profile.submitted.v1': {
+        const [profile, verifiers] = await Promise.all([
+          tx.supplierProfile.findUnique({
+            where: { id: event.aggregateId },
+            select: { organization: { select: { displayName: true } } },
+          }),
+          tx.user.findMany({
+            where: {
+              status: 'ACTIVE',
+              userRoles: { some: { organizationId: null, role: { key: { in: ['SUPER_ADMIN', 'ADMIN'] } } } },
+            },
+            select: { id: true },
+          }),
+        ]);
+        if (!profile) return [];
+        return verifiers.map(({ id }) => ({
+          userId: id,
+          actionPath: '/admin/suppliers',
+          variables: { supplierName: profile.organization.displayName },
+        }));
+      }
+      case 'ir.vazano.supplier.verification.changed.v1': {
+        const profile = await tx.supplierProfile.findUnique({
+          where: { id: event.aggregateId },
+          select: {
+            organizationId: true,
+            verificationStatus: true,
+            verificationReason: true,
+            organization: {
+              select: {
+                displayName: true,
+                members: { where: { status: 'ACTIVE' }, select: { userId: true } },
+              },
+            },
+          },
+        });
+        if (!profile) return [];
+        return profile.organization.members.map(({ userId }) => ({
+          userId,
+          organizationId: profile.organizationId,
+          actionPath: `/supplier/profile/${profile.organizationId}`,
+          variables: {
+            organizationId: profile.organizationId,
+            supplierName: profile.organization.displayName,
+            verificationStatus: this.supplierVerificationLabel(profile.verificationStatus),
+            verificationReason: profile.verificationReason || 'بدون توضیح تکمیلی',
+          },
+        }));
       }
       case 'ir.vazano.rfq.submitted.v1': {
         const [rfq, admins] = await Promise.all([
@@ -666,6 +717,15 @@ export class NotificationsService {
 
   private approvalLabel(status: string): string {
     return ({ APPROVED: 'تأیید شد', NEEDS_CHANGES: 'نیازمند اصلاح است', REJECTED: 'رد شد' } as Record<string, string>)[status] ?? status;
+  }
+
+  private supplierVerificationLabel(status: string): string {
+    return ({
+      VERIFIED: 'تأیید شد',
+      NEEDS_CORRECTION: 'نیازمند اصلاح است',
+      REJECTED: 'رد شد',
+      SUSPENDED: 'تعلیق شد',
+    } as Record<string, string>)[status] ?? status;
   }
 
   private ticketTypeLabel(type: string): string {

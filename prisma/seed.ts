@@ -213,6 +213,20 @@ const systemSettings = [
 
 const inAppNotificationTemplates = [
   {
+    code: 'IN_APP_SUPPLIER_PROFILE_SUBMITTED_FA_V1',
+    eventType: 'ir.vazano.supplier.profile.submitted.v1',
+    titleTemplate: 'فروشنده جدید آماده بررسی است',
+    bodyTemplate: 'پروفایل «{{supplierName}}» برای احراز و بررسی مدارک ارسال شد.',
+    actionPathTemplate: '/admin/suppliers',
+  },
+  {
+    code: 'IN_APP_SUPPLIER_VERIFICATION_CHANGED_FA_V1',
+    eventType: 'ir.vazano.supplier.verification.changed.v1',
+    titleTemplate: 'نتیجه بررسی پروفایل فروشنده',
+    bodyTemplate: 'پروفایل «{{supplierName}}» {{verificationStatus}}. توضیح: {{verificationReason}}',
+    actionPathTemplate: '/supplier/profile/{{organizationId}}',
+  },
+  {
     code: 'IN_APP_ORGANIZATION_MEMBER_INVITED_FA_V1',
     eventType: 'ir.vazano.organization.member_invited.v1',
     titleTemplate: 'دعوت به سازمان {{organizationName}}',
