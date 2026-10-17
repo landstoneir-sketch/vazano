@@ -418,8 +418,8 @@ export class SubscriptionBillingService {
       await tx.outboxEvent.create({ data: {
         aggregateType: 'Subscription',
         aggregateId: subscription.id,
-        eventType: 'ir.vazano.subscription.trial_activated.v1',
-        payload: { subscriptionId: subscription.id, organizationId, expiresAt: expiresAt.toISOString() },
+        eventType: 'ir.vazano.subscription.activated.v1',
+        payload: { subscriptionId: subscription.id, organizationId, activationSource: 'TRIAL', expiresAt: expiresAt.toISOString() },
       } });
       return { trialActivated: true as const, subscriptionId: subscription.id, startsAt: activatedAt, expiresAt };
     });
