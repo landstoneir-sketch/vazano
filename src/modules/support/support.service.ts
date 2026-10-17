@@ -101,7 +101,15 @@ export class SupportService {
       },
     });
     if (!ticket) throw new NotFoundException('تیکت پیدا نشد.');
-    return ticket;
+    return {
+      ...ticket,
+      capabilities: {
+        canUploadPaymentReceipt: ticket.requesterUserId === user.id
+          && ticket.type === 'SERVICE_REQUEST'
+          && ticket.category === 'BILLING'
+          && !['RESOLVED', 'CLOSED', 'REJECTED'].includes(ticket.status),
+      },
+    };
   }
 
   async addComment(user: AuthenticatedUser, ticketId: string, input: AddSupportCommentDto) {
