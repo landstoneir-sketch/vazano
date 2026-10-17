@@ -43,9 +43,9 @@ services:
     ports: ["53310:3310"]
     volumes: ["vazano-clamav:/var/lib/clamav"]
     healthcheck:
-      test: ["CMD-SHELL", "clamdcheck.sh"]
+      test: ["CMD-SHELL", "printf 'PING\\n' | nc -w 10 127.0.0.1 3310 | grep -qx PONG"]
       interval: 10s
-      timeout: 5s
+      timeout: 15s
       retries: 30
       start_period: 60s
     restart: unless-stopped

@@ -71,9 +71,9 @@ services:
     networks: [application]
     security_opt: ["no-new-privileges:true"]
     healthcheck:
-      test: ["CMD-SHELL", "clamdcheck.sh"]
+      test: ["CMD-SHELL", "printf 'PING\\n' | nc -w 10 127.0.0.1 3310 | grep -qx PONG"]
       interval: 15s
-      timeout: 5s
+      timeout: 15s
       retries: 20
       start_period: 60s
 
