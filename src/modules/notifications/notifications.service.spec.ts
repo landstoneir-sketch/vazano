@@ -123,3 +123,41 @@ describe('NotificationsService quality control routing', () => {
     ]));
   });
 });
+
+describe('NotificationsService supplier review routing', () => {
+  it('notifies active members of the reviewed supplier organization', async () => {
+    const event = {
+      id: 'event-review', eventType: 'ir.vazano.supplier.review_published.v1',
+      aggregateType: 'SupplierReview', aggregateId: 'review-1', payload: {},
+    };
+    let notificationsInput: { data: Array<{ recipientUserId: string; body: string }> } | undefined;
+    const tx = {
+      notificationDispatch: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({}),
+      },
+      notificationTemplate: { findUnique: jest.fn().mockResolvedValue({
+        id: 'template-review', code: 'SUPPLIER_REVIEW', version: 1, isActive: true,
+        titleTemplate: 'امتیاز جدید', bodyTemplate: '{{rfqCode}}: {{rating}} از ۵', actionPathTemplate: null,
+      }) },
+      supplierReview: { findUnique: jest.fn().mockResolvedValue({
+        rating: 5, supplierOrganizationId: 'supplier-org-1',
+        supplierOrganization: { members: [{ userId: 'supplier-owner' }] },
+        rfq: { code: 'VZR-20' },
+      }) },
+      notification: { createMany: jest.fn((input: { data: Array<{ recipientUserId: string; body: string }> }) => {
+        notificationsInput = input;
+        return Promise.resolve({ count: input.data.length });
+      }) },
+    };
+    const prisma = {
+      outboxEvent: { findMany: jest.fn().mockResolvedValue([event]) },
+      $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
+    };
+    const service = new NotificationsService(prisma as never);
+
+    await expect(service.processPendingEvents()).resolves.toEqual({ events: 1, notifications: 1 });
+    expect(notificationsInput?.data[0]).toEqual(expect.objectContaining({ recipientUserId: 'supplier-owner' }));
+    expect(notificationsInput?.data[0]?.body).toContain('۵ از ۵');
+  });
+});

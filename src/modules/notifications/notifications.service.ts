@@ -12,6 +12,7 @@ const SUPPORTED_EVENT_TYPES = [
   'ir.vazano.quality_control.in_progress.v1',
   'ir.vazano.quality_control.completed.v1',
   'ir.vazano.quality_control.cancelled.v1',
+  'ir.vazano.supplier.review_published.v1',
   'ir.vazano.rfq.submitted.v1',
   'ir.vazano.rfq.reviewed.v1',
   'ir.vazano.rfq.distributed.v1',
@@ -311,6 +312,29 @@ export class NotificationsService {
           ...buyerTargets,
           ...operators.map(({ id }) => ({ userId: id, actionPath: '/admin/quality-control', variables })),
         ]);
+      }
+      case 'ir.vazano.supplier.review_published.v1': {
+        const review = await tx.supplierReview.findUnique({
+          where: { id: event.aggregateId },
+          select: {
+            rating: true,
+            supplierOrganizationId: true,
+            supplierOrganization: {
+              select: { members: { where: { status: 'ACTIVE' }, select: { userId: true } } },
+            },
+            rfq: { select: { code: true } },
+          },
+        });
+        if (!review) return [];
+        return review.supplierOrganization.members.map(({ userId }) => ({
+          userId,
+          organizationId: review.supplierOrganizationId,
+          actionPath: '/supplier',
+          variables: {
+            rfqCode: review.rfq.code,
+            rating: review.rating.toLocaleString('fa-IR'),
+          },
+        }));
       }
       case 'ir.vazano.rfq.submitted.v1': {
         const [rfq, admins] = await Promise.all([

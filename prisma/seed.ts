@@ -262,6 +262,13 @@ const inAppNotificationTemplates = [
     actionPathTemplate: '/dashboard/rfqs/{{rfqId}}',
   },
   {
+    code: 'IN_APP_SUPPLIER_REVIEW_PUBLISHED_FA_V1',
+    eventType: 'ir.vazano.supplier.review_published.v1',
+    titleTemplate: 'امتیاز جدید برای فروشنده',
+    bodyTemplate: 'خریدار استعلام {{rfqCode}} امتیاز {{rating}} از ۵ را ثبت کرد.',
+    actionPathTemplate: '/supplier',
+  },
+  {
     code: 'IN_APP_ORGANIZATION_MEMBER_INVITED_FA_V1',
     eventType: 'ir.vazano.organization.member_invited.v1',
     titleTemplate: 'دعوت به سازمان {{organizationName}}',
