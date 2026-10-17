@@ -73,7 +73,7 @@ export function SupportCenter({ initialRequest, initialOrganizationId }: { initi
           body: JSON.stringify({ fileName: paymentReceipt.name, mimeType: paymentReceipt.type, sizeBytes: paymentReceipt.size, purpose: 'PAYMENT_RECEIPT' }),
         });
         const uploaded = await fetch(intent.upload.url, { method: intent.upload.method, headers: intent.upload.headers, body: paymentReceipt });
-        if (!uploaded.ok) throw new Error(`درخواست ${created.code} ثبت شد، اما بارگذاری رسید انجام نشد؛ در پاسخ همان درخواست موضوع را به پشتیبانی اطلاع دهید.`);
+        if (!uploaded.ok) throw new Error(`درخواست ${created.code} ثبت شد، اما بارگذاری رسید انجام نشد؛ از صفحه همان درخواست دوباره تلاش کنید.`);
         await apiRequest(`/attachments/${intent.attachment.id}/complete`, { method: 'POST' });
       }
       setSubject(''); setDescription('');
