@@ -38,8 +38,7 @@ export function validateEnvironment(environment: Environment): Environment {
     requireDigestImage(environment, 'VAZANO_GATEWAY_IMAGE');
     assertNotPlaceholder('DATABASE_URL', environment.DATABASE_URL!);
     assertNotPlaceholder('REDIS_URL', environment.REDIS_URL!);
-    const webOrigin = new URL(environment.WEB_ORIGIN!);
-    if (webOrigin.protocol !== 'https:') throw new Error('WEB_ORIGIN must use HTTPS in production.');
+    requireHttpsOrigin(environment, 'WEB_ORIGIN');
     if (environment.OTP_DEBUG_ENABLED === 'true') throw new Error('OTP debug mode must be disabled in production.');
     if (environment.SEED_DEMO_DATA === 'true') throw new Error('Development demo data must be disabled in production.');
     for (const key of ['NOTIFICATION_WORKER_ENABLED', 'SUBSCRIPTION_LIFECYCLE_WORKER_ENABLED', 'RFQ_LIFECYCLE_WORKER_ENABLED']) {
@@ -66,8 +65,7 @@ export function validateEnvironment(environment: Environment): Environment {
     if (environment.ZARINPAL_ENABLED === 'true') {
       if (environment.ZARINPAL_SANDBOX !== 'false') throw new Error('ZARINPAL_SANDBOX must be disabled when production payments are enabled.');
       requireProductionSecret(environment, 'ZARINPAL_MERCHANT_ID', 16);
-      const publicApiUrl = requireUrl(environment, 'PUBLIC_API_URL');
-      if (publicApiUrl.protocol !== 'https:') throw new Error('PUBLIC_API_URL must use HTTPS when production payments are enabled.');
+      requireHttpsOrigin(environment, 'PUBLIC_API_URL');
     }
   }
 
@@ -84,6 +82,15 @@ function requireUrl(environment: Environment, key: string): URL {
   const value = requireValue(environment, key);
   try { return new URL(value); }
   catch { throw new Error(`${key} must be a valid absolute URL.`); }
+}
+
+function requireHttpsOrigin(environment: Environment, key: string): URL {
+  const url = requireUrl(environment, key);
+  if (url.protocol !== 'https:') throw new Error(`${key} must use HTTPS in production.`);
+  if (url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
+    throw new Error(`${key} must be an HTTPS origin without credentials, path, query or fragment.`);
+  }
+  return url;
 }
 
 function requirePositiveInteger(environment: Environment, key: string): number {

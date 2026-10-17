@@ -41,6 +41,25 @@ describe('production environment validation', () => {
     expect(() => validateEnvironment({ ...productionEnvironment, ZARINPAL_ENABLED: 'true', ZARINPAL_SANDBOX: 'false', ZARINPAL_MERCHANT_ID: 'merchant-identifier', PUBLIC_API_URL: 'http://api.vazano.ir' })).toThrow(/PUBLIC_API_URL/);
   });
 
+  it.each([
+    'https://vazano.ir/admin',
+    'https://user:password@vazano.ir',
+    'https://vazano.ir?source=production',
+    'https://vazano.ir#fragment',
+  ])('rejects WEB_ORIGIN values that are not an exact origin: %s', (value) => {
+    expect(() => validateEnvironment({ ...productionEnvironment, WEB_ORIGIN: value })).toThrow(/WEB_ORIGIN/);
+  });
+
+  it('rejects a payment callback base URL with a path', () => {
+    expect(() => validateEnvironment({
+      ...productionEnvironment,
+      ZARINPAL_ENABLED: 'true',
+      ZARINPAL_SANDBOX: 'false',
+      ZARINPAL_MERCHANT_ID: 'merchant-identifier',
+      PUBLIC_API_URL: 'https://vazano.ir/api',
+    })).toThrow(/PUBLIC_API_URL/);
+  });
+
   it('rejects sandbox payments when live payments are enabled', () => {
     expect(() => validateEnvironment({ ...productionEnvironment, ZARINPAL_ENABLED: 'true', ZARINPAL_SANDBOX: 'true', ZARINPAL_MERCHANT_ID: 'merchant-identifier', PUBLIC_API_URL: 'https://vazano.ir' })).toThrow(/ZARINPAL_SANDBOX/);
   });
