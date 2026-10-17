@@ -31,7 +31,16 @@ function Test-DockerEngine {
   }
 }
 
+function Assert-WslCanStart {
+  $wslService = Get-Service -Name 'WslService' -ErrorAction SilentlyContinue
+  if ($wslService -and $wslService.Status -eq [System.ServiceProcess.ServiceControllerStatus]::StopPending) {
+    Write-Output '[Vazano] WSL is stuck while stopping. Restart Windows, then run START_VAZANO.bat again. No Vazano data will be deleted.'
+    exit 2
+  }
+}
+
 if (Test-DockerEngine) { exit 0 }
+Assert-WslCanStart
 if (-not $DoNotStart) {
   $desktop = 'C:\Program Files\Docker\Docker\Docker Desktop.exe'
   if (-not (Test-Path -LiteralPath $desktop -PathType Leaf)) {
@@ -46,6 +55,7 @@ if (-not $DoNotStart) {
 $timer = [System.Diagnostics.Stopwatch]::StartNew()
 while ($timer.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
   if (Test-DockerEngine) { exit 0 }
+  Assert-WslCanStart
   Start-Sleep -Seconds 2
 }
 
