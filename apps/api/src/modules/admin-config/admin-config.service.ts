@@ -11,6 +11,7 @@ import { assertValidProposalFeePolicy, assertValidShortageOverrideSetting } from
 import { assertValidRfqPolicySetting, resolveRfqPolicySettings } from '../rfqs/rfq-policy-settings.service';
 import { FileSafetyService } from '../attachments/file-safety.service';
 import { getMvpDeliveryPlan } from './mvp-delivery-plan';
+import { isSafeInternalActionPathTemplate } from './notification-template-policy';
 
 @Injectable()
 export class AdminConfigService {
@@ -211,7 +212,7 @@ export class AdminConfigService {
 
   async updateNotificationTemplate(user: AuthenticatedUser, templateId: string, input: UpdateNotificationTemplateDto) {
     this.requireAnyPermission(user, ['settings.manage', 'content.manage']);
-    if (input.actionPathTemplate && (!input.actionPathTemplate.startsWith('/') || input.actionPathTemplate.startsWith('//'))) {
+    if (input.actionPathTemplate && !isSafeInternalActionPathTemplate(input.actionPathTemplate)) {
       throw new BadRequestException('مسیر اقدام باید یک مسیر داخلی وازانو باشد.');
     }
     const template = await this.prisma.notificationTemplate.findUnique({ where: { id: templateId } });
