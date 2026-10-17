@@ -110,6 +110,11 @@ export class AdminBillingService {
           createdAt: true,
           requester: { select: { firstName: true, lastName: true, mobile: true } },
           organization: { select: { id: true, displayName: true, legalName: true } },
+          attachments: {
+            where: { purpose: 'PAYMENT_RECEIPT', status: 'READY' },
+            select: { id: true, originalName: true, sizeBytes: true, uploadedAt: true },
+            orderBy: { createdAt: 'asc' },
+          },
           _count: { select: { comments: true } },
         },
         orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],

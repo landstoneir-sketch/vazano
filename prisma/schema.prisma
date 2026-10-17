@@ -203,6 +203,7 @@ enum AttachmentPurpose {
   SPECIFICATION
   PROFORMA
   CERTIFICATE
+  PAYMENT_RECEIPT
 }
 
 enum MessageThreadStatus {
@@ -1089,6 +1090,7 @@ model Attachment {
   rfqId             String?           @map("rfq_id")
   quotationId       String?           @map("quotation_id")
   supplierProfileId String?           @map("supplier_profile_id")
+  supportTicketId   String?           @map("support_ticket_id")
   purpose           AttachmentPurpose @default(GENERAL)
   status            AttachmentStatus  @default(PENDING_UPLOAD)
   bucket            String
@@ -1108,10 +1110,12 @@ model Attachment {
   rfq               Rfq?              @relation(fields: [rfqId], references: [id], onDelete: Cascade)
   quotation         Quotation?        @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   supplierProfile   SupplierProfile?  @relation(fields: [supplierProfileId], references: [id], onDelete: Cascade)
+  supportTicket     SupportTicket?     @relation(fields: [supportTicketId], references: [id], onDelete: Cascade)
 
   @@index([rfqId, status, createdAt])
   @@index([quotationId, status, createdAt])
   @@index([supplierProfileId, status, createdAt])
+  @@index([supportTicketId, status, createdAt])
   @@index([organizationId, createdAt])
   @@index([status, createdAt])
   @@map("attachments")
@@ -1193,6 +1197,7 @@ model SupportTicket {
   relatedRfq            Rfq?                   @relation(fields: [relatedRfqId], references: [id], onDelete: SetNull)
   assignedTo            User?                  @relation("SupportTicketAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
   comments              SupportTicketComment[]
+  attachments           Attachment[]
 
   @@index([requesterUserId, createdAt])
   @@index([organizationId, createdAt])

@@ -40,6 +40,16 @@ export class AttachmentsController {
     return this.attachments.listForSupplier(user, organizationId);
   }
 
+  @Post('support-tickets/:ticketId/upload-intent')
+  createSupportTicketUploadIntent(@CurrentUser() user: AuthenticatedUser, @Param('ticketId') ticketId: string, @Body() input: CreateUploadIntentDto) {
+    return this.attachments.createSupportTicketUploadIntent(user, ticketId, input);
+  }
+
+  @Get('support-tickets/:ticketId')
+  listForSupportTicket(@CurrentUser() user: AuthenticatedUser, @Param('ticketId') ticketId: string) {
+    return this.attachments.listForSupportTicket(user, ticketId);
+  }
+
   @Post(':attachmentId/complete')
   complete(@CurrentUser() user: AuthenticatedUser, @Param('attachmentId') attachmentId: string) {
     return this.attachments.complete(user, attachmentId);
