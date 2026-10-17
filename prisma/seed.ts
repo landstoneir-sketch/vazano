@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { normalizeIranianMobile } from '../src/modules/auth/domain/mobile';
+import { assertBootstrapInvariants } from './bootstrap-invariants';
 
 const prisma = new PrismaClient();
 const isProduction = process.env.NODE_ENV === 'production';
@@ -788,6 +789,69 @@ async function main(): Promise<void> {
       });
     }
   }
+
+  const expectedRoleKeys = Object.keys(roles);
+  const expectedProvinceCodes = iranProvinces.map(([code]) => code);
+  const expectedCategoryCodes = naturalStoneCategories.map(([code]) => code);
+  const expectedUnitCodes = units.map(([code]) => code);
+  const expectedPlanCodes = plans.map(({ code }) => code);
+  const expectedSettingKeys = systemSettings.map(([key]) => key);
+  const expectedTemplateCodes = inAppNotificationTemplates.map(({ code }) => code);
+  const [
+    permissionRows,
+    roleRows,
+    provinceRows,
+    categoryRows,
+    unitRows,
+    planRows,
+    settingRows,
+    templateRows,
+    activeSuperAdminCount,
+    activeDemoDiscountCount,
+  ] = await Promise.all([
+    prisma.permission.findMany({ where: { key: { in: permissions } }, select: { key: true } }),
+    prisma.role.findMany({
+      where: { key: { in: expectedRoleKeys } },
+      select: { key: true, permissions: { select: { permission: { select: { key: true } } } } },
+    }),
+    prisma.province.findMany({ where: { code: { in: [...expectedProvinceCodes] } }, select: { code: true } }),
+    prisma.category.findMany({ where: { code: { in: [...expectedCategoryCodes] } }, select: { code: true } }),
+    prisma.unitOfMeasure.findMany({ where: { code: { in: [...expectedUnitCodes] } }, select: { code: true } }),
+    prisma.subscriptionPlan.findMany({ where: { code: { in: expectedPlanCodes } }, select: { code: true } }),
+    prisma.systemSetting.findMany({ where: { key: { in: [...expectedSettingKeys] } }, select: { key: true } }),
+    prisma.notificationTemplate.findMany({ where: { code: { in: [...expectedTemplateCodes] } }, select: { code: true } }),
+    prisma.userRole.count({
+      where: { organizationId: null, role: { key: 'SUPER_ADMIN' }, user: { status: 'ACTIVE' } },
+    }),
+    prisma.subscriptionDiscountCode.count({ where: { code: 'DEMO10', isActive: true } }),
+  ]);
+
+  assertBootstrapInvariants({
+    permissionKeys: permissionRows.map(({ key }) => key),
+    roles: roleRows.map((role) => ({
+      key: role.key,
+      permissionKeys: role.permissions.map(({ permission }) => permission.key),
+    })),
+    provinceCodes: provinceRows.map(({ code }) => code),
+    naturalStoneCategoryCodes: categoryRows.map(({ code }) => code),
+    unitCodes: unitRows.map(({ code }) => code),
+    subscriptionPlanCodes: planRows.map(({ code }) => code),
+    systemSettingKeys: settingRows.map(({ key }) => key),
+    notificationTemplateCodes: templateRows.map(({ code }) => code),
+    activeSuperAdminCount,
+    activeDemoDiscountCount,
+  }, {
+    permissionKeys: permissions,
+    roles,
+    provinceCodes: expectedProvinceCodes,
+    naturalStoneCategoryCodes: expectedCategoryCodes,
+    unitCodes: expectedUnitCodes,
+    subscriptionPlanCodes: expectedPlanCodes,
+    systemSettingKeys: expectedSettingKeys,
+    notificationTemplateCodes: expectedTemplateCodes,
+    requireActiveSuperAdmin: isProduction,
+    forbidActiveDemoDiscount: isProduction,
+  });
 }
 
 void main()
