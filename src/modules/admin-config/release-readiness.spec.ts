@@ -6,7 +6,8 @@ const readyInput: ReleaseReadinessInput = {
   paymentConfigured: true, fileScanningConfigured: true, notificationWorkerEnabled: true, subscriptionWorkerEnabled: true, rfqLifecycleWorkerEnabled: true,
   failedNotificationDispatchCount: 0,
   termsPublished: true, privacyPublished: true, paidPlanCount: 2, activeCategoryCount: 15, activeUnitCount: 6,
-  activeProvinceCount: 31, marketCoverageConfigured: true, activeBuyerOrganizationCount: 2, eligibleSupplierCount: 5,
+  activeProvinceCount: 31, activeCityCount: 31, provincesWithoutActiveCityCount: 0, provincesWithoutActiveCityNames: [],
+  marketCoverageConfigured: true, activeBuyerOrganizationCount: 2, eligibleSupplierCount: 5,
   uncoveredCategoryCount: 0, uncoveredProvinceCount: 0,
   uncoveredCategoryNames: [], uncoveredProvinceNames: [],
   activeSuperAdminCount: 2,
@@ -18,8 +19,8 @@ describe('release readiness', () => {
     expect(result.ready).toBe(true);
     expect(result.pilotReady).toBe(true);
     expect(result.summary).toEqual({
-      total: 23,
-      ready: 23,
+      total: 24,
+      ready: 24,
       warning: 0,
       blocked: 0,
       ownerDecisionRequired: 0,
@@ -35,15 +36,15 @@ describe('release readiness', () => {
     const result = evaluateReleaseReadiness({ ...readyInput, nodeEnvironment: 'development', termsPublished: false, paymentConfigured: false });
     expect(result.ready).toBe(false);
     expect(result.summary).toMatchObject({
-      total: 23,
-      ready: 20,
+      total: 24,
+      ready: 21,
       warning: 1,
       blocked: 2,
       ownerDecisionRequired: 2,
       technicalActionsRequired: 1,
       operationsActionsRequired: 0,
       pilotBlockers: 1,
-      percent: 89,
+      percent: 90,
     });
     expect(result.checks.find((item) => item.key === 'environment.production')?.status).toBe('WARNING');
     expect(result.checks.find((item) => item.key === 'content.terms')?.status).toBe('BLOCKED');
@@ -104,5 +105,18 @@ describe('release readiness', () => {
     expect(result.checks.find((item) => item.key === 'market.province-supply')?.detail).toContain('فارس');
     expect(result.checks.find((item) => item.key === 'market.suppliers')?.responsibility).toBe('OPERATIONS');
     expect(result.summary.operationsActionsRequired).toBe(6);
+  });
+
+  it('blocks launch when an active province has no selectable city', () => {
+    const result = evaluateReleaseReadiness({
+      ...readyInput,
+      activeCityCount: 30,
+      provincesWithoutActiveCityCount: 1,
+      provincesWithoutActiveCityNames: ['تهران'],
+    });
+    expect(result.ready).toBe(false);
+    expect(result.pilotReady).toBe(false);
+    expect(result.checks.find((item) => item.key === 'locations.cities')).toMatchObject({ status: 'BLOCKED', responsibility: 'OPERATIONS' });
+    expect(result.checks.find((item) => item.key === 'locations.cities')?.detail).toContain('تهران');
   });
 });
