@@ -478,30 +478,38 @@ export class NotificationsService {
           }));
       }
       case 'ir.vazano.support.ticket.created.v1': {
-        const [ticket, supportUsers] = await Promise.all([
-          tx.supportTicket.findUnique({
-            where: { id: event.aggregateId },
-            select: { id: true, code: true, type: true, priority: true, subject: true },
-          }),
-          tx.user.findMany({
-            where: {
-              status: 'ACTIVE',
-              userRoles: { some: { organizationId: null, role: { key: { in: ['SUPER_ADMIN', 'ADMIN', 'SUPPORT'] } } } },
-            },
-            select: { id: true },
-          }),
-        ]);
+        const ticket = await tx.supportTicket.findUnique({
+          where: { id: event.aggregateId },
+          select: { id: true, code: true, type: true, category: true, priority: true, subject: true },
+        });
         if (!ticket) return [];
-        return supportUsers.map(({ id }) => ({
-          userId: id,
-          actionPath: '/admin/support',
-          variables: {
-            ticketCode: ticket.code,
-            ticketSubject: ticket.subject,
-            ticketPriority: ticket.priority,
-            ticketType: this.ticketTypeLabel(ticket.type),
+        const roleKeys = ticket.category === 'BILLING'
+          ? ['SUPER_ADMIN', 'ADMIN', 'SUPPORT', 'FINANCE']
+          : ['SUPER_ADMIN', 'ADMIN', 'SUPPORT'];
+        const supportUsers = await tx.user.findMany({
+          where: {
+            status: 'ACTIVE',
+            userRoles: { some: { organizationId: null, role: { key: { in: roleKeys } } } },
           },
-        }));
+          select: {
+            id: true,
+            userRoles: { where: { organizationId: null, role: { key: { in: roleKeys } } }, select: { role: { select: { key: true } } } },
+          },
+        });
+        return supportUsers.map((target) => {
+          const roles = target.userRoles.map((item) => item.role.key);
+          const financeOnly = roles.includes('FINANCE') && !roles.some((role) => ['SUPER_ADMIN', 'ADMIN', 'SUPPORT'].includes(role));
+          return {
+            userId: target.id,
+            actionPath: financeOnly ? '/admin/billing' : '/admin/support',
+            variables: {
+              ticketCode: ticket.code,
+              ticketSubject: ticket.subject,
+              ticketPriority: ticket.priority,
+              ticketType: this.ticketTypeLabel(ticket.type),
+            },
+          };
+        });
       }
       case 'ir.vazano.support.ticket.status_changed.v1': {
         const ticket = await tx.supportTicket.findUnique({

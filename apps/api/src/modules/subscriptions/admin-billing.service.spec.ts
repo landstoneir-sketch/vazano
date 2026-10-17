@@ -170,7 +170,7 @@ describe('AdminBillingService manual subscription renewal', () => {
     expect(ticketUpdateInput?.where.id).toBe(sourceTicket.id);
     expect(ticketUpdateInput?.data.status).toBe('RESOLVED');
     expect(auditInput?.data.action).toBe('subscription.manual_renewal.create');
-    expect(outboxInput?.data.eventType).toBe('ir.vazano.subscription.manual_renewal_activated.v1');
+    expect(outboxInput?.data.eventType).toBe('ir.vazano.subscription.activated.v1');
   });
 
   it('rejects a reused tracking number before changing subscription state', async () => {
