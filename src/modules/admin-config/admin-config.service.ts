@@ -36,6 +36,7 @@ export class AdminConfigService {
       activeProvinces,
       activeBuyerOrganizationCount,
       eligibleSuppliers,
+      failedNotificationDispatchCount,
       activeSuperAdminCount,
       marketPolicyRows,
     ] = await Promise.all([
@@ -71,6 +72,7 @@ export class AdminConfigService {
           serviceProvinceLinks: { where: { province: { isActive: true } }, select: { provinceId: true } },
         },
       }),
+      this.prisma.notificationDispatch.count({ where: { channel: 'IN_APP', status: 'FAILED' } }),
       this.prisma.user.count({
         where: { status: 'ACTIVE', userRoles: { some: { organizationId: null, role: { key: 'SUPER_ADMIN' } } } },
       }),
@@ -132,6 +134,7 @@ export class AdminConfigService {
         paymentConfigured,
         fileScanningConfigured: fileScanningReady,
         notificationWorkerEnabled: this.environment.get<string>('NOTIFICATION_WORKER_ENABLED', 'true') === 'true',
+        failedNotificationDispatchCount,
         subscriptionWorkerEnabled: this.environment.get<string>('SUBSCRIPTION_LIFECYCLE_WORKER_ENABLED', 'true') === 'true',
         rfqLifecycleWorkerEnabled: this.environment.get<string>('RFQ_LIFECYCLE_WORKER_ENABLED', 'true') === 'true',
         termsPublished: pageStatus.get('terms') === 'PUBLISHED',
