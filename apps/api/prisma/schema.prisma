@@ -312,6 +312,12 @@ enum SupplierVerificationStatus {
   SUSPENDED
 }
 
+enum SupplierProductStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
 enum RfqInvitationStatus {
   INVITED
   VIEWED
@@ -758,6 +764,7 @@ model Category {
   children           Category[]          @relation("CategoryTree")
   rfqItems           RfqItem[]
   supplierCategories SupplierCategory[]
+  supplierProducts   SupplierProduct[]
   attributeBindings  CategoryAttribute[]
 
   @@index([industryId, parentId, isActive])
@@ -946,6 +953,7 @@ model SupplierProfile {
   updatedAt                     DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
   organization                  Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   categories                    SupplierCategory[]
+  products                      SupplierProduct[]
   serviceProvinceLinks          SupplierServiceProvince[]
   verificationDocuments         Attachment[]
 
@@ -975,6 +983,30 @@ model SupplierCategory {
   @@id([supplierProfileId, categoryId])
   @@index([categoryId])
   @@map("supplier_categories")
+}
+
+model SupplierProduct {
+  id                      String                @id @default(cuid())
+  supplierProfileId       String                @map("supplier_profile_id")
+  categoryId              String                @map("category_id")
+  nameFa                  String                @map("name_fa")
+  sku                     String?
+  description             String?               @db.Text
+  specifications          Json                  @default("{}")
+  minimumOrderDescription String?               @map("minimum_order_description")
+  leadTimeDescription     String?               @map("lead_time_description")
+  isAvailable             Boolean               @default(true) @map("is_available")
+  status                  SupplierProductStatus @default(DRAFT)
+  version                 Int                   @default(1)
+  createdAt               DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+  supplierProfile         SupplierProfile       @relation(fields: [supplierProfileId], references: [id], onDelete: Cascade)
+  category                Category              @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@unique([supplierProfileId, sku])
+  @@index([supplierProfileId, status, updatedAt])
+  @@index([categoryId, status, isAvailable])
+  @@map("supplier_products")
 }
 
 model RfqInvitation {
@@ -1110,7 +1142,7 @@ model Attachment {
   rfq               Rfq?              @relation(fields: [rfqId], references: [id], onDelete: Cascade)
   quotation         Quotation?        @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   supplierProfile   SupplierProfile?  @relation(fields: [supplierProfileId], references: [id], onDelete: Cascade)
-  supportTicket     SupportTicket?     @relation(fields: [supportTicketId], references: [id], onDelete: Cascade)
+  supportTicket     SupportTicket?    @relation(fields: [supportTicketId], references: [id], onDelete: Cascade)
 
   @@index([rfqId, status, createdAt])
   @@index([quotationId, status, createdAt])

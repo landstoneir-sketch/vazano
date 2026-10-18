@@ -1,10 +1,13 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, SupplierVerificationStatus } from '@prisma/client';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma, SupplierProductStatus, SupplierVerificationStatus } from '@prisma/client';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { PrismaService } from '../../shared/prisma/prisma.service';
 import { UpsertSupplierProfileDto } from './upsert-supplier-profile.dto';
 import { VerifySupplierDto } from './verify-supplier.dto';
 import type { PublicSupplierSearchDto } from './public-supplier-search.dto';
+import { CreateSupplierProductDto } from './create-supplier-product.dto';
+import { UpdateSupplierProductDto } from './update-supplier-product.dto';
+import { assertValidProductSpecifications } from '../catalog/product-specification-policy';
 
 @Injectable()
 export class SuppliersService {
@@ -29,6 +32,7 @@ export class SuppliersService {
             { province: { contains: query, mode: 'insensitive' } },
             { city: { contains: query, mode: 'insensitive' } },
             { supplierProfile: { is: { categories: { some: { category: { nameFa: { contains: query, mode: 'insensitive' }, isActive: true } } } } } },
+            { supplierProfile: { is: { products: { some: { status: 'PUBLISHED', isAvailable: true, category: { isActive: true }, nameFa: { contains: query, mode: 'insensitive' } } } } } },
           ],
         }],
       } : {}),
@@ -63,6 +67,12 @@ export class SuppliersService {
             description: true, productionCapacityDescription: true, minimumOrderDescription: true, leadTimeDescription: true, officialInvoiceAvailable: true, sampleAvailable: true, installationAvailable: true, nationwideCoverage: true,
             serviceProvinceLinks: { select: { province: { select: { id: true, nameFa: true } } }, orderBy: { province: { sortOrder: 'asc' } } },
             categories: { select: { category: { select: { id: true, nameFa: true, slug: true } } }, orderBy: { category: { sortOrder: 'asc' } } },
+            products: {
+              where: { status: 'PUBLISHED', isAvailable: true, category: { isActive: true } },
+              select: { id: true, nameFa: true, sku: true, description: true, specifications: true, minimumOrderDescription: true, leadTimeDescription: true, category: { select: { id: true, nameFa: true, slug: true, attributeBindings: { include: { attribute: true }, orderBy: { sortOrder: 'asc' } } } } },
+              orderBy: { updatedAt: 'desc' },
+              take: 50,
+            },
           },
         },
       },
@@ -78,6 +88,125 @@ export class SuppliersService {
       }),
     ]);
     return { ...organization, reviewSummary: { count: aggregate._count._all, averageRating: aggregate._avg.rating }, recentReviews };
+  }
+
+  async listProducts(user: AuthenticatedUser, organizationId: string) {
+    this.assertCanViewSupplier(user, organizationId);
+    const profile = await this.prisma.supplierProfile.findUnique({ where: { organizationId }, select: { id: true } });
+    if (!profile) throw new NotFoundException('ابتدا پروفایل فروشنده را تکمیل کنید.');
+    return this.prisma.supplierProduct.findMany({
+      where: { supplierProfileId: profile.id },
+      include: { category: { select: { id: true, nameFa: true, slug: true, attributeBindings: { include: { attribute: true }, orderBy: { sortOrder: 'asc' } } } } },
+      orderBy: { updatedAt: 'desc' },
+      take: 200,
+    });
+  }
+
+  async createProduct(user: AuthenticatedUser, organizationId: string, input: CreateSupplierProductDto) {
+    this.assertCanManageProfile(user, organizationId);
+    const { profileId, bindings } = await this.productContext(organizationId, input.categoryId);
+    const status = input.status ?? SupplierProductStatus.DRAFT;
+    const specifications = input.specifications ?? {};
+    assertValidProductSpecifications(specifications, bindings, status === SupplierProductStatus.PUBLISHED);
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const product = await tx.supplierProduct.create({
+          data: {
+            supplierProfileId: profileId,
+            categoryId: input.categoryId,
+            nameFa: input.nameFa.trim(),
+            sku: input.sku?.trim() || null,
+            description: input.description?.trim() || null,
+            specifications,
+            minimumOrderDescription: input.minimumOrderDescription?.trim() || null,
+            leadTimeDescription: input.leadTimeDescription?.trim() || null,
+            isAvailable: input.isAvailable ?? true,
+            status,
+          },
+          include: { category: { select: { id: true, nameFa: true, slug: true, attributeBindings: { include: { attribute: true }, orderBy: { sortOrder: 'asc' } } } } },
+        });
+        await tx.auditLog.create({ data: { actorUserId: user.id, organizationId, action: 'supplier_product.create', entityType: 'SupplierProduct', entityId: product.id, metadata: { status, categoryId: input.categoryId } } });
+        await tx.outboxEvent.create({
+          data: {
+            aggregateType: 'SupplierProduct',
+            aggregateId: product.id,
+            eventType: 'ir.vazano.supplier.product.created.v1',
+            payload: {
+              organizationId,
+              productId: product.id,
+              categoryId: input.categoryId,
+              status,
+            },
+          },
+        });
+        return product;
+      });
+    } catch (error: unknown) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ConflictException('کد محصول در این سازمان تکراری است.');
+      throw error;
+    }
+  }
+
+  async updateProduct(user: AuthenticatedUser, organizationId: string, productId: string, input: UpdateSupplierProductDto) {
+    this.assertCanManageProfile(user, organizationId);
+    const existing = await this.prisma.supplierProduct.findFirst({ where: { id: productId, supplierProfile: { organizationId } } });
+    if (!existing) throw new NotFoundException('محصول فروشنده پیدا نشد.');
+    const { bindings } = await this.productContext(organizationId, input.categoryId);
+    const status = input.status ?? existing.status;
+    const specifications = input.specifications ?? {};
+    assertValidProductSpecifications(specifications, bindings, status === SupplierProductStatus.PUBLISHED);
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const result = await tx.supplierProduct.updateMany({
+          where: { id: existing.id, version: input.expectedVersion },
+          data: {
+            categoryId: input.categoryId,
+            nameFa: input.nameFa.trim(),
+            sku: input.sku?.trim() || null,
+            description: input.description?.trim() || null,
+            specifications,
+            minimumOrderDescription: input.minimumOrderDescription?.trim() || null,
+            leadTimeDescription: input.leadTimeDescription?.trim() || null,
+            isAvailable: input.isAvailable ?? true,
+            status,
+            version: { increment: 1 },
+          },
+        });
+        if (result.count !== 1) throw new ConflictException('این محصول هم‌زمان ویرایش شده است؛ فهرست را تازه‌سازی کنید.');
+        await tx.auditLog.create({ data: { actorUserId: user.id, organizationId, action: 'supplier_product.update', entityType: 'SupplierProduct', entityId: existing.id, metadata: { fromStatus: existing.status, toStatus: status, previousVersion: existing.version } } });
+        await tx.outboxEvent.create({
+          data: {
+            aggregateType: 'SupplierProduct',
+            aggregateId: existing.id,
+            eventType: 'ir.vazano.supplier.product.updated.v1',
+            payload: {
+              organizationId,
+              productId: existing.id,
+              categoryId: input.categoryId,
+              status,
+            },
+          },
+        });
+        return tx.supplierProduct.findUniqueOrThrow({
+          where: { id: existing.id },
+          include: {
+            category: {
+              select: {
+                id: true,
+                nameFa: true,
+                slug: true,
+                attributeBindings: { include: { attribute: true }, orderBy: { sortOrder: 'asc' } },
+              },
+            },
+          },
+        });
+      });
+    } catch (error: unknown) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ConflictException('کد محصول در این سازمان تکراری است.');
+      throw error;
+    }
   }
 
   async performance(user: AuthenticatedUser) {
@@ -208,6 +337,10 @@ export class SuppliersService {
       });
       await tx.supplierCategory.deleteMany({ where: { supplierProfileId: profile.id } });
       await tx.supplierCategory.createMany({ data: categoryIds.map((categoryId) => ({ supplierProfileId: profile.id, categoryId })) });
+      await tx.supplierProduct.updateMany({
+        where: { supplierProfileId: profile.id, categoryId: { notIn: categoryIds }, status: { not: 'ARCHIVED' } },
+        data: { status: 'ARCHIVED', version: { increment: 1 } },
+      });
       await tx.supplierServiceProvince.deleteMany({ where: { supplierProfileId: profile.id } });
       if (serviceProvinceIds.length > 0) {
         await tx.supplierServiceProvince.createMany({ data: serviceProvinceIds.map((provinceId) => ({ supplierProfileId: profile.id, provinceId })) });
@@ -260,5 +393,25 @@ export class SuppliersService {
     const membership = user.memberships.find((item) => item.organizationId === organizationId);
     const allowed = membership?.role === 'SUPPLIER_OWNER' || membership?.role === 'SUPPLIER_MANAGER' || user.permissions.includes('supplier.verify');
     if (!allowed) throw new ForbiddenException('مجوز مدیریت پروفایل این فروشنده را ندارید.');
+  }
+
+  private assertCanViewSupplier(user: AuthenticatedUser, organizationId: string): void {
+    const isMember = user.memberships.some((item) => item.organizationId === organizationId && ['SUPPLIER_OWNER', 'SUPPLIER_MANAGER', 'SUPPLIER_SALES'].includes(item.role));
+    if (!isMember && !user.permissions.includes('supplier.verify')) throw new ForbiddenException('مجوز مشاهده محصولات این فروشنده را ندارید.');
+  }
+
+  private async productContext(organizationId: string, categoryId: string) {
+    const profile = await this.prisma.supplierProfile.findUnique({
+      where: { organizationId },
+      select: { id: true, categories: { where: { categoryId }, select: { categoryId: true } } },
+    });
+    if (!profile) throw new NotFoundException('ابتدا پروفایل فروشنده را تکمیل کنید.');
+    if (profile.categories.length === 0) throw new BadRequestException('محصول باید در یکی از دسته‌های تأییدشده پروفایل فروشنده ثبت شود.');
+    const category = await this.prisma.category.findFirst({
+      where: { id: categoryId, isActive: true },
+      select: { attributeBindings: { where: { attribute: { isActive: true } }, include: { attribute: true }, orderBy: { sortOrder: 'asc' } } },
+    });
+    if (!category) throw new BadRequestException('دسته‌بندی محصول معتبر یا فعال نیست.');
+    return { profileId: profile.id, bindings: category.attributeBindings };
   }
 }

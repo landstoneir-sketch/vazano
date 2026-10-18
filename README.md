@@ -24,6 +24,8 @@ START_VAZANO.bat
 
 پس از آماده‌شدن سرویس‌ها، سایت در `http://localhost:3000` و API در `http://localhost:3001/v1` در دسترس است.
 
+قرارداد OpenAPI 3.1 در محیط توسعه از مسیر `http://localhost:3001/v1/docs` قابل مشاهده است. فایل‌های ماشینی JSON و YAML نیز در `/v1/docs/openapi.json` و `/v1/docs/openapi.yaml` ارائه می‌شوند؛ این مسیرها در Production به‌طور اجباری غیرفعال‌اند.
+
 ## اجرای دستی
 
 ```bash
@@ -45,6 +47,7 @@ npm run dev
 - `/dashboard/rfqs/new` — ثبت استعلام
 - `/dashboard/organization` — سازمان‌ها و اعضا
 - `/supplier` — فرصت‌های فروشنده
+- `/supplier/products/[organizationId]` — مدیریت محصولات و مشخصات فنی فروشنده
 - `/messages` — مرکز پیام
 - `/plans` — پلن‌ها و اشتراک
 - `/admin/rfqs` — صف بررسی استعلام‌ها
