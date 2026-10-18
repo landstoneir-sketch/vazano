@@ -18,6 +18,8 @@ type SupplierProduct = {
   specifications: Record<string, SpecificationValue>; minimumOrderDescription: string | null; leadTimeDescription: string | null;
   isAvailable: boolean; status: ProductStatus; version: number; updatedAt: string; category: ProductCategory;
 };
+type ProductImage = { id: string; originalName: string; mimeType: string; sizeBytes: number; status: string };
+type UploadIntent = { attachment: ProductImage; upload: { url: string; method: 'PUT'; headers: Record<string, string> } };
 type ProductDraft = {
   id: string; categoryId: string; nameFa: string; sku: string; description: string;
   specifications: Record<string, SpecificationValue>; minimumOrderDescription: string; leadTimeDescription: string;
@@ -31,6 +33,8 @@ export function SupplierProductManager({ organizationId }: { organizationId: str
   const [products, setProducts] = useState<SupplierProduct[]>([]);
   const [attributes, setAttributes] = useState<ProductAttribute[]>([]);
   const [draft, setDraft] = useState<ProductDraft>(() => emptyDraft());
+  const [images, setImages] = useState<ProductImage[]>([]);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -91,6 +95,8 @@ export function SupplierProductManager({ organizationId }: { organizationId: str
       });
       setMessage(draft.id ? 'تغییرات محصول ذخیره شد.' : 'محصول جدید ثبت شد.');
       setDraft({ ...emptyDraft(), categoryId: categories[0]?.id ?? '' });
+      setImages([]);
+      setSelectedImage(null);
       await refresh();
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : 'ذخیره محصول انجام نشد.');
@@ -104,7 +110,56 @@ export function SupplierProductManager({ organizationId }: { organizationId: str
       specifications: product.specifications ?? {}, minimumOrderDescription: product.minimumOrderDescription ?? '', leadTimeDescription: product.leadTimeDescription ?? '',
       isAvailable: product.isAvailable, status: product.status, expectedVersion: product.version,
     });
+    setSelectedImage(null);
+    void loadImages(product.id);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function loadImages(productId: string) {
+    try {
+      setImages(await apiRequest<ProductImage[]>(`/attachments/supplier-products/${productId}`));
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : 'دریافت تصاویر محصول انجام نشد.');
+    }
+  }
+
+  async function uploadImage() {
+    if (!draft.id || !selectedImage) return;
+    setBusy(true); setError(''); setMessage('');
+    try {
+      const intent = await apiRequest<UploadIntent>(`/attachments/supplier-products/${draft.id}/upload-intent`, {
+        method: 'POST',
+        body: JSON.stringify({ fileName: selectedImage.name, mimeType: selectedImage.type, sizeBytes: selectedImage.size, purpose: 'PRODUCT_IMAGE' }),
+      });
+      const uploadResponse = await fetch(intent.upload.url, { method: intent.upload.method, headers: intent.upload.headers, body: selectedImage });
+      if (!uploadResponse.ok) throw new Error('بارگذاری تصویر در فضای ذخیره‌سازی انجام نشد.');
+      await apiRequest(`/attachments/${intent.attachment.id}/complete`, { method: 'POST' });
+      await loadImages(draft.id);
+      setSelectedImage(null);
+      setMessage('تصویر محصول بارگذاری و بررسی شد.');
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : 'بارگذاری تصویر انجام نشد.');
+    } finally { setBusy(false); }
+  }
+
+  async function removeImage(attachmentId: string) {
+    setBusy(true); setError(''); setMessage('');
+    try {
+      await apiRequest(`/attachments/${attachmentId}`, { method: 'DELETE' });
+      setImages((current) => current.filter((image) => image.id !== attachmentId));
+      setMessage('تصویر محصول حذف شد.');
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : 'حذف تصویر انجام نشد.');
+    } finally { setBusy(false); }
+  }
+
+  async function openImage(attachmentId: string) {
+    try {
+      const result = await apiRequest<{ url: string }>(`/attachments/${attachmentId}/download-url`);
+      window.open(result.url, '_blank', 'noopener,noreferrer');
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : 'نمایش تصویر انجام نشد.');
+    }
   }
 
   function setSpecification(code: string, value: SpecificationValue) {
@@ -131,7 +186,9 @@ export function SupplierProductManager({ organizationId }: { organizationId: str
       <label className="form-field"><span>حداقل سفارش (اختیاری)</span><input maxLength={300} value={draft.minimumOrderDescription} onChange={(event) => setDraft((current) => ({ ...current, minimumOrderDescription: event.target.value }))} placeholder="مثلاً ۱۰۰ مترمربع" /></label>
       <label className="form-field"><span>زمان آماده‌سازی (اختیاری)</span><input maxLength={300} value={draft.leadTimeDescription} onChange={(event) => setDraft((current) => ({ ...current, leadTimeDescription: event.target.value }))} placeholder="مثلاً ۱۰ روز کاری" /></label>
       <label className="check-field full"><input type="checkbox" checked={draft.isAvailable} onChange={(event) => setDraft((current) => ({ ...current, isAvailable: event.target.checked }))} /><span>در حال حاضر قابل تأمین است</span></label>
-      <div className="actions full"><button className="button button-primary" disabled={busy || categories.length === 0}>{busy ? 'در حال ذخیره…' : draft.id ? 'ذخیره تغییرات' : 'ثبت محصول'}</button>{draft.id && <button className="button button-secondary" type="button" onClick={() => setDraft({ ...emptyDraft(), categoryId: categories[0]?.id ?? '' })}>انصراف از ویرایش</button>}</div>
+      {draft.id && <fieldset className="fieldset full"><legend>تصاویر محصول</legend><p className="muted">حداکثر ۸ تصویر JPG، PNG یا WebP. هر فایل پیش از نمایش عمومی اسکن امنیتی می‌شود.</p><div className="attachment-upload-row"><input aria-label="انتخاب تصویر محصول" type="file" accept=".jpg,.jpeg,.png,.webp" onChange={(event) => setSelectedImage(event.target.files?.[0] ?? null)} /><button className="button button-secondary" type="button" disabled={busy || !selectedImage || images.length >= 8} onClick={() => void uploadImage()}>بارگذاری امن</button></div>{images.length > 0 && <div className="stack">{images.map((image) => <div className="list-card" key={image.id}><span>{image.originalName} · {image.status === 'READY' ? 'تأیید امنیتی' : 'در حال بررسی'}</span><div className="actions">{image.status === 'READY' && <button className="button button-secondary" type="button" onClick={() => void openImage(image.id)}>مشاهده</button>}<button className="button button-ghost" type="button" disabled={busy} onClick={() => void removeImage(image.id)}>حذف</button></div></div>)}</div>}</fieldset>}
+      {!draft.id && <p className="muted full">پس از ثبت اولیه محصول، امکان بارگذاری تصاویر فعال می‌شود.</p>}
+      <div className="actions full"><button className="button button-primary" disabled={busy || categories.length === 0}>{busy ? 'در حال ذخیره…' : draft.id ? 'ذخیره تغییرات' : 'ثبت محصول'}</button>{draft.id && <button className="button button-secondary" type="button" onClick={() => { setDraft({ ...emptyDraft(), categoryId: categories[0]?.id ?? '' }); setImages([]); setSelectedImage(null); }}>انصراف از ویرایش</button>}</div>
     </form>
     <section className="stack"><div><h2>فهرست محصولات</h2><p className="muted">محصولات منتشرشده و موجود در پروفایل عمومی فروشنده نمایش داده می‌شوند.</p></div>{products.length === 0 && <div className="card">هنوز محصولی ثبت نشده است.</div>}{products.map((product) => {
       const values = formatProductSpecifications(product.specifications as ProductSpecifications, product.category.attributeBindings);

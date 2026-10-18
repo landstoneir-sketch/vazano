@@ -28,15 +28,23 @@ type Profile = {
   reviewSummary: { count: number; averageRating: number | null };
   recentReviews: Array<{ id: string; rating: number; comment: string | null; createdAt: string }>;
 };
+type PublicProductImage = { id: string; originalName: string; url: string };
 
 export function PublicSupplierProfile({ organizationId }: { organizationId: string }) {
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [productImages, setProductImages] = useState<Record<string, PublicProductImage[]>>({});
   const [error, setError] = useState('');
 
   useEffect(() => {
     let active = true;
     void apiRequest<Profile>(`/public/suppliers/${organizationId}`)
-      .then((data) => { if (active) setProfile(data); })
+      .then(async (data) => {
+        const imageEntries = await Promise.all(data.supplierProfile.products.map(async (product) => {
+          const images = await apiRequest<PublicProductImage[]>(`/public/supplier-products/${product.id}/images`).catch(() => []);
+          return [product.id, images] as const;
+        }));
+        if (active) { setProfile(data); setProductImages(Object.fromEntries(imageEntries)); }
+      })
       .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : 'دریافت پروفایل فروشنده انجام نشد.'); });
     return () => { active = false; };
   }, [organizationId]);
@@ -57,7 +65,8 @@ export function PublicSupplierProfile({ organizationId }: { organizationId: stri
     <article className="card"><h2>دسته‌های قابل تأمین</h2><div className="specification-summary">{profile.supplierProfile.categories.map(({ category }) => <span key={category.id}>{category.nameFa}</span>)}</div></article>
     <section className="stack"><div><h2>محصولات معرفی‌شده</h2><p className="muted">قیمت و موجودی قطعی هر محصول در پیشنهاد همان استعلام اعلام می‌شود.</p></div>{profile.supplierProfile.products.length === 0 && <div className="card">این فروشنده هنوز محصول عمومی ثبت نکرده است.</div>}{profile.supplierProfile.products.map((product) => {
       const values = formatProductSpecifications(product.specifications, product.category.attributeBindings);
-      return <article className="card" key={product.id}><div className="admin-card-title"><div><div className="eyebrow">{product.category.nameFa}</div><h3>{product.nameFa}</h3></div>{product.sku && <span className="status-badge">کد {product.sku}</span>}</div><p>{product.description ?? 'برای این محصول توضیح تکمیلی ثبت نشده است.'}</p><div className="specification-summary">{values.map((item) => <span key={item.code}>{item.label}: {item.value}</span>)}{product.minimumOrderDescription && <span>حداقل سفارش: {product.minimumOrderDescription}</span>}{product.leadTimeDescription && <span>آماده‌سازی: {product.leadTimeDescription}</span>}</div></article>;
+      const images = productImages[product.id] ?? [];
+      return <article className="card" key={product.id}>{images.length > 0 && <div className="product-image-gallery">{images.map((image) => <a href={image.url} target="_blank" rel="noreferrer" className="product-image" style={{ backgroundImage: `url(${JSON.stringify(image.url)})` }} aria-label={`مشاهده تصویر ${product.nameFa}`} key={image.id}><span className="sr-only">{image.originalName}</span></a>)}</div>}<div className="admin-card-title"><div><div className="eyebrow">{product.category.nameFa}</div><h3>{product.nameFa}</h3></div>{product.sku && <span className="status-badge">کد {product.sku}</span>}</div><p>{product.description ?? 'برای این محصول توضیح تکمیلی ثبت نشده است.'}</p><div className="specification-summary">{values.map((item) => <span key={item.code}>{item.label}: {item.value}</span>)}{product.minimumOrderDescription && <span>حداقل سفارش: {product.minimumOrderDescription}</span>}{product.leadTimeDescription && <span>آماده‌سازی: {product.leadTimeDescription}</span>}</div></article>;
     })}</section>
     {!profile.supplierProfile.nationwideCoverage && <article className="card"><h2>استان‌های تحت پوشش</h2><p>{profile.supplierProfile.serviceProvinceLinks.map(({ province }) => province.nameFa).join('، ') || 'ثبت نشده'}</p></article>}
     <section className="stack"><h2>تجربه خریداران</h2>{profile.recentReviews.length === 0 && <div className="card">هنوز ارزیابی معتبری برای این فروشنده منتشر نشده است.</div>}{profile.recentReviews.map((review) => <article className="card" key={review.id}><div className="admin-card-title"><strong className="price" aria-label={`${review.rating} از ۵`}>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</strong><span className="muted">{new Date(review.createdAt).toLocaleDateString('fa-IR')}</span></div><p>{review.comment ?? 'خریدار فقط امتیاز عددی ثبت کرده است.'}</p><small className="muted">خرید معتبر ثبت‌شده در وازانو</small></article>)}</section>

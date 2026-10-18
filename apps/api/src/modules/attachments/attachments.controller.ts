@@ -40,6 +40,16 @@ export class AttachmentsController {
     return this.attachments.listForSupplier(user, organizationId);
   }
 
+  @Post('supplier-products/:productId/upload-intent')
+  createSupplierProductUploadIntent(@CurrentUser() user: AuthenticatedUser, @Param('productId') productId: string, @Body() input: CreateUploadIntentDto) {
+    return this.attachments.createSupplierProductUploadIntent(user, productId, input);
+  }
+
+  @Get('supplier-products/:productId')
+  listForSupplierProduct(@CurrentUser() user: AuthenticatedUser, @Param('productId') productId: string) {
+    return this.attachments.listForSupplierProduct(user, productId);
+  }
+
   @Post('support-tickets/:ticketId/upload-intent')
   createSupportTicketUploadIntent(@CurrentUser() user: AuthenticatedUser, @Param('ticketId') ticketId: string, @Body() input: CreateUploadIntentDto) {
     return this.attachments.createSupportTicketUploadIntent(user, ticketId, input);
@@ -63,5 +73,15 @@ export class AttachmentsController {
   @Delete(':attachmentId')
   remove(@CurrentUser() user: AuthenticatedUser, @Param('attachmentId') attachmentId: string) {
     return this.attachments.remove(user, attachmentId);
+  }
+}
+
+@Controller('public/supplier-products')
+export class PublicSupplierProductAttachmentsController {
+  constructor(private readonly attachments: AttachmentsService) {}
+
+  @Get(':productId/images')
+  listImages(@Param('productId') productId: string) {
+    return this.attachments.listPublicSupplierProductImages(productId);
   }
 }

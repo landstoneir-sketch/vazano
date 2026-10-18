@@ -152,6 +152,57 @@ export class AttachmentsService {
     };
   }
 
+  async createSupplierProductUploadIntent(user: AuthenticatedUser, productId: string, input: CreateUploadIntentDto) {
+    const product = await this.prisma.supplierProduct.findUnique({
+      where: { id: productId },
+      select: { id: true, status: true, supplierProfile: { select: { organizationId: true } } },
+    });
+    const organizationId = product?.supplierProfile.organizationId;
+    if (!product || !organizationId || !this.canManageSupplierOrganization(user, organizationId)) {
+      throw new NotFoundException('محصول فروشنده پیدا نشد.');
+    }
+    if (product.status === 'ARCHIVED') throw new ConflictException('افزودن تصویر به محصول بایگانی‌شده مجاز نیست.');
+    if (input.purpose !== 'PRODUCT_IMAGE' || !['image/jpeg', 'image/png', 'image/webp'].includes(input.mimeType)) {
+      throw new BadRequestException('فایل محصول باید تصویر JPG، PNG یا WebP باشد.');
+    }
+    const existingImageCount = await this.prisma.attachment.count({
+      where: { supplierProductId: product.id, purpose: 'PRODUCT_IMAGE', status: { not: 'DELETED' } },
+    });
+    if (existingImageCount >= 8) throw new ConflictException('حداکثر ۸ تصویر برای هر محصول مجاز است.');
+
+    const maxSizeBytes = this.config.get<number>('ATTACHMENT_MAX_SIZE_BYTES', DEFAULT_MAX_ATTACHMENT_SIZE_BYTES);
+    if (input.sizeBytes > maxSizeBytes) throw new BadRequestException(`حداکثر حجم هر فایل ${Math.floor(maxSizeBytes / 1024 / 1024)} مگابایت است.`);
+    const extension = normalizedAttachmentExtension(input.fileName, input.mimeType);
+    if (!extension) throw new BadRequestException('نوع یا پسوند این فایل مجاز نیست.');
+
+    const attachment = await this.prisma.attachment.create({
+      data: {
+        organizationId,
+        uploadedByUserId: user.id,
+        supplierProductId: product.id,
+        purpose: 'PRODUCT_IMAGE',
+        bucket: this.storage.bucket,
+        storageKey: `${organizationId}/supplier-products/${product.id}/images/${randomUUID()}${extension}`,
+        originalName: safeOriginalFileName(input.fileName),
+        mimeType: input.mimeType,
+        sizeBytes: input.sizeBytes,
+      },
+    });
+    const uploadUrl = await this.storage.createUploadUrl(attachment.storageKey, attachment.mimeType);
+    await this.prisma.auditLog.create({ data: {
+      actorUserId: user.id,
+      organizationId,
+      action: 'supplier_product.image.upload_intent.create',
+      entityType: 'Attachment',
+      entityId: attachment.id,
+      metadata: { productId: product.id, mimeType: attachment.mimeType, sizeBytes: attachment.sizeBytes },
+    } });
+    return {
+      attachment: this.publicAttachment(attachment),
+      upload: { url: uploadUrl, method: 'PUT', headers: { 'content-type': attachment.mimeType }, expiresInSeconds: 300 },
+    };
+  }
+
   async createSupportTicketUploadIntent(user: AuthenticatedUser, ticketId: string, input: CreateUploadIntentDto) {
     const ticket = await this.prisma.supportTicket.findUnique({
       where: { id: ticketId },
@@ -299,6 +350,46 @@ export class AttachmentsService {
     return attachments.map((attachment) => this.publicAttachment(attachment));
   }
 
+  async listForSupplierProduct(user: AuthenticatedUser, productId: string) {
+    const product = await this.prisma.supplierProduct.findUnique({
+      where: { id: productId },
+      select: { supplierProfile: { select: { organizationId: true } } },
+    });
+    const organizationId = product?.supplierProfile.organizationId;
+    if (!product || !organizationId || !this.canManageSupplierOrganization(user, organizationId)) {
+      throw new NotFoundException('محصول فروشنده پیدا نشد.');
+    }
+    const attachments = await this.prisma.attachment.findMany({
+      where: { supplierProductId: productId, purpose: 'PRODUCT_IMAGE', status: { not: 'DELETED' } },
+      orderBy: { createdAt: 'asc' },
+    });
+    return attachments.map((attachment) => this.publicAttachment(attachment));
+  }
+
+  async listPublicSupplierProductImages(productId: string) {
+    const product = await this.prisma.supplierProduct.findFirst({
+      where: {
+        id: productId,
+        status: 'PUBLISHED',
+        isAvailable: true,
+        category: { isActive: true },
+        supplierProfile: { verificationStatus: 'VERIFIED', organization: { status: 'ACTIVE' } },
+      },
+      select: { id: true },
+    });
+    if (!product) throw new NotFoundException('محصول عمومی پیدا نشد.');
+    const images = await this.prisma.attachment.findMany({
+      where: { supplierProductId: product.id, purpose: 'PRODUCT_IMAGE', status: 'READY' },
+      orderBy: { createdAt: 'asc' },
+      take: 8,
+    });
+    return Promise.all(images.map(async (image) => ({
+      ...this.publicAttachment(image),
+      url: await this.storage.createViewUrl(image.storageKey),
+      expiresInSeconds: 300,
+    })));
+  }
+
   async listForSupportTicket(user: AuthenticatedUser, ticketId: string) {
     const ticket = await this.prisma.supportTicket.findUnique({
       where: { id: ticketId },
@@ -322,14 +413,16 @@ export class AttachmentsService {
         rfq: { select: { buyerOrganizationId: true, invitations: { select: { supplierOrganizationId: true } } } },
         quotation: { select: { supplierOrganizationId: true, status: true, rfq: { select: { buyerOrganizationId: true } } } },
         supplierProfile: { select: { organizationId: true } },
+        supplierProduct: { select: { status: true, supplierProfile: { select: { organizationId: true } } } },
         supportTicket: { select: { requesterUserId: true, category: true } },
       },
     });
     const canReadRfq = attachment?.rfq && this.canReadRfq(user, attachment.rfq.buyerOrganizationId, attachment.rfq.invitations.map((item) => item.supplierOrganizationId));
     const canReadQuotation = attachment?.quotation && this.canReadQuotation(user, attachment.quotation.supplierOrganizationId, attachment.quotation.rfq.buyerOrganizationId, attachment.quotation.status);
     const canReadSupplierDocument = attachment?.supplierProfile && this.canReadSupplierDocuments(user, attachment.supplierProfile.organizationId);
+    const canReadSupplierProductImage = attachment?.supplierProduct && this.canManageSupplierOrganization(user, attachment.supplierProduct.supplierProfile.organizationId);
     const canReadSupportDocument = attachment?.supportTicket && this.canReadSupportTicket(user, attachment.supportTicket.requesterUserId, attachment.supportTicket.category);
-    if (!attachment || (!canReadRfq && !canReadQuotation && !canReadSupplierDocument && !canReadSupportDocument)) {
+    if (!attachment || (!canReadRfq && !canReadQuotation && !canReadSupplierDocument && !canReadSupplierProductImage && !canReadSupportDocument)) {
       throw new NotFoundException('فایل پیدا نشد.');
     }
     if (attachment.status !== 'READY') throw new ConflictException('فایل هنوز تأیید امنیتی نشده است.');
@@ -344,19 +437,22 @@ export class AttachmentsService {
         rfq: { select: { lifecycleState: true, operationalStatus: true } },
         quotation: { select: { supplierOrganizationId: true, status: true } },
         supplierProfile: { select: { organizationId: true, verificationStatus: true } },
+        supplierProduct: { select: { supplierProfile: { select: { organizationId: true } } } },
         supportTicket: { select: { requesterUserId: true, status: true } },
       },
     });
     const canManageRfq = attachment?.rfq && this.canManageBuyerOrganization(user, attachment.organizationId);
     const canManageQuotation = attachment?.quotation && this.canManageQuotation(user, attachment.quotation.supplierOrganizationId);
     const canManageSupplierDocument = attachment?.supplierProfile && this.canManageSupplierOrganization(user, attachment.supplierProfile.organizationId);
+    const canManageSupplierProductImage = attachment?.supplierProduct && this.canManageSupplierOrganization(user, attachment.supplierProduct.supplierProfile.organizationId);
     const canManageSupportDocument = attachment?.supportTicket && (attachment.supportTicket.requesterUserId === user.id || user.permissions.includes('support.manage'));
-    if (!attachment || (!canManageRfq && !canManageQuotation && !canManageSupplierDocument && !canManageSupportDocument)) throw new NotFoundException('فایل پیدا نشد.');
+    if (!attachment || (!canManageRfq && !canManageQuotation && !canManageSupplierDocument && !canManageSupplierProductImage && !canManageSupportDocument)) throw new NotFoundException('فایل پیدا نشد.');
     const removableRfq = attachment.rfq?.lifecycleState === 'DRAFT' && ['DRAFT_INCOMPLETE', 'NEEDS_CHANGES'].includes(attachment.rfq.operationalStatus);
     const removableQuotation = attachment.quotation?.status === 'DRAFT';
     const removableSupplierDocument = attachment.supplierProfile && !['VERIFIED', 'SUSPENDED'].includes(attachment.supplierProfile.verificationStatus);
+    const removableSupplierProductImage = Boolean(attachment.supplierProduct);
     const removableSupportDocument = attachment.supportTicket && !['RESOLVED', 'CLOSED', 'REJECTED'].includes(attachment.supportTicket.status);
-    if (!removableRfq && !removableQuotation && !removableSupplierDocument && !removableSupportDocument) {
+    if (!removableRfq && !removableQuotation && !removableSupplierDocument && !removableSupplierProductImage && !removableSupportDocument) {
       throw new ConflictException('حذف این فایل در وضعیت فعلی مجاز نیست.');
     }
     await this.storage.remove(attachment.storageKey);
@@ -373,6 +469,7 @@ export class AttachmentsService {
       include: {
         quotation: { select: { supplierOrganizationId: true, status: true } },
         supplierProfile: { select: { organizationId: true } },
+        supplierProduct: { select: { status: true, supplierProfile: { select: { organizationId: true } } } },
         supportTicket: { select: { requesterUserId: true, status: true } },
       },
     });
@@ -380,9 +477,11 @@ export class AttachmentsService {
     const canManageQuotation = attachment?.quotation && attachment.quotation.status === 'DRAFT'
       && this.canManageQuotation(user, attachment.quotation.supplierOrganizationId);
     const canManageSupplierDocument = attachment?.supplierProfile && this.canManageSupplierOrganization(user, attachment.supplierProfile.organizationId);
+    const canManageSupplierProductImage = attachment?.supplierProduct && attachment.supplierProduct.status !== 'ARCHIVED'
+      && this.canManageSupplierOrganization(user, attachment.supplierProduct.supplierProfile.organizationId);
     const canManageSupportDocument = attachment?.supportTicket && !['RESOLVED', 'CLOSED', 'REJECTED'].includes(attachment.supportTicket.status)
       && (attachment.supportTicket.requesterUserId === user.id || user.permissions.includes('support.manage'));
-    if (!attachment || (!canManageRfq && !canManageQuotation && !canManageSupplierDocument && !canManageSupportDocument)) throw new NotFoundException('فایل پیدا نشد.');
+    if (!attachment || (!canManageRfq && !canManageQuotation && !canManageSupplierDocument && !canManageSupplierProductImage && !canManageSupportDocument)) throw new NotFoundException('فایل پیدا نشد.');
     return attachment;
   }
 
