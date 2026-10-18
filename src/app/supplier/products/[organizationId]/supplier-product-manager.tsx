@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
 import { apiRequest } from '@/lib/api';
 import { formatProductSpecifications, type ProductAttributeBinding, type ProductSpecifications } from '@/lib/product-specifications';
@@ -13,6 +14,7 @@ type ProductAttribute = {
   unitLabelFa: string | null; options: string[]; validation: Record<string, unknown>; isRequired: boolean;
 };
 type SupplierProfile = { supplierProfile: null | { categories: Array<{ category: Category }> } };
+type Identity = { permissions: string[]; memberships: Array<{ organizationId: string; role: string }> };
 type SupplierProduct = {
   id: string; categoryId: string; nameFa: string; sku: string | null; description: string | null;
   specifications: Record<string, SpecificationValue>; minimumOrderDescription: string | null; leadTimeDescription: string | null;
@@ -35,6 +37,7 @@ export function SupplierProductManager({ organizationId }: { organizationId: str
   const [draft, setDraft] = useState<ProductDraft>(() => emptyDraft());
   const [images, setImages] = useState<ProductImage[]>([]);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [canManage, setCanManage] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -55,11 +58,13 @@ export function SupplierProductManager({ organizationId }: { organizationId: str
     void Promise.all([
       apiRequest<SupplierProfile>(`/suppliers/organizations/${organizationId}/profile`),
       apiRequest<SupplierProduct[]>(`/suppliers/organizations/${organizationId}/products`),
-    ]).then(([profile, productItems]) => {
+      apiRequest<Identity>('/auth/me'),
+    ]).then(([profile, productItems, identity]) => {
       if (!active) return;
       const profileCategories = profile.supplierProfile?.categories.map((item) => item.category) ?? [];
       setCategories(profileCategories);
       setProducts(productItems);
+      setCanManage(identity.permissions.includes('supplier.verify') || identity.memberships.some((membership) => membership.organizationId === organizationId && ['SUPPLIER_OWNER', 'SUPPLIER_MANAGER'].includes(membership.role)));
       setDraft((current) => current.categoryId || profileCategories.length === 0 ? current : { ...current, categoryId: profileCategories[0]!.id });
     }).catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : 'دریافت محصولات انجام نشد.'); });
     return () => { active = false; };
@@ -174,8 +179,9 @@ export function SupplierProductManager({ organizationId }: { organizationId: str
   return <div className="stack">
     {error && <div className="message message-error">{error}</div>}
     {message && <div className="message message-success">{message}</div>}
-    {categories.length === 0 && <div className="message message-warning">ابتدا در پروفایل فروشنده حداقل یک دسته قابل‌تأمین ثبت کنید.</div>}
-    <form className="card form-grid" onSubmit={submit}>
+    {canManage === false && <div className="message">شما دسترسی مشاهده محصولات این فروشنده را دارید؛ ثبت و ویرایش فقط برای مالک یا مدیر سازمان فعال است.</div>}
+    {canManage && categories.length === 0 && <div className="message message-warning">ابتدا در پروفایل فروشنده حداقل یک دسته قابل‌تأمین ثبت کنید. <Link className="text-link" href={`/supplier/profile/${organizationId}`}>تکمیل پروفایل</Link></div>}
+    {canManage && <form className="card form-grid" onSubmit={submit}>
       <div className="full"><h2>{draft.id ? 'ویرایش محصول' : 'ثبت محصول جدید'}</h2><p className="muted">برای انتشار عمومی، همه ویژگی‌های الزامی دسته را کامل کنید. پیش‌نویس ناقص قابل ذخیره است.</p></div>
       <label className="form-field"><span>دسته محصول</span><select value={draft.categoryId} onChange={(event) => { setAttributes([]); setDraft((current) => ({ ...current, categoryId: event.target.value, specifications: {} })); }} required><option value="">انتخاب کنید</option>{categories.map((category) => <option value={category.id} key={category.id}>{category.nameFa}</option>)}</select></label>
       <label className="form-field"><span>نام محصول</span><input value={draft.nameFa} onChange={(event) => setDraft((current) => ({ ...current, nameFa: event.target.value }))} minLength={2} maxLength={160} required placeholder="مثلاً تراورتن کرم موج‌دار معدن نمونه" /></label>
@@ -189,10 +195,10 @@ export function SupplierProductManager({ organizationId }: { organizationId: str
       {draft.id && <fieldset className="fieldset full"><legend>تصاویر محصول</legend><p className="muted">حداکثر ۸ تصویر JPG، PNG یا WebP. هر فایل پیش از نمایش عمومی اسکن امنیتی می‌شود.</p><div className="attachment-upload-row"><input aria-label="انتخاب تصویر محصول" type="file" accept=".jpg,.jpeg,.png,.webp" onChange={(event) => setSelectedImage(event.target.files?.[0] ?? null)} /><button className="button button-secondary" type="button" disabled={busy || !selectedImage || images.length >= 8} onClick={() => void uploadImage()}>بارگذاری امن</button></div>{images.length > 0 && <div className="stack">{images.map((image) => <div className="list-card" key={image.id}><span>{image.originalName} · {image.status === 'READY' ? 'تأیید امنیتی' : 'در حال بررسی'}</span><div className="actions">{image.status === 'READY' && <button className="button button-secondary" type="button" onClick={() => void openImage(image.id)}>مشاهده</button>}<button className="button button-ghost" type="button" disabled={busy} onClick={() => void removeImage(image.id)}>حذف</button></div></div>)}</div>}</fieldset>}
       {!draft.id && <p className="muted full">پس از ثبت اولیه محصول، امکان بارگذاری تصاویر فعال می‌شود.</p>}
       <div className="actions full"><button className="button button-primary" disabled={busy || categories.length === 0}>{busy ? 'در حال ذخیره…' : draft.id ? 'ذخیره تغییرات' : 'ثبت محصول'}</button>{draft.id && <button className="button button-secondary" type="button" onClick={() => { setDraft({ ...emptyDraft(), categoryId: categories[0]?.id ?? '' }); setImages([]); setSelectedImage(null); }}>انصراف از ویرایش</button>}</div>
-    </form>
+    </form>}
     <section className="stack"><div><h2>فهرست محصولات</h2><p className="muted">محصولات منتشرشده و موجود در پروفایل عمومی فروشنده نمایش داده می‌شوند.</p></div>{products.length === 0 && <div className="card">هنوز محصولی ثبت نشده است.</div>}{products.map((product) => {
       const values = formatProductSpecifications(product.specifications as ProductSpecifications, product.category.attributeBindings);
-      return <article className="card list-card" key={product.id}><div><div className="eyebrow">{product.category.nameFa} · {statusLabels[product.status]}</div><h3>{product.nameFa}</h3><p>{product.description ?? 'بدون توضیح تکمیلی'}</p><div className="specification-summary">{product.sku && <span>کد: {product.sku}</span>}{values.slice(0, 5).map((item) => <span key={item.code}>{item.label}: {item.value}</span>)}<span>{product.isAvailable ? 'قابل تأمین' : 'موقتاً ناموجود'}</span></div></div><div className="list-card-actions"><button className="button button-secondary" type="button" onClick={() => edit(product)}>ویرایش</button></div></article>;
+      return <article className="card list-card" key={product.id}><div><div className="eyebrow">{product.category.nameFa} · {statusLabels[product.status]}</div><h3>{product.nameFa}</h3><p>{product.description ?? 'بدون توضیح تکمیلی'}</p><div className="specification-summary">{product.sku && <span>کد: {product.sku}</span>}{values.slice(0, 5).map((item) => <span key={item.code}>{item.label}: {item.value}</span>)}<span>{product.isAvailable ? 'قابل تأمین' : 'موقتاً ناموجود'}</span></div></div>{canManage && <div className="list-card-actions"><button className="button button-secondary" type="button" onClick={() => edit(product)}>ویرایش</button></div>}</article>;
     })}</section>
   </div>;
 }
