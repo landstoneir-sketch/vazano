@@ -41,9 +41,10 @@ describe('QualityControlService payments', () => {
     const createPayment = jest.fn().mockResolvedValue({ authority: 'authority-1', redirectUrl: 'https://payment.example/authority-1' });
     const createIntent = jest.fn().mockResolvedValue({ id: 'payment-1', amountRial: 30_000_000n });
     const updateIntent = jest.fn().mockResolvedValue({});
+    const claimIntent = jest.fn().mockResolvedValue({ count: 1 });
     const prisma = {
       qualityControlRequest: { findUnique: jest.fn().mockResolvedValue(quotedRequest) },
-      paymentIntent: { findUnique: jest.fn().mockResolvedValue(null), create: createIntent, update: updateIntent },
+      paymentIntent: { findUnique: jest.fn().mockResolvedValue(null), create: createIntent, updateMany: claimIntent, update: updateIntent },
     } as unknown as PrismaService;
     const payments = { provider: 'ZARINPAL', create: createPayment } as unknown as PaymentsService;
     const service = new QualityControlService(prisma, payments, new ConfigService({ PUBLIC_API_URL: 'https://api.vazano.ir' }));
@@ -61,8 +62,27 @@ describe('QualityControlService payments', () => {
       mobile: '09120000000',
       orderId: 'quality-request',
     });
-    expect(updateIntent).toHaveBeenCalledWith({ where: { id: 'payment-1' }, data: { authority: 'authority-1', status: 'REDIRECT_PENDING' } });
+    expect(claimIntent).toHaveBeenCalledWith({ where: { id: 'payment-1', status: 'CREATED', authority: null }, data: { status: 'REDIRECT_PENDING' } });
+    expect(updateIntent).toHaveBeenCalledWith({ where: { id: 'payment-1' }, data: { authority: 'authority-1' } });
     expect(result.redirectUrl).toBe('https://payment.example/authority-1');
+  });
+
+  it('does not create a duplicate provider request while checkout is being prepared', async () => {
+    const createPayment = jest.fn();
+    const prisma = {
+      qualityControlRequest: { findUnique: jest.fn().mockResolvedValue(quotedRequest) },
+      paymentIntent: { findUnique: jest.fn().mockResolvedValue({
+        id: 'payment-pending', status: 'REDIRECT_PENDING', authority: null, purpose: 'QUALITY_CONTROL',
+        referenceId: 'quality-request', payerOrganizationId: 'buyer-org', amountRial: 30_000_000n,
+      }) },
+    } as unknown as PrismaService;
+    const payments = { provider: 'ZARINPAL', create: createPayment } as unknown as PaymentsService;
+    const service = new QualityControlService(prisma, payments, new ConfigService());
+
+    await expect(service.startCheckout(buyer, 'rfq-1', 'quality-key-123')).resolves.toEqual({
+      paymentIntentId: 'payment-pending', processing: true,
+    });
+    expect(createPayment).not.toHaveBeenCalled();
   });
 
   it('does not verify or activate an already completed callback again', async () => {

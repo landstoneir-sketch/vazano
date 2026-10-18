@@ -154,3 +154,93 @@ describe('SubscriptionBillingService unsuccessful payment', () => {
     });
   });
 });
+
+describe('SubscriptionBillingService paid checkout idempotency', () => {
+  const paidPlan = {
+    id: 'paid-plan-1', code: 'SELLER_STANDARD_M1_V1', nameFa: 'استاندارد ماهانه',
+    priceRial: 10_000_000n, grantCredits: 20n, version: 1, isTrial: false,
+  };
+  const draftSubscription = {
+    id: 'subscription-paid-1', organizationId: 'supplier-1', planId: paidPlan.id,
+    priceRialSnapshot: paidPlan.priceRial, discountCodeSnapshot: null,
+  };
+  const foundingPolicy = {
+    foundingProgram: {
+      enabled: true, planCode: 'SELLER_FOUNDING_P6M_V1', capacity: 20, renewalDiscountBps: 2000,
+      minimumValidLeads: 10, guaranteeExtensionDays: 90, managedSalesOnly: true,
+    },
+  };
+
+  it('returns processing without creating another provider request while the first request is being prepared', async () => {
+    const intent = {
+      id: 'payment-pending-1', referenceId: draftSubscription.id, provider: 'ZARINPAL', purpose: 'SUBSCRIPTION',
+      payerOrganizationId: 'supplier-1', status: 'REDIRECT_PENDING', authority: null,
+      amountRial: paidPlan.priceRial,
+    };
+    const prisma = {
+      organization: { findUnique: jest.fn().mockResolvedValue({ id: 'supplier-1', kind: 'SUPPLIER', status: 'ACTIVE' }) },
+      subscriptionPlan: { findFirst: jest.fn().mockResolvedValue(paidPlan) },
+      paymentIntent: { findUnique: jest.fn().mockResolvedValue(intent), updateMany: jest.fn() },
+      subscription: {
+        findUnique: jest.fn().mockImplementation(({ where }: { where: { idempotencyKey?: string; trialActivationKey?: string } }) =>
+          where.trialActivationKey ? null : draftSubscription),
+        findUniqueOrThrow: jest.fn().mockResolvedValue(draftSubscription),
+      },
+    };
+    const payments = { provider: 'ZARINPAL', create: jest.fn() };
+    const config = { get: jest.fn() };
+    const service = new SubscriptionBillingService(prisma as never, payments as never, config as never, { get: jest.fn().mockResolvedValue(foundingPolicy) } as never);
+
+    await expect(service.startCheckout(supplierOwner, 'supplier-1', paidPlan.id, 'same-checkout-key')).resolves.toEqual({
+      paymentIntentId: intent.id,
+      subscriptionId: draftSubscription.id,
+      processing: true,
+    });
+    expect(prisma.paymentIntent.updateMany).not.toHaveBeenCalled();
+    expect(payments.create).not.toHaveBeenCalled();
+  });
+
+  it('claims a created intent before contacting the payment provider', async () => {
+    const events: string[] = [];
+    const intent = {
+      id: 'payment-created-1', referenceId: draftSubscription.id, provider: 'ZARINPAL', purpose: 'SUBSCRIPTION',
+      payerOrganizationId: 'supplier-1', status: 'CREATED', authority: null,
+      amountRial: paidPlan.priceRial,
+    };
+    const prisma = {
+      organization: { findUnique: jest.fn().mockResolvedValue({ id: 'supplier-1', kind: 'SUPPLIER', status: 'ACTIVE' }) },
+      subscriptionPlan: { findFirst: jest.fn().mockResolvedValue(paidPlan) },
+      paymentIntent: {
+        findUnique: jest.fn().mockResolvedValue(intent),
+        updateMany: jest.fn().mockImplementation(() => { events.push('claim'); return Promise.resolve({ count: 1 }); }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      subscription: {
+        findUnique: jest.fn().mockImplementation(({ where }: { where: { trialActivationKey?: string } }) =>
+          where.trialActivationKey ? null : draftSubscription),
+        findUniqueOrThrow: jest.fn().mockResolvedValue(draftSubscription),
+      },
+      billingInvoice: { upsert: jest.fn().mockResolvedValue({}) },
+    };
+    const payments = {
+      provider: 'ZARINPAL',
+      create: jest.fn().mockImplementation(() => {
+        events.push('provider');
+        return Promise.resolve({ authority: 'A12345678901234567890', redirectUrl: 'https://gateway.example/start' });
+      }),
+    };
+    const config = { get: jest.fn().mockReturnValue('http://localhost:3001') };
+    const service = new SubscriptionBillingService(prisma as never, payments as never, config as never, { get: jest.fn().mockResolvedValue(foundingPolicy) } as never);
+
+    await expect(service.startCheckout(supplierOwner, 'supplier-1', paidPlan.id, 'same-checkout-key')).resolves.toMatchObject({
+      paymentIntentId: intent.id,
+      authority: 'A12345678901234567890',
+    });
+    expect(events).toEqual(['claim', 'provider']);
+    expect(prisma.paymentIntent.updateMany).toHaveBeenCalledWith({
+      where: { id: intent.id, status: 'CREATED', authority: null },
+      data: { status: 'REDIRECT_PENDING' },
+    });
+    expect(payments.create).toHaveBeenCalledTimes(1);
+  });
+});

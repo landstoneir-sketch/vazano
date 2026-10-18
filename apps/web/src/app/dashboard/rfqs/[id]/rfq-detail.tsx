@@ -15,7 +15,10 @@ type Rfq = { id: string; code: string; title: string; description: string | null
 type QuotationItem = { id: string; quantity: string; unitPriceRial: string; lineNetRial: string; isAlternative: boolean; offeredDescription: string | null; rfqItem: RfqItem };
 type Quotation = { id: string; code: string; status: string; finalAmountRial: string; subtotalRial: string; discountRial: string; taxRial: string; packagingRial: string; loadingRial: string; shippingRial: string; otherCostsRial: string; paymentTerms: string | null; preparationDays: number | null; deliveryDate: string | null; validUntil: string | null; supplierOrganization: { id: string; displayName: string; province: string | null; city: string | null }; items: QuotationItem[] };
 type Attachment = { id: string; originalName: string; status: string; sizeBytes: number };
-type CheckoutResult = { paymentIntentId: string; authority?: string; redirectUrl: string; alreadyPaid?: boolean };
+type CheckoutResult =
+  | { paymentIntentId: string; authority?: string; redirectUrl: string; alreadyPaid?: boolean }
+  | { paymentIntentId: string; processing: true }
+  | { paymentIntentId: string; completed: true };
 type SupplierReview = { id: string; rating: number; comment: string | null; status: 'PUBLISHED' | 'HIDDEN'; moderationReason: string | null; createdAt: string };
 
 function toman(value: string | bigint) { return `${(BigInt(value) / BigInt(10)).toLocaleString('fa-IR')} تومان`; }
@@ -126,7 +129,11 @@ export function RfqDetail({ rfqId, qualityPaymentResult, qualityReceiptId, commi
         sessionStorage.setItem(storageKey, idempotencyKey);
       }
       const result = await apiRequest<CheckoutResult>(`/quality-control/rfqs/${rfqId}/checkout`, { method: 'POST', body: JSON.stringify({ idempotencyKey }) });
-      window.location.assign(result.redirectUrl);
+      if ('redirectUrl' in result) window.location.assign(result.redirectUrl);
+      else {
+        setMessage('درخواست پرداخت کنترل کیفیت در حال آماده‌سازی است. چند لحظه دیگر دوباره تلاش کنید.');
+        setBusyId('');
+      }
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : 'شروع پرداخت کنترل کیفیت انجام نشد.'); setBusyId(''); }
   }
 
@@ -141,7 +148,12 @@ export function RfqDetail({ rfqId, qualityPaymentResult, qualityReceiptId, commi
         sessionStorage.setItem(storageKey, idempotencyKey);
       }
       const result = await apiRequest<CheckoutResult>(`/rfqs/${rfqId}/commitment/payment`, { method: 'POST', body: JSON.stringify({ idempotencyKey }) });
-      window.location.assign(result.redirectUrl);
+      if ('redirectUrl' in result) window.location.assign(result.redirectUrl);
+      else {
+        setMessage('درخواست پرداخت تعهد در حال آماده‌سازی یا قبلاً تکمیل شده است. وضعیت صفحه را دوباره بررسی کنید.');
+        setBusyId('');
+        await load();
+      }
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : 'شروع پرداخت تعهد انجام نشد.'); setBusyId(''); }
   }
 

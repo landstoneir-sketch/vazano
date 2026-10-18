@@ -130,6 +130,26 @@ describe('RfqsService commitment payment callbacks', () => {
     await expect(service.createCommitmentPayment({ mobile: '09120000000' } as never, 'rfq-1', 'used-key')).rejects.toBeInstanceOf(ConflictException);
     expect(payments.create).not.toHaveBeenCalled();
   });
+
+  it('does not create a duplicate commitment request while checkout is being prepared', async () => {
+    const prisma = {
+      paymentIntent: { findUnique: jest.fn().mockResolvedValue({
+        id: 'payment-pending', status: 'REDIRECT_PENDING', authority: null, purpose: 'BUYER_COMMITMENT',
+        referenceId: 'rfq-1', payerOrganizationId: 'buyer-1', amountRial: 5_000_000n,
+      }) },
+    };
+    const payments = { provider: 'TEST_GATEWAY', create: jest.fn() };
+    const service = new RfqsService(prisma as never, payments as never, { get: jest.fn().mockReturnValue('http://localhost:3001') } as never, {} as never);
+    (service as unknown as { findAuthorizedRfq: jest.Mock }).findAuthorizedRfq = jest.fn().mockResolvedValue({
+      id: 'rfq-1', approvalStatus: 'APPROVED', commitmentStatus: 'REQUIRED', commitmentAmountRial: 5_000_000n,
+      buyerOrganizationId: 'buyer-1', code: 'RFQ-1',
+    });
+
+    await expect(service.createCommitmentPayment({ mobile: '09120000000' } as never, 'rfq-1', 'same-key')).resolves.toEqual({
+      paymentIntentId: 'payment-pending', processing: true,
+    });
+    expect(payments.create).not.toHaveBeenCalled();
+  });
 });
 
 describe('RfqsService response deadlines', () => {
