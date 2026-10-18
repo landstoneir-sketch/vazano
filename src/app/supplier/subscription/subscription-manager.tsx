@@ -20,7 +20,11 @@ type BillingInvoice = {
   paymentIntent: { providerReference: string | null } | null;
   manualRenewal: { trackingNumber: string } | null;
 };
-type CheckoutResult = { paymentIntentId: string; subscriptionId: string; authority: string; redirectUrl: string } | { trialActivated: true; subscriptionId: string; startsAt: string; expiresAt: string };
+type CheckoutResult =
+  | { paymentIntentId: string; subscriptionId: string; authority: string; redirectUrl: string }
+  | { paymentIntentId: string; subscriptionId: string; processing: true }
+  | { paymentIntentId: string; subscriptionId: string; completed: true }
+  | { trialActivated: true; subscriptionId: string; startsAt: string; expiresAt: string };
 type DiscountPreview = { planId: string; code: string; listPriceRial: string; discountRial: string; payableRial: string };
 
 function formatToman(rial: string): string {
@@ -36,6 +40,7 @@ export function SubscriptionManager({ paymentResult, trialResult }: { paymentRes
   const [receipts, setReceipts] = useState<PaymentReceipt[]>([]);
   const [invoices, setInvoices] = useState<BillingInvoice[]>([]);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [busyPlanId, setBusyPlanId] = useState('');
   const [discountCode, setDiscountCode] = useState('');
   const [previewingPlanId, setPreviewingPlanId] = useState('');
@@ -81,7 +86,7 @@ export function SubscriptionManager({ paymentResult, trialResult }: { paymentRes
   async function checkout(plan: Plan) {
     if (!organizationId) return;
     if (!plan.checkoutAvailable) { setError('خرید آنلاین این پلن هنوز فعال نیست؛ برای فعال‌سازی دستی با پشتیبانی وازانو تماس بگیرید.'); return; }
-    setBusyPlanId(plan.id); setError('');
+    setBusyPlanId(plan.id); setError(''); setNotice('');
     try {
       const normalizedDiscountCode = plan.isTrial ? '' : discountCode.trim().toUpperCase();
       const storageKey = `vazano:subscription-checkout:${organizationId}:${plan.id}:${normalizedDiscountCode || 'NO_DISCOUNT'}`;
@@ -94,7 +99,13 @@ export function SubscriptionManager({ paymentResult, trialResult }: { paymentRes
         method: 'POST', body: JSON.stringify({ planId: plan.id, idempotencyKey, discountCode: normalizedDiscountCode || undefined }),
       });
       if ('redirectUrl' in result) window.location.assign(result.redirectUrl);
-      else {
+      else if ('processing' in result) {
+        setNotice('درخواست پرداخت در حال آماده‌سازی است. چند لحظه دیگر دوباره همین دکمه را انتخاب کنید.');
+        setBusyPlanId('');
+      } else if ('completed' in result) {
+        setNotice('این پرداخت قبلاً تأیید شده و اشتراک فعال است.');
+        setBusyPlanId('');
+      } else {
         router.replace('/supplier/subscription?trial=success');
         router.refresh();
       }
@@ -119,6 +130,7 @@ export function SubscriptionManager({ paymentResult, trialResult }: { paymentRes
   return <div className="stack">
     {paymentResult === 'success' && <div className="message message-success">پرداخت با موفقیت تأیید شد و اشتراک شما فعال است.</div>}
     {trialResult === 'success' && <div className="message message-success">دوره آزمایشی با موفقیت فعال شد و نیازی به پرداخت ندارد.</div>}
+    {notice && <div className="message">{notice}</div>}
     {paymentResult === 'cancelled' && <div className="message message-error">پرداخت لغو شد و مبلغی از حساب شما کسر نشده است.</div>}
     {paymentResult === 'failed' && <div className="message message-error">تأیید پرداخت انجام نشد. در صورت کسر وجه، وضعیت تراکنش را با پشتیبانی پیگیری کنید.</div>}
     {paymentResult === 'processing' && <div className="message">نتیجه پرداخت در حال پردازش است؛ چند لحظه بعد این صفحه را تازه‌سازی کنید.</div>}
