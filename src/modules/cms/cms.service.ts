@@ -5,6 +5,8 @@ import { PrismaService } from '../../shared/prisma/prisma.service';
 import { CreateCmsPageDto, UpdateCmsPageDto } from './cms-page.dto';
 import { CreateFaqItemDto, UpdateFaqItemDto } from './faq-item.dto';
 
+const CONTROLLED_LEGAL_PAGE_SLUGS = new Set(['terms', 'privacy']);
+
 @Injectable()
 export class CmsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -34,6 +36,7 @@ export class CmsService {
 
   async createPage(user: AuthenticatedUser, input: CreateCmsPageDto) {
     this.requireContentManager(user);
+    this.assertControlledLegalPageChange(input.slug, null, input.status);
     try {
       return await this.prisma.$transaction(async (tx) => {
         const page = await tx.cmsPage.create({ data: {
@@ -58,6 +61,7 @@ export class CmsService {
     this.requireContentManager(user);
     const page = await this.prisma.cmsPage.findUnique({ where: { id: pageId } });
     if (!page) throw new NotFoundException('صفحه پیدا نشد.');
+    this.assertControlledLegalPageChange(page.slug, page.status, input.status);
     try {
       return await this.prisma.$transaction(async (tx) => {
         const result = await tx.cmsPage.updateMany({
@@ -121,5 +125,15 @@ export class CmsService {
 
   private requireContentManager(user: AuthenticatedUser): void {
     if (!user.permissions.includes('content.manage')) throw new ForbiddenException('شما مجوز مدیریت محتوا را ندارید.');
+  }
+
+  private assertControlledLegalPageChange(slug: string, currentStatus: string | null, nextStatus: string): void {
+    if (!CONTROLLED_LEGAL_PAGE_SLUGS.has(slug)) return;
+    if (currentStatus === 'PUBLISHED') {
+      throw new ForbiddenException('تغییر نسخه منتشرشده صفحه حقوقی فقط از فرایند کنترل‌شده تأیید حقوقی امکان‌پذیر است.');
+    }
+    if (nextStatus === 'PUBLISHED') {
+      throw new ForbiddenException('انتشار صفحه حقوقی فقط پس از کنترل Hash و تأیید صریح مالک/مشاور حقوقی انجام می‌شود.');
+    }
   }
 }
