@@ -19,6 +19,7 @@ This module owns seller plan purchase, payment activation, credits, renewal sche
 - Supplier owners start an idempotent checkout from `/supplier/subscription`; provider SDK details remain behind the payment adapter.
 - Paid checkout atomically claims a `CREATED` payment intent before contacting the provider. Concurrent retries return a processing state or the existing redirect and never create a second provider request for the same idempotency key.
 - Zarinpal callbacks are verified server-side and redirect to a non-sensitive success/cancel/failure result in the seller workspace.
+- The local-only mock provider exposes paid checkout for deterministic E2E testing; production environment validation forbids that provider.
 - Successful subscription payments create one immutable Rial receipt with zero tax for the current tax-exclusive MVP policy; repeated callbacks cannot create duplicate activation, credit, or receipt records.
 - Cancelled or failed attempts atomically close the draft subscription, invoice, and discount reservation, emit one retry notification event, and require a fresh idempotent checkout request.
 - Organization members can view their payment receipts; cross-organization receipt access is rejected in the backend.
