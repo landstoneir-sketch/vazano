@@ -63,7 +63,7 @@ export class AdminLocationsService {
 
   async createCity(user: AuthenticatedUser, input: CreateCityDto) {
     this.requireManagePermission(user);
-    await this.assertProvince(input.provinceId);
+    await this.assertProvince(input.provinceId, input.isActive ?? true);
     try {
       return await this.prisma.$transaction(async (tx) => {
         const city = await tx.city.create({ data: { provinceId: input.provinceId, code: input.code.trim(), nameFa: input.nameFa.trim(), nameEn: input.nameEn?.trim() || null, isProvinceCapital: input.isProvinceCapital ?? false, sortOrder: input.sortOrder, isActive: input.isActive ?? true } });
@@ -79,7 +79,7 @@ export class AdminLocationsService {
     this.requireManagePermission(user);
     const city = await this.prisma.city.findUnique({ where: { id: cityId } });
     if (!city) throw new NotFoundException('شهر پیدا نشد.');
-    await this.assertProvince(input.provinceId);
+    await this.assertProvince(input.provinceId, input.isActive);
     try {
       return await this.prisma.$transaction(async (tx) => {
         const result = await tx.city.updateMany({
@@ -95,8 +95,10 @@ export class AdminLocationsService {
     }
   }
 
-  private async assertProvince(provinceId: string) {
-    if (!(await this.prisma.province.findUnique({ where: { id: provinceId } }))) throw new NotFoundException('استان انتخاب‌شده پیدا نشد.');
+  private async assertProvince(provinceId: string, requireActive: boolean) {
+    const province = await this.prisma.province.findUnique({ where: { id: provinceId }, select: { isActive: true } });
+    if (!province) throw new NotFoundException('استان انتخاب‌شده پیدا نشد.');
+    if (requireActive && !province.isActive) throw new BadRequestException('شهر فعال باید در یک استان فعال قرار داشته باشد.');
   }
 
   private requireManagePermission(user: AuthenticatedUser) {
