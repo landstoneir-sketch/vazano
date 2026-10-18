@@ -29,6 +29,7 @@ const INTERNAL_PILOT_DEFERRED_CHECKS = new Set([
   'integration.subscription-sms-delivery',
   'integration.payment',
 ]);
+const NATIONWIDE_IRAN_CITY_COUNT = 1_481;
 
 export type ReleaseReadinessInput = {
   nodeEnvironment: string;
@@ -89,10 +90,10 @@ export function evaluateReleaseReadiness(input: ReleaseReadinessInput): { ready:
     check('locations.provinces', 'پوشش استان‌های ایران', input.activeProvinceCount >= 31, `${input.activeProvinceCount.toLocaleString('fa-IR')} استان فعال ثبت شده است.`, `فقط ${input.activeProvinceCount.toLocaleString('fa-IR')} استان فعال ثبت شده است.`, '/admin/locations', 'OPERATIONS'),
     check(
       'locations.cities',
-      'شهر پایه هر استان',
-      input.activeCityCount >= input.activeProvinceCount && input.provincesWithoutActiveCityCount === 0,
-      `برای همه استان‌های فعال حداقل یک شهر ثبت شده است (${input.activeCityCount.toLocaleString('fa-IR')} شهر فعال).`,
-      locationGapDetail(input.provincesWithoutActiveCityCount, input.provincesWithoutActiveCityNames),
+      'پوشش شهرهای ایران',
+      input.activeCityCount >= NATIONWIDE_IRAN_CITY_COUNT && input.provincesWithoutActiveCityCount === 0,
+      `فهرست کشوری کامل است (${input.activeCityCount.toLocaleString('fa-IR')} شهر فعال).`,
+      locationGapDetail(input.activeCityCount, input.provincesWithoutActiveCityCount, input.provincesWithoutActiveCityNames),
       '/admin/locations',
       'OPERATIONS',
     ),
@@ -142,11 +143,14 @@ export function evaluateReleaseReadiness(input: ReleaseReadinessInput): { ready:
   };
 }
 
-function locationGapDetail(count: number, names: string[]): string {
-  if (count === 0) return 'تعداد شهرهای فعال از تعداد استان‌های فعال کمتر است.';
+function locationGapDetail(activeCityCount: number, count: number, names: string[]): string {
+  const countDetail = activeCityCount < NATIONWIDE_IRAN_CITY_COUNT
+    ? `فقط ${activeCityCount.toLocaleString('fa-IR')} شهر از ${NATIONWIDE_IRAN_CITY_COUNT.toLocaleString('fa-IR')} شهر مرجع فعال است.`
+    : '';
+  if (count === 0) return countDetail || 'فهرست شهرهای فعال کامل نیست.';
   const visibleNames = names.slice(0, 8);
   const remainingCount = Math.max(0, count - visibleNames.length);
-  return `${count.toLocaleString('fa-IR')} استان فعال شهر قابل‌انتخاب ندارد: ${visibleNames.join('، ')}${remainingCount > 0 ? ` و ${remainingCount.toLocaleString('fa-IR')} استان دیگر` : ''}.`;
+  return `${countDetail}${countDetail ? ' ' : ''}${count.toLocaleString('fa-IR')} استان فعال شهر قابل‌انتخاب ندارد: ${visibleNames.join('، ')}${remainingCount > 0 ? ` و ${remainingCount.toLocaleString('fa-IR')} استان دیگر` : ''}.`;
 }
 
 function coverageGapDetail(count: number, subject: string, names: string[]): string {

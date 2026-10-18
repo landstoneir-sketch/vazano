@@ -6,7 +6,7 @@ const readyInput: ReleaseReadinessInput = {
   paymentConfigured: true, fileScanningConfigured: true, notificationWorkerEnabled: true, subscriptionWorkerEnabled: true, rfqLifecycleWorkerEnabled: true,
   failedNotificationDispatchCount: 0,
   termsPublished: true, privacyPublished: true, paidPlanCount: 2, activeCategoryCount: 15, activeUnitCount: 6,
-  activeProvinceCount: 31, activeCityCount: 31, provincesWithoutActiveCityCount: 0, provincesWithoutActiveCityNames: [],
+  activeProvinceCount: 31, activeCityCount: 1481, provincesWithoutActiveCityCount: 0, provincesWithoutActiveCityNames: [],
   marketCoverageConfigured: true, activeBuyerOrganizationCount: 2, eligibleSupplierCount: 5,
   uncoveredCategoryCount: 0, uncoveredProvinceCount: 0,
   uncoveredCategoryNames: [], uncoveredProvinceNames: [],

@@ -4,6 +4,7 @@ const expectation: BootstrapInvariantExpectation = {
   permissionKeys: ['rfq.read', 'rfq.manage'],
   roles: { ADMIN: ['rfq.read', 'rfq.manage'], BUYER_OWNER: ['rfq.read'] },
   provinceCodes: ['tehran', 'isfahan'],
+  minimumCityCount: 100,
   naturalStoneCategoryCodes: ['travertine', 'granite'],
   unitCodes: ['square-meter'],
   subscriptionPlanCodes: ['SELLER_P1M_V1'],
@@ -20,6 +21,7 @@ const validSnapshot: BootstrapInvariantSnapshot = {
     { key: 'BUYER_OWNER', permissionKeys: ['rfq.read'] },
   ],
   provinceCodes: ['tehran', 'isfahan'],
+  cityCount: 100,
   naturalStoneCategoryCodes: ['travertine', 'granite'],
   unitCodes: ['square-meter'],
   subscriptionPlanCodes: ['SELLER_P1M_V1'],
@@ -39,6 +41,7 @@ describe('bootstrap invariants', () => {
     const issues = validateBootstrapInvariants({
       ...validSnapshot,
       provinceCodes: ['tehran'],
+      cityCount: 99,
       roles: [{ key: 'ADMIN', permissionKeys: ['rfq.read'] }],
       activeSuperAdminCount: 0,
       activeDemoDiscountCount: 1,
@@ -46,6 +49,7 @@ describe('bootstrap invariants', () => {
 
     expect(issues).toEqual(expect.arrayContaining([
       'missing provinces: isfahan',
+      'insufficient cities: expected at least 100, found 99',
       'missing permissions for role ADMIN: rfq.manage',
       'missing role: BUYER_OWNER',
       'no active SUPER_ADMIN account exists',

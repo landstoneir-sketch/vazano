@@ -7,6 +7,7 @@ export type BootstrapInvariantSnapshot = {
   permissionKeys: string[];
   roles: BootstrapRoleSnapshot[];
   provinceCodes: string[];
+  cityCount: number;
   naturalStoneCategoryCodes: string[];
   unitCodes: string[];
   subscriptionPlanCodes: string[];
@@ -20,6 +21,7 @@ export type BootstrapInvariantExpectation = {
   permissionKeys: readonly string[];
   roles: Readonly<Record<string, readonly string[]>>;
   provinceCodes: readonly string[];
+  minimumCityCount: number;
   naturalStoneCategoryCodes: readonly string[];
   unitCodes: readonly string[];
   subscriptionPlanCodes: readonly string[];
@@ -46,6 +48,9 @@ export function validateBootstrapInvariants(
   const issues: string[] = [];
   addMissingIssue(issues, 'missing permissions', expectation.permissionKeys, snapshot.permissionKeys);
   addMissingIssue(issues, 'missing provinces', expectation.provinceCodes, snapshot.provinceCodes);
+  if (snapshot.cityCount < expectation.minimumCityCount) {
+    issues.push(`insufficient cities: expected at least ${expectation.minimumCityCount}, found ${snapshot.cityCount}`);
+  }
   addMissingIssue(issues, 'missing natural-stone categories', expectation.naturalStoneCategoryCodes, snapshot.naturalStoneCategoryCodes);
   addMissingIssue(issues, 'missing units', expectation.unitCodes, snapshot.unitCodes);
   addMissingIssue(issues, 'missing subscription plans', expectation.subscriptionPlanCodes, snapshot.subscriptionPlanCodes);

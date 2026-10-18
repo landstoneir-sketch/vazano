@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { normalizeIranianMobile } from '../src/modules/auth/domain/mobile';
 import { assertBootstrapInvariants } from './bootstrap-invariants';
+import { buildProvinceCitySeedRows, IRAN_CITY_REFERENCE_COUNT, loadIranCitiesReferenceData } from './iran-cities-reference';
 
 const prisma = new PrismaClient();
 const isProduction = process.env.NODE_ENV === 'production';
@@ -62,6 +63,7 @@ const iranProvinces = [
   ['hamedan', 'همدان', 'Hamedan', 'hamedan', 'همدان', 'Hamedan'],
   ['yazd', 'یزد', 'Yazd', 'yazd', 'یزد', 'Yazd'],
 ] as const;
+const iranCitiesReference = loadIranCitiesReferenceData();
 
 const naturalStoneCategories = [
   ['travertine', 'travertine', 'تراورتن', 'Travertine'],
@@ -523,6 +525,11 @@ async function main(): Promise<void> {
       create: { provinceId: province.id, code: capitalCode, nameFa: capitalNameFa, nameEn: capitalNameEn, isProvinceCapital: true, sortOrder: 1 },
       update: isProduction ? {} : { nameFa: capitalNameFa, nameEn: capitalNameEn, isProvinceCapital: true, sortOrder: 1, isActive: true },
     });
+    const cityRows = buildProvinceCitySeedRows(iranCitiesReference, nameFa, capitalNameFa);
+    await prisma.city.createMany({
+      data: cityRows.map((city) => ({ provinceId: province.id, ...city })),
+      skipDuplicates: true,
+    });
     await prisma.rfq.updateMany({
       where: { deliveryProvince: nameFa, deliveryProvinceId: null },
       data: { deliveryProvinceId: province.id },
@@ -801,6 +808,7 @@ async function main(): Promise<void> {
     permissionRows,
     roleRows,
     provinceRows,
+    cityCount,
     categoryRows,
     unitRows,
     planRows,
@@ -815,6 +823,7 @@ async function main(): Promise<void> {
       select: { key: true, permissions: { select: { permission: { select: { key: true } } } } },
     }),
     prisma.province.findMany({ where: { code: { in: [...expectedProvinceCodes] } }, select: { code: true } }),
+    prisma.city.count({ where: { province: { code: { in: [...expectedProvinceCodes] } } } }),
     prisma.category.findMany({ where: { code: { in: [...expectedCategoryCodes] } }, select: { code: true } }),
     prisma.unitOfMeasure.findMany({ where: { code: { in: [...expectedUnitCodes] } }, select: { code: true } }),
     prisma.subscriptionPlan.findMany({ where: { code: { in: expectedPlanCodes } }, select: { code: true } }),
@@ -833,6 +842,7 @@ async function main(): Promise<void> {
       permissionKeys: role.permissions.map(({ permission }) => permission.key),
     })),
     provinceCodes: provinceRows.map(({ code }) => code),
+    cityCount,
     naturalStoneCategoryCodes: categoryRows.map(({ code }) => code),
     unitCodes: unitRows.map(({ code }) => code),
     subscriptionPlanCodes: planRows.map(({ code }) => code),
@@ -844,6 +854,7 @@ async function main(): Promise<void> {
     permissionKeys: permissions,
     roles,
     provinceCodes: expectedProvinceCodes,
+    minimumCityCount: IRAN_CITY_REFERENCE_COUNT,
     naturalStoneCategoryCodes: expectedCategoryCodes,
     unitCodes: expectedUnitCodes,
     subscriptionPlanCodes: expectedPlanCodes,
