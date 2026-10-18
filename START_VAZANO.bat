@@ -33,7 +33,7 @@ echo [Vazano] Starting API and website...
 echo [Vazano] Open http://localhost:3000 after both services report ready.
 if not defined FILE_SCAN_MODE set "FILE_SCAN_MODE=clamav"
 if not defined CLAMAV_HOST set "CLAMAV_HOST=127.0.0.1"
-if not defined CLAMAV_PORT set "CLAMAV_PORT=53310"
+if not defined CLAMAV_PORT set "CLAMAV_PORT=54100"
 call npm.cmd run dev
 goto :eof
 

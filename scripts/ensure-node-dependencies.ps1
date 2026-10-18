@@ -5,6 +5,27 @@ $lockFile = Join-Path $projectRoot 'package-lock.json'
 $nodeModules = Join-Path $projectRoot 'node_modules'
 $stampFile = Join-Path $nodeModules '.vazano-package-lock.sha256'
 
+function Get-Sha256Hex {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Path
+  )
+
+  $stream = [System.IO.File]::OpenRead($Path)
+  try {
+    $algorithm = [System.Security.Cryptography.SHA256]::Create()
+    try {
+      return ([System.BitConverter]::ToString($algorithm.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
+    }
+    finally {
+      $algorithm.Dispose()
+    }
+  }
+  finally {
+    $stream.Dispose()
+  }
+}
+
 if (-not (Get-Command node.exe -ErrorAction SilentlyContinue)) {
   throw 'Node.js was not found. Install the supported Node.js LTS release, then run START_VAZANO.bat again.'
 }
@@ -15,7 +36,7 @@ if (-not (Test-Path -LiteralPath $lockFile -PathType Leaf)) {
   throw "package-lock.json was not found: $lockFile"
 }
 
-$expectedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $lockFile).Hash.ToLowerInvariant()
+$expectedHash = Get-Sha256Hex -Path $lockFile
 $installedHash = if (Test-Path -LiteralPath $stampFile -PathType Leaf) {
   (Get-Content -LiteralPath $stampFile -Raw).Trim().ToLowerInvariant()
 }
