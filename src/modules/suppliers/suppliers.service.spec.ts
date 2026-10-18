@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { validate } from 'class-validator';
 import type { AuthenticatedUser } from '../auth/auth.types';
@@ -6,6 +6,7 @@ import { PrismaService } from '../../shared/prisma/prisma.service';
 import { SuppliersService } from './suppliers.service';
 import { UpsertSupplierProfileDto } from './upsert-supplier-profile.dto';
 import { PublicSupplierSearchDto } from './public-supplier-search.dto';
+import { CreateSupplierProductDto } from './create-supplier-product.dto';
 
 describe('UpsertSupplierProfileDto', () => {
   it('rejects an overlong capacity description and non-boolean capability flag', async () => {
@@ -20,6 +21,18 @@ describe('UpsertSupplierProfileDto', () => {
     const errors = await validate(input);
 
     expect(errors.map((error) => error.property)).toEqual(expect.arrayContaining(['productionCapacityDescription', 'officialInvoiceAvailable']));
+  });
+});
+
+describe('CreateSupplierProductDto', () => {
+  it('rejects invalid product input before it reaches the service', async () => {
+    const input = Object.assign(new CreateSupplierProductDto(), {
+      categoryId: 'category-1', nameFa: 'ن', sku: '<script>', status: 'PUBLIC', specifications: [],
+    });
+
+    const errors = await validate(input);
+
+    expect(errors.map((error) => error.property)).toEqual(expect.arrayContaining(['nameFa', 'sku', 'status', 'specifications']));
   });
 });
 
@@ -75,5 +88,17 @@ describe('SuppliersService public directory', () => {
     const errors = await validate(input);
 
     expect(errors.map((error) => error.property)).toEqual(expect.arrayContaining(['q', 'category', 'province']));
+  });
+});
+
+describe('SuppliersService product tenant isolation', () => {
+  it('does not expose a supplier product list to another organization', async () => {
+    const service = new SuppliersService({} as PrismaService);
+    const outsider: AuthenticatedUser = {
+      id: 'user-2', mobile: '09120000002', status: 'ACTIVE', permissions: [], globalRoles: [],
+      memberships: [{ organizationId: 'supplier-2', role: 'SUPPLIER_OWNER' }],
+    };
+
+    await expect(service.listProducts(outsider, 'supplier-1')).rejects.toBeInstanceOf(ForbiddenException);
   });
 });
