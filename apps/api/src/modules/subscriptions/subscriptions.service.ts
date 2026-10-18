@@ -28,9 +28,11 @@ export class SubscriptionsService {
         version: true,
       },
     });
-    const onlinePaymentAvailable = this.config.get<string>('PAYMENT_PROVIDER', 'zarinpal') === 'zarinpal'
-      && this.config.get<string>('ZARINPAL_ENABLED') === 'true'
-      && Boolean(this.config.get<string>('ZARINPAL_MERCHANT_ID'));
+    const paymentProvider = this.config.get<string>('PAYMENT_PROVIDER', 'zarinpal');
+    const onlinePaymentAvailable = paymentProvider === 'mock'
+      || (paymentProvider === 'zarinpal'
+        && this.config.get<string>('ZARINPAL_ENABLED') === 'true'
+        && Boolean(this.config.get<string>('ZARINPAL_MERCHANT_ID')));
     return plans.map((plan) => ({ ...plan, checkoutAvailable: plan.isTrial || onlinePaymentAvailable }));
   }
 

@@ -50,4 +50,18 @@ describe('SubscriptionsService receipt access', () => {
       { id: 'paid', isTrial: false, checkoutAvailable: false },
     ]);
   });
+
+  it('enables paid checkout with the local mock provider', async () => {
+    const findMany = jest.fn().mockResolvedValue([
+      { id: 'trial', isTrial: true },
+      { id: 'paid', isTrial: false },
+    ]);
+    const prisma = { subscriptionPlan: { findMany } } as unknown as PrismaService;
+    const service = new SubscriptionsService(prisma, new ConfigService({ PAYMENT_PROVIDER: 'mock' }));
+
+    await expect(service.listPublicPlans()).resolves.toEqual([
+      { id: 'trial', isTrial: true, checkoutAvailable: true },
+      { id: 'paid', isTrial: false, checkoutAvailable: true },
+    ]);
+  });
 });
