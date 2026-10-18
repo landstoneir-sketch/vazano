@@ -65,6 +65,14 @@ export class ObjectStorageService implements OnModuleInit {
     }), { expiresIn: this.downloadTtlSeconds });
   }
 
+  createViewUrl(storageKey: string): Promise<string> {
+    return getSignedUrl(this.client, new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: storageKey,
+      ResponseContentDisposition: 'inline',
+    }), { expiresIn: this.downloadTtlSeconds });
+  }
+
   async inspect(storageKey: string): Promise<{ sizeBytes: number; mimeType?: string }> {
     const result = await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: storageKey }));
     return { sizeBytes: result.ContentLength ?? 0, mimeType: result.ContentType };

@@ -1002,6 +1002,7 @@ model SupplierProduct {
   updatedAt               DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
   supplierProfile         SupplierProfile       @relation(fields: [supplierProfileId], references: [id], onDelete: Cascade)
   category                Category              @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  attachments             Attachment[]
 
   @@unique([supplierProfileId, sku])
   @@index([supplierProfileId, status, updatedAt])
@@ -1122,6 +1123,7 @@ model Attachment {
   rfqId             String?           @map("rfq_id")
   quotationId       String?           @map("quotation_id")
   supplierProfileId String?           @map("supplier_profile_id")
+  supplierProductId String?           @map("supplier_product_id")
   supportTicketId   String?           @map("support_ticket_id")
   purpose           AttachmentPurpose @default(GENERAL)
   status            AttachmentStatus  @default(PENDING_UPLOAD)
@@ -1142,11 +1144,13 @@ model Attachment {
   rfq               Rfq?              @relation(fields: [rfqId], references: [id], onDelete: Cascade)
   quotation         Quotation?        @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   supplierProfile   SupplierProfile?  @relation(fields: [supplierProfileId], references: [id], onDelete: Cascade)
+  supplierProduct   SupplierProduct?  @relation(fields: [supplierProductId], references: [id], onDelete: Cascade)
   supportTicket     SupportTicket?    @relation(fields: [supportTicketId], references: [id], onDelete: Cascade)
 
   @@index([rfqId, status, createdAt])
   @@index([quotationId, status, createdAt])
   @@index([supplierProfileId, status, createdAt])
+  @@index([supplierProductId, status, createdAt])
   @@index([supportTicketId, status, createdAt])
   @@index([organizationId, createdAt])
   @@index([status, createdAt])

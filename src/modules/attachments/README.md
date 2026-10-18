@@ -8,4 +8,5 @@ Files are stored in private S3-compatible object storage; only metadata and owne
 - Production requires the `clamav` adapter. Clean files become `READY`, detected files become `QUARANTINED`, and scanner outages leave files in `PENDING_SCAN` for a safe retry.
 - Development may use the explicit `development-bypass` mode. The core module talks to ClamAV through its standard `INSTREAM` protocol and does not depend on a vendor SDK.
 - RFQ files and supplier-verification documents use separate ownership scopes and storage prefixes. Supplier owners/managers may upload verification documents; verification operators receive read-only access through the `supplier.verify` permission.
+- Supplier product galleries accept at most eight JPG, PNG, or WebP images per product. Images keep a tenant-scoped storage prefix, pass the same signature and malware checks, and become public only when both the product and supplier are publicly eligible.
 - Internal bucket names, object keys, checksums, and scanner details are never returned in supplier profile responses.
