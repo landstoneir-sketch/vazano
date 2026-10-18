@@ -6,6 +6,8 @@ export class CreateOrganizationDto {
   @IsString() @MinLength(2) @MaxLength(180) legalName!: string;
   @IsString() @MinLength(2) @MaxLength(120) displayName!: string;
   @IsOptional() @IsString() @Matches(/^\d{10,11}$/) nationalId?: string;
+  @IsOptional() @IsString() @MaxLength(64) provinceId?: string;
+  @IsOptional() @IsString() @MaxLength(64) cityId?: string;
   @IsOptional() @IsString() @MaxLength(80) province?: string;
   @IsOptional() @IsString() @MaxLength(80) city?: string;
 }
