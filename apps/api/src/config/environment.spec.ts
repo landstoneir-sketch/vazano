@@ -23,6 +23,7 @@ describe('production environment validation', () => {
 
   it.each([
     ['OTP_DEBUG_ENABLED', 'true'],
+    ['API_DOCS_ENABLED', 'true'],
     ['SMS_PROVIDER', 'debug'],
     ['FILE_SCAN_MODE', 'pending'],
     ['WEB_ORIGIN', 'http://vazano.ir'],

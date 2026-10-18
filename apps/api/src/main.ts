@@ -9,6 +9,7 @@ import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/http-exception.filter';
 import { ResponseInterceptor } from './common/response.interceptor';
 import { apiRateLimitGuard, RedisRuntime, requestContext, sessionOriginGuard } from './common/request-security';
+import { configureOpenApi } from './openapi';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -18,6 +19,7 @@ async function bootstrap(): Promise<void> {
   app.setGlobalPrefix('v1');
   app.use(requestContext);
   app.use(apiRateLimitGuard(app.get(RedisRuntime), config));
+  configureOpenApi(app, config);
   app.use(helmet());
   app.use(cookieParser());
   const webOrigin = config.getOrThrow<string>('WEB_ORIGIN');
