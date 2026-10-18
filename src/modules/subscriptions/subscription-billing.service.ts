@@ -65,6 +65,7 @@ export class SubscriptionBillingService {
       return this.activateTrial(user, organizationId, plan, idempotencyKey);
     }
     if (existingTrialRequest) throw new ConflictException('کلید تکرارپذیری برای یک دوره آزمایشی استفاده شده است.');
+    const callbackUrl = `${this.publicApiUrl()}/v1/subscriptions/zarinpal/callback`;
 
     let subscription = existingIntent
       ? await this.prisma.subscription.findUniqueOrThrow({ where: { id: existingIntent.referenceId } })
@@ -79,8 +80,13 @@ export class SubscriptionBillingService {
     if (existingIntent && ['FAILED', 'CANCELLED'].includes(existingIntent.status)) {
       throw new ConflictException('این تلاش پرداخت بسته شده است؛ برای پرداخت مجدد یک درخواست تازه ایجاد کنید.');
     }
-    if (existingIntent?.authority && ['REDIRECT_PENDING', 'VERIFY_PENDING', 'SUCCEEDED'].includes(existingIntent.status)) {
-      const callbackUrl = `${this.publicApiUrl()}/v1/subscriptions/zarinpal/callback`;
+    if (existingIntent?.status === 'SUCCEEDED') {
+      return { paymentIntentId: existingIntent.id, subscriptionId: existingIntent.referenceId, completed: true as const };
+    }
+    if (existingIntent?.status === 'VERIFY_PENDING' || (existingIntent?.status === 'REDIRECT_PENDING' && !existingIntent.authority)) {
+      return { paymentIntentId: existingIntent.id, subscriptionId: existingIntent.referenceId, processing: true as const };
+    }
+    if (existingIntent?.authority && existingIntent.status === 'REDIRECT_PENDING') {
       return { paymentIntentId: existingIntent.id, subscriptionId: existingIntent.referenceId, authority: existingIntent.authority, redirectUrl: this.payments.redirectUrl(existingIntent.authority, callbackUrl) };
     }
 
@@ -133,27 +139,41 @@ export class SubscriptionBillingService {
     if (subscription.planId !== plan.id || subscription.organizationId !== organizationId) {
       throw new ConflictException('درخواست پرداخت با پلن انتخابی سازگار نیست.');
     }
-    const issuedAt = new Date();
-    await this.prisma.billingInvoice.upsert({
-      where: { subscriptionId: subscription.id },
-      create: {
-        invoiceNumber: buildBillingInvoiceNumber(subscription.id, issuedAt),
-        organizationId,
-        purpose: 'SUBSCRIPTION',
-        subscriptionId: subscription.id,
-        paymentIntentId: intent.id,
-        netAmountRial: intent.amountRial,
-        taxRial: 0n,
-        totalAmountRial: intent.amountRial,
-        descriptionFa: subscription.discountCodeSnapshot ? `اشتراک ${plan.nameFa} با کد تخفیف ${subscription.discountCodeSnapshot}` : `اشتراک ${plan.nameFa}`,
-        issuedAt,
-        dueAt: new Date(issuedAt.getTime() + 24 * 60 * 60 * 1000),
-      },
-      update: { paymentIntentId: intent.id, status: 'ISSUED', dueAt: new Date(issuedAt.getTime() + 24 * 60 * 60 * 1000) },
+    const requestClaim = await this.prisma.paymentIntent.updateMany({
+      where: { id: intent.id, status: 'CREATED', authority: null },
+      data: { status: 'REDIRECT_PENDING' },
     });
+    if (requestClaim.count !== 1) {
+      const currentIntent = await this.prisma.paymentIntent.findUniqueOrThrow({ where: { id: intent.id } });
+      if (currentIntent.status === 'SUCCEEDED') {
+        return { paymentIntentId: currentIntent.id, subscriptionId: currentIntent.referenceId, completed: true as const };
+      }
+      if (currentIntent.authority && currentIntent.status === 'REDIRECT_PENDING') {
+        return { paymentIntentId: currentIntent.id, subscriptionId: currentIntent.referenceId, authority: currentIntent.authority, redirectUrl: this.payments.redirectUrl(currentIntent.authority, callbackUrl) };
+      }
+      return { paymentIntentId: currentIntent.id, subscriptionId: currentIntent.referenceId, processing: true as const };
+    }
     try {
-      const result = await this.payments.create({ amountRial: intent.amountRial, description: `خرید ${plan.nameFa}`, callbackUrl: `${this.publicApiUrl()}/v1/subscriptions/zarinpal/callback`, mobile: user.mobile, orderId: subscription.id });
-      await this.prisma.paymentIntent.update({ where: { id: intent.id }, data: { authority: result.authority, status: 'REDIRECT_PENDING' } });
+      const issuedAt = new Date();
+      await this.prisma.billingInvoice.upsert({
+        where: { subscriptionId: subscription.id },
+        create: {
+          invoiceNumber: buildBillingInvoiceNumber(subscription.id, issuedAt),
+          organizationId,
+          purpose: 'SUBSCRIPTION',
+          subscriptionId: subscription.id,
+          paymentIntentId: intent.id,
+          netAmountRial: intent.amountRial,
+          taxRial: 0n,
+          totalAmountRial: intent.amountRial,
+          descriptionFa: subscription.discountCodeSnapshot ? `اشتراک ${plan.nameFa} با کد تخفیف ${subscription.discountCodeSnapshot}` : `اشتراک ${plan.nameFa}`,
+          issuedAt,
+          dueAt: new Date(issuedAt.getTime() + 24 * 60 * 60 * 1000),
+        },
+        update: { paymentIntentId: intent.id, status: 'ISSUED', dueAt: new Date(issuedAt.getTime() + 24 * 60 * 60 * 1000) },
+      });
+      const result = await this.payments.create({ amountRial: intent.amountRial, description: `خرید ${plan.nameFa}`, callbackUrl, mobile: user.mobile, orderId: subscription.id });
+      await this.prisma.paymentIntent.update({ where: { id: intent.id }, data: { authority: result.authority } });
       return { paymentIntentId: intent.id, subscriptionId: subscription.id, ...result };
     } catch (error) {
       await this.closeUnsuccessfulPayment(intent.id, intent.referenceId, 'FAILED', { stage: 'CREATE_PAYMENT_REQUEST' });

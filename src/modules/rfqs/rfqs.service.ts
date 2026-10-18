@@ -589,21 +589,39 @@ export class RfqsService implements OnApplicationBootstrap, OnApplicationShutdow
       throw new ConflictException('این تلاش پرداخت بسته شده است؛ برای پرداخت مجدد یک درخواست تازه ایجاد کنید.');
     }
     const callbackUrl = `${this.config.get<string>('PUBLIC_API_URL') ?? 'http://localhost:3001'}/v1/rfqs/commitments/zarinpal/callback`;
-    if (existing?.authority && ['REDIRECT_PENDING', 'VERIFY_PENDING', 'SUCCEEDED'].includes(existing.status)) {
+    if (existing?.status === 'SUCCEEDED') {
+      return { paymentIntentId: existing.id, completed: true as const };
+    }
+    if (existing?.status === 'VERIFY_PENDING' || (existing?.status === 'REDIRECT_PENDING' && !existing.authority)) {
+      return { paymentIntentId: existing.id, processing: true as const };
+    }
+    if (existing?.authority && existing.status === 'REDIRECT_PENDING') {
       return { paymentIntentId: existing.id, authority: existing.authority, redirectUrl: this.payments.redirectUrl(existing.authority, callbackUrl) };
     }
     const intent = existing ?? await this.prisma.paymentIntent.create({
       data: { provider: this.payments.provider, purpose: 'BUYER_COMMITMENT', amountRial: rfq.commitmentAmountRial, payerOrganizationId: rfq.buyerOrganizationId, referenceType: 'Rfq', referenceId: rfq.id, idempotencyKey },
     });
+    const requestClaim = await this.prisma.paymentIntent.updateMany({
+      where: { id: intent.id, status: 'CREATED', authority: null },
+      data: { status: 'REDIRECT_PENDING' },
+    });
+    if (requestClaim.count !== 1) {
+      const currentIntent = await this.prisma.paymentIntent.findUniqueOrThrow({ where: { id: intent.id } });
+      if (currentIntent.status === 'SUCCEEDED') return { paymentIntentId: currentIntent.id, completed: true as const };
+      if (currentIntent.authority && currentIntent.status === 'REDIRECT_PENDING') {
+        return { paymentIntentId: currentIntent.id, authority: currentIntent.authority, redirectUrl: this.payments.redirectUrl(currentIntent.authority, callbackUrl) };
+      }
+      return { paymentIntentId: currentIntent.id, processing: true as const };
+    }
     try {
       const result = await this.payments.create({ amountRial: intent.amountRial, description: `سپرده تعهد استعلام ${rfq.code}`, callbackUrl, mobile: user.mobile, orderId: intent.id });
       await this.prisma.$transaction([
-        this.prisma.paymentIntent.update({ where: { id: intent.id }, data: { authority: result.authority, status: 'REDIRECT_PENDING' } }),
+        this.prisma.paymentIntent.update({ where: { id: intent.id }, data: { authority: result.authority } }),
         this.prisma.rfq.update({ where: { id: rfq.id }, data: { commitmentStatus: 'PAYMENT_PENDING' } }),
       ]);
       return { paymentIntentId: intent.id, ...result };
     } catch (error) {
-      await this.prisma.paymentIntent.update({ where: { id: intent.id }, data: { status: 'FAILED' } });
+      await this.prisma.paymentIntent.updateMany({ where: { id: intent.id, status: 'REDIRECT_PENDING', authority: null }, data: { status: 'FAILED' } });
       throw error;
     }
   }
