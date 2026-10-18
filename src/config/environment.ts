@@ -41,6 +41,7 @@ export function validateEnvironment(environment: Environment): Environment {
     assertNotPlaceholder('REDIS_URL', environment.REDIS_URL!);
     requireHttpsOrigin(environment, 'WEB_ORIGIN');
     if (environment.OTP_DEBUG_ENABLED === 'true') throw new Error('OTP debug mode must be disabled in production.');
+    if (environment.API_DOCS_ENABLED === 'true') throw new Error('API documentation must be disabled in production.');
     if (environment.SEED_DEMO_DATA === 'true') throw new Error('Development demo data must be disabled in production.');
     for (const key of ['NOTIFICATION_WORKER_ENABLED', 'SUBSCRIPTION_LIFECYCLE_WORKER_ENABLED', 'RFQ_LIFECYCLE_WORKER_ENABLED']) {
       requireEnabled(environment, key);
