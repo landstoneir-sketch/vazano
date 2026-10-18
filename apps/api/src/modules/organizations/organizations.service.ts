@@ -151,7 +151,18 @@ export class OrganizationsService {
     const ownerRole = input.kind === OrganizationKind.BUYER ? MemberRole.BUYER_OWNER : MemberRole.SUPPLIER_OWNER;
     try {
       return await this.prisma.$transaction(async (tx) => {
-        const organization = await tx.organization.create({ data: { ...input, status: input.kind === OrganizationKind.BUYER ? 'ACTIVE' : 'PENDING' } });
+        const location = await this.resolveLocation(tx, input);
+        const organization = await tx.organization.create({
+          data: {
+            kind: input.kind,
+            type: input.type,
+            legalName: input.legalName,
+            displayName: input.displayName,
+            nationalId: input.nationalId,
+            ...location,
+            status: input.kind === OrganizationKind.BUYER ? 'ACTIVE' : 'PENDING',
+          },
+        });
         await tx.organizationMember.create({ data: { organizationId: organization.id, userId, role: ownerRole } });
         await tx.auditLog.create({ data: { actorUserId: userId, organizationId: organization.id, action: 'organization.create', entityType: 'Organization', entityId: organization.id } });
         await tx.outboxEvent.create({ data: { aggregateType: 'Organization', aggregateId: organization.id, eventType: 'ir.vazano.organization.created.v1', payload: { organizationId: organization.id, kind: organization.kind } } });
@@ -161,6 +172,33 @@ export class OrganizationsService {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ConflictException('شناسه ملی قبلاً ثبت شده است.');
       throw error;
     }
+  }
+
+  private async resolveLocation(tx: Prisma.TransactionClient, input: CreateOrganizationDto): Promise<{ province: string | null; city: string | null }> {
+    const provinceId = input.provinceId?.trim();
+    const cityId = input.cityId?.trim();
+    const provinceName = input.province?.trim();
+    const cityName = input.city?.trim();
+    if ((cityId || cityName) && !(provinceId || provinceName)) {
+      throw new BadRequestException('برای انتخاب شهر، استان را نیز انتخاب کنید.');
+    }
+    if (!provinceId && !provinceName) return { province: null, city: null };
+
+    const province = await tx.province.findFirst({
+      where: provinceId ? { id: provinceId, isActive: true } : { nameFa: provinceName, isActive: true },
+      select: { id: true, nameFa: true },
+    });
+    if (!province) throw new BadRequestException('استان انتخاب‌شده معتبر یا فعال نیست.');
+    if (!cityId && !cityName) return { province: province.nameFa, city: null };
+
+    const city = await tx.city.findFirst({
+      where: cityId
+        ? { id: cityId, provinceId: province.id, isActive: true }
+        : { nameFa: cityName, provinceId: province.id, isActive: true },
+      select: { nameFa: true },
+    });
+    if (!city) throw new BadRequestException('شهر انتخاب‌شده با استان مطابقت ندارد یا غیرفعال است.');
+    return { province: province.nameFa, city: city.nameFa };
   }
 
   private async requireActiveMembership(userId: string, organizationId: string) {

@@ -14,6 +14,8 @@ type OrganizationMember = {
   id: string; role: MemberRole; status: 'ACTIVE' | 'INVITED'; createdAt: string;
   user: { id: string; mobileMasked: string; firstName: string | null; lastName: string | null; email: string | null };
 };
+type Province = { id: string; code: string; nameFa: string };
+type City = { id: string; provinceId: string; code: string; nameFa: string; isProvinceCapital: boolean };
 
 const roleLabels: Record<MemberRole, string> = {
   BUYER_OWNER: 'مالک حساب خریدار', BUYER_MEMBER: 'عضو خریدار', SUPPLIER_OWNER: 'مالک حساب فروشنده',
@@ -29,8 +31,10 @@ export function OrganizationPanel() {
   const [displayName, setDisplayName] = useState('');
   const [nationalId, setNationalId] = useState('');
   const [kind, setKind] = useState<'BUYER' | 'SUPPLIER'>('BUYER');
-  const [province, setProvince] = useState('');
-  const [city, setCity] = useState('');
+  const [provinces, setProvinces] = useState<Province[]>([]);
+  const [cities, setCities] = useState<City[]>([]);
+  const [provinceId, setProvinceId] = useState('');
+  const [cityId, setCityId] = useState('');
   const [inviteMobile, setInviteMobile] = useState('');
   const [inviteRole, setInviteRole] = useState<MemberRole>('BUYER_MEMBER');
   const [message, setMessage] = useState('');
@@ -42,13 +46,25 @@ export function OrganizationPanel() {
     void Promise.all([
       apiRequest<Organization[]>('/organizations/mine'),
       apiRequest<Invitation[]>('/organizations/invitations/mine'),
-    ]).then(([organizationItems, invitationItems]) => {
-      if (active) { setOrganizations(organizationItems); setInvitations(invitationItems); }
+      apiRequest<Province[]>('/locations/provinces'),
+    ]).then(([organizationItems, invitationItems, provinceItems]) => {
+      if (active) { setOrganizations(organizationItems); setInvitations(invitationItems); setProvinces(provinceItems); }
     }).catch((reason: unknown) => {
       if (active) setError(reason instanceof Error ? reason.message : 'دریافت حساب‌های سازمانی انجام نشد.');
     });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    if (!provinceId) return () => { active = false; };
+    void apiRequest<City[]>(`/locations/provinces/${provinceId}/cities`)
+      .then((items) => { if (active) setCities(items); })
+      .catch((reason: unknown) => {
+        if (active) setError(reason instanceof Error ? reason.message : 'دریافت شهرهای استان انجام نشد.');
+      });
+    return () => { active = false; };
+  }, [provinceId]);
 
   async function loadOrganizations() {
     const [organizationItems, invitationItems] = await Promise.all([
@@ -72,9 +88,9 @@ export function OrganizationPanel() {
     try {
       await apiRequest('/organizations', {
         method: 'POST',
-        body: JSON.stringify({ kind, type: nationalId ? 'COMPANY' : 'INDIVIDUAL', legalName: displayName, displayName, nationalId: nationalId || undefined, province: province || undefined, city: city || undefined }),
+        body: JSON.stringify({ kind, type: nationalId ? 'COMPANY' : 'INDIVIDUAL', legalName: displayName, displayName, nationalId: nationalId || undefined, provinceId, cityId }),
       });
-      setDisplayName(''); setNationalId(''); setProvince(''); setCity('');
+      setDisplayName(''); setNationalId(''); setProvinceId(''); setCityId(''); setCities([]);
       setMessage(kind === 'BUYER' ? 'حساب خریدار با موفقیت ایجاد شد.' : 'حساب فروشنده ایجاد شد؛ اکنون توانمندی‌های آن را تکمیل کنید.');
       await loadOrganizations();
     } catch (reason: unknown) { setError(reason instanceof Error ? reason.message : 'ایجاد حساب انجام نشد.'); }
@@ -147,9 +163,9 @@ export function OrganizationPanel() {
       <label className="form-field"><span>نوع حساب</span><select value={kind} onChange={(event) => setKind(event.target.value as 'BUYER' | 'SUPPLIER')}><option value="BUYER">خریدار</option><option value="SUPPLIER">فروشنده / تولیدکننده</option></select></label>
       <label className="form-field"><span>نام شخص یا مجموعه</span><input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required minLength={2} /></label>
       <label className="form-field"><span>شناسه ملی شرکت (اختیاری)</span><input value={nationalId} onChange={(event) => setNationalId(event.target.value)} inputMode="numeric" /></label>
-      <label className="form-field"><span>استان</span><input value={province} onChange={(event) => setProvince(event.target.value)} /></label>
-      <label className="form-field"><span>شهر</span><input value={city} onChange={(event) => setCity(event.target.value)} /></label>
-      <button className="button button-primary" disabled={busy}>{busy ? 'در حال ثبت…' : `ایجاد حساب ${kind === 'BUYER' ? 'خریدار' : 'فروشنده'}`}</button>
+      <label className="form-field"><span>استان</span><select value={provinceId} onChange={(event) => { setProvinceId(event.target.value); setCityId(''); setCities([]); }} required><option value="">انتخاب استان</option>{provinces.map((province) => <option value={province.id} key={province.id}>{province.nameFa}</option>)}</select></label>
+      <label className="form-field"><span>شهر</span><select value={cityId} onChange={(event) => setCityId(event.target.value)} disabled={!provinceId} required><option value="">{provinceId ? 'انتخاب شهر' : 'ابتدا استان را انتخاب کنید'}</option>{cities.map((city) => <option value={city.id} key={city.id}>{city.nameFa}{city.isProvinceCapital ? ' · مرکز استان' : ''}</option>)}</select></label>
+      <button className="button button-primary" disabled={busy || !provinceId || !cityId}>{busy ? 'در حال ثبت…' : `ایجاد حساب ${kind === 'BUYER' ? 'خریدار' : 'فروشنده'}`}</button>
     </form>
   </div>;
 }
