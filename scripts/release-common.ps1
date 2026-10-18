@@ -122,12 +122,27 @@ function Invoke-VazanoReleaseSmokeChecks {
   if ($provinces.Count -lt 31) {
     throw "Post-deployment smoke check found only $($provinces.Count) active provinces."
   }
+  $activeCities = 0
+  foreach ($province in $provinces) {
+    $provinceId = [string]$province.id
+    if (-not $provinceId) { throw 'Post-deployment smoke check found a province without an ID.' }
+    $citiesResponse = Invoke-RestMethod -Uri "$gatewayBaseUrl/v1/locations/provinces/$provinceId/cities" -Method Get -TimeoutSec 10
+    $cities = @(Get-VazanoResponseData -Response $citiesResponse)
+    if ($cities.Count -lt 1) {
+      throw "Post-deployment smoke check found no active city for province $($province.nameFa)."
+    }
+    $activeCities += $cities.Count
+  }
+  if ($activeCities -lt 1481) {
+    throw "Post-deployment smoke check found only $activeCities active cities."
+  }
 
   return [pscustomobject]@{
     Paths = $smokePaths
     ActiveCategories = $categories.Count
     ActiveUnits = $units.Count
     ActiveProvinces = $provinces.Count
+    ActiveCities = $activeCities
     ReleaseRevision = $releaseRevision
   }
 }

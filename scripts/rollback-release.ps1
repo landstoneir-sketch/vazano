@@ -52,6 +52,7 @@ try {
     ActiveCategories = $smokeResult.ActiveCategories
     ActiveUnits = $smokeResult.ActiveUnits
     ActiveProvinces = $smokeResult.ActiveProvinces
+    ActiveCities = $smokeResult.ActiveCities
     ReleaseRevision = $smokeResult.ReleaseRevision
     CheckedAt = (Get-Date).ToUniversalTime().ToString('o')
   })
