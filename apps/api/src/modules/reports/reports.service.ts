@@ -11,7 +11,8 @@ export class ReportsService {
 
   async overview(user: AuthenticatedUser) {
     if (!user.permissions.includes('report.read')) throw new ForbiddenException('شما مجوز مشاهده گزارش‌های مدیریتی را ندارید.');
-    const since = new Date();
+    const now = new Date();
+    const since = new Date(now);
     since.setUTCDate(since.getUTCDate() - REPORT_WINDOW_DAYS);
 
     const [
@@ -40,7 +41,7 @@ export class ReportsService {
       this.prisma.supplierProfile.count({ where: { verificationStatus: 'VERIFIED' } }),
       this.prisma.rfq.count(),
       this.prisma.quotation.count(),
-      this.prisma.subscription.count({ where: { status: 'ACTIVE' } }),
+      this.prisma.subscription.count({ where: { status: 'ACTIVE', startsAt: { lte: now }, expiresAt: { gt: now } } }),
       this.prisma.paymentIntent.aggregate({ where: { status: 'SUCCEEDED', purpose: 'SUBSCRIPTION' }, _sum: { amountRial: true } }),
       this.prisma.user.count({ where: { createdAt: { gte: since } } }),
       this.prisma.rfq.count({ where: { createdAt: { gte: since } } }),
