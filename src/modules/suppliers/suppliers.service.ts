@@ -93,7 +93,7 @@ export class SuppliersService {
   async listProducts(user: AuthenticatedUser, organizationId: string) {
     this.assertCanViewSupplier(user, organizationId);
     const profile = await this.prisma.supplierProfile.findUnique({ where: { organizationId }, select: { id: true } });
-    if (!profile) throw new NotFoundException('ابتدا پروفایل فروشنده را تکمیل کنید.');
+    if (!profile) return [];
     return this.prisma.supplierProduct.findMany({
       where: { supplierProfileId: profile.id },
       include: { category: { select: { id: true, nameFa: true, slug: true, attributeBindings: { include: { attribute: true }, orderBy: { sortOrder: 'asc' } } } } },

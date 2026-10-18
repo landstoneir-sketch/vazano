@@ -101,4 +101,15 @@ describe('SuppliersService product tenant isolation', () => {
 
     await expect(service.listProducts(outsider, 'supplier-1')).rejects.toBeInstanceOf(ForbiddenException);
   });
+
+  it('returns an empty product list while the supplier profile is not created yet', async () => {
+    const prisma = { supplierProfile: { findUnique: jest.fn().mockResolvedValue(null) } } as unknown as PrismaService;
+    const service = new SuppliersService(prisma);
+    const owner: AuthenticatedUser = {
+      id: 'user-1', mobile: '09120000001', status: 'ACTIVE', permissions: [], globalRoles: [],
+      memberships: [{ organizationId: 'supplier-1', role: 'SUPPLIER_OWNER' }],
+    };
+
+    await expect(service.listProducts(owner, 'supplier-1')).resolves.toEqual([]);
+  });
 });
