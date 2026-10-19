@@ -413,6 +413,11 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   await expect(page.getByRole('button', { name: 'پرداخت کارمزد و فعال‌سازی خدمت' })).toBeVisible();
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'پرداخت کارمزد و فعال‌سازی خدمت' }).click();
+  await page.waitForURL(/\/payments\/demo|qualityPayment=/);
+  if (page.url().includes('/payments/demo')) {
+    await expect(page.getByRole('heading', { name: 'شبیه‌سازی پرداخت' })).toBeVisible();
+    await page.getByRole('button', { name: 'پرداخت موفق آزمایشی' }).click();
+  }
   await expect(page).toHaveURL(/qualityPayment=success/);
   await expect(page.getByText('پرداخت کنترل کیفیت تأیید شد و درخواست وارد صف عملیات وازانو شده است.')).toBeVisible();
   const qualityControl = await prisma.qualityControlRequest.findUnique({ where: { rfqId: rfqId! }, include: { paymentReceipt: true } });
