@@ -96,6 +96,9 @@ test('کد تخفیف در خرید اشتراک اعمال و پرداخت قط
   await expect(planCard.getByText(/تخفیف .* کد E2E10/)).toBeVisible();
   await planCard.getByRole('button', { name: /خرید این پلن|تمدید با این پلن/ }).click();
 
+  await expect(page).toHaveURL(/\/payments\/demo/);
+  await expect(page.getByRole('heading', { name: 'شبیه‌سازی پرداخت' })).toBeVisible();
+  await page.getByRole('button', { name: 'پرداخت موفق آزمایشی' }).click();
   await expect(page).toHaveURL(/\/supplier\/subscription\?payment=success/);
   await expect(page.getByText('پرداخت با موفقیت تأیید شد و اشتراک شما فعال است.')).toBeVisible();
 

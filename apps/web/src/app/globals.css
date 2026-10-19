@@ -123,6 +123,19 @@ button, input, select, textarea { font: inherit; }
 .message-success { color: var(--success); background: #f0fdf4; }
 .message-warning { color: #6f4a08; background: #fff5d8; }
 .muted { color: var(--muted); }
+.demo-payment-shell { min-height: calc(100vh - 180px); display: grid; place-items: center; padding-block: 64px; }
+.demo-payment-card { width: min(620px,100%); position: relative; display: grid; gap: 22px; overflow: hidden; padding: 34px; }
+.demo-payment-card h1 { margin: 4px 0 8px; font-size: clamp(1.8rem,4vw,2.5rem); }
+.demo-payment-badge { position: absolute; top: 20px; left: -38px; width: 160px; padding: 5px; transform: rotate(-42deg); background: var(--accent); color: #342300; text-align: center; font-size: .75rem; font-weight: 900; }
+.demo-payment-mark { width: 68px; height: 68px; display: grid; place-items: center; border: 1px solid #badac8; border-radius: 22px; background: #eaf6ef; color: var(--success); font-size: 2rem; font-weight: 900; }
+.demo-payment-details { display: grid; gap: 0; margin: 0; border: 1px solid var(--border); border-radius: 15px; background: #faf6ee; }
+.demo-payment-details > div { display: grid; grid-template-columns: 130px 1fr; gap: 16px; padding: 12px 16px; }
+.demo-payment-details > div + div { border-top: 1px solid var(--border); }
+.demo-payment-details dt { color: var(--muted); }
+.demo-payment-details dd { margin: 0; font-weight: 800; overflow-wrap: anywhere; }
+.demo-payment-actions { margin-top: 0; }
+.demo-payment-actions form { flex: 1 1 210px; }
+.demo-payment-actions .button { width: 100%; }
 .dashboard { padding: 54px 0; }
 .dashboard > h1 { margin: 8px 0 4px; font-size: clamp(2rem,4vw,3rem); line-height: 1.35; }
 .dashboard > .muted { max-width: 760px; margin-top: 0; }
