@@ -6,12 +6,9 @@ export default async function NewRfqPage({ searchParams }: { searchParams: Promi
   const { edit } = await searchParams;
   return <section className="container dashboard rfq-page">
     <header className="dashboard-page-heading">
-      <div><div className="eyebrow">استعلام قیمت</div><h1>{edit ? 'ویرایش پیش‌نویس استعلام' : 'ثبت استعلام جدید'}</h1><p className="muted">نیاز پروژه را مرحله‌به‌مرحله وارد کنید. ذخیره این فرم فقط یک پیش‌نویس می‌سازد و تا تأیید شما برای فروشندگان ارسال نمی‌شود.</p></div>
-      <aside><strong>نمایش قیمت بدون مالیات</strong><span>تمام استعلام‌های پایلوت پیش از انتشار توسط وازانو بازبینی می‌شوند.</span></aside>
+      <div><div className="eyebrow">استعلام قیمت</div><h1>{edit ? 'ویرایش پیش‌نویس استعلام' : 'ثبت استعلام جدید'}</h1><p className="muted">در پنج مرحله کوتاه، نیاز خریدتان را ثبت کنید. اطلاعات شما تا تأیید نهایی برای هیچ فروشنده‌ای ارسال نمی‌شود.</p></div>
+      <aside><strong>قیمت‌های قابل مقایسه</strong><span>قیمت‌ها بدون مالیات نمایش داده می‌شوند و استعلام‌های پایلوت پیش از انتشار بازبینی خواهند شد.</span></aside>
     </header>
-    <ol className="rfq-completion-guide" aria-label="مراحل تکمیل استعلام">
-      <li><b>۱</b><span>پروژه</span></li><li><b>۲</b><span>محصولات</span></li><li><b>۳</b><span>مشخصات فنی</span></li><li><b>۴</b><span>تحویل</span></li><li><b>۵</b><span>خدمات</span></li>
-    </ol>
     <NewRfqForm draftId={edit} />
   </section>;
 }
