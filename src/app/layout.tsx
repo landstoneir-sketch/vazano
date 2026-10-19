@@ -1,15 +1,9 @@
 import type { Metadata } from 'next';
 import type { Route } from 'next';
-import { Vazirmatn } from 'next/font/google';
 import Link from 'next/link';
 import { AccountNavigation } from '@/components/account-navigation';
+import '@fontsource-variable/vazirmatn';
 import './globals.css';
-
-const vazirmatn = Vazirmatn({
-  subsets: ['arabic', 'latin'],
-  display: 'swap',
-  variable: '--font-vazirmatn',
-});
 
 export const metadata: Metadata = {
   title: { default: 'وازانو', template: '%s | وازانو' },
@@ -18,7 +12,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="fa" dir="rtl" className={vazirmatn.variable} data-scroll-behavior="smooth">
+    <html lang="fa" dir="rtl" data-scroll-behavior="smooth">
       <body>
         <a className="skip-link" href="#main-content">پرش به محتوای اصلی</a>
         <header className="site-header">
