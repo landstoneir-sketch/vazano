@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { basename, resolve } from 'node:path';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthController } from './modules/health/health.controller';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
@@ -26,11 +27,19 @@ import { ReviewsModule } from './modules/reviews/reviews.module';
 import { validateEnvironment } from './config/environment';
 import { RedisRuntime } from './common/request-security';
 
+const invocationDirectory = process.env.INIT_CWD ?? process.cwd();
+const repositoryRoot =
+  basename(invocationDirectory) === 'api' && basename(resolve(invocationDirectory, '..')) === 'apps'
+    ? resolve(invocationDirectory, '../..')
+    : invocationDirectory;
+
+const environmentFiles = [resolve(repositoryRoot, '.env'), resolve(repositoryRoot, 'apps/api/.env')];
+
 @Module({
   imports: [
     // The repository-root environment is canonical in local development. The
     // workspace-local file remains a backwards-compatible fallback only.
-    ConfigModule.forRoot({ isGlobal: true, cache: true, envFilePath: ['../../.env', '.env'], validate: validateEnvironment }),
+    ConfigModule.forRoot({ isGlobal: true, cache: true, envFilePath: environmentFiles, validate: validateEnvironment }),
     PrismaModule,
     AuthModule,
     UsersModule,
