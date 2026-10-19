@@ -1,0 +1,42 @@
+import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { SubscriptionLifecycleService } from './subscription-lifecycle.service';
+
+@Injectable()
+export class SubscriptionLifecycleWorker implements OnApplicationBootstrap, OnApplicationShutdown {
+  private readonly logger = new Logger(SubscriptionLifecycleWorker.name);
+  private timer?: NodeJS.Timeout;
+  private running = false;
+
+  constructor(
+    private readonly config: ConfigService,
+    private readonly lifecycle: SubscriptionLifecycleService,
+  ) {}
+
+  onApplicationBootstrap(): void {
+    if (this.config.get<string>('SUBSCRIPTION_LIFECYCLE_WORKER_ENABLED', 'true') !== 'true') return;
+    void this.process();
+    const intervalMs = this.config.get<number>('SUBSCRIPTION_LIFECYCLE_WORKER_INTERVAL_MS', 60_000);
+    this.timer = setInterval(() => void this.process(), intervalMs);
+    this.timer.unref();
+  }
+
+  onApplicationShutdown(): void {
+    if (this.timer) clearInterval(this.timer);
+  }
+
+  private async process(): Promise<void> {
+    if (this.running) return;
+    this.running = true;
+    try {
+      const result = await this.lifecycle.process();
+      if (result.reminders + result.smsReminders + result.enteredGrace + result.expired + result.overdueInvoices > 0) {
+        this.logger.log(`Subscription lifecycle processed inApp=${result.reminders}, sms=${result.smsReminders}, grace=${result.enteredGrace}, expired=${result.expired}, overdueInvoices=${result.overdueInvoices}.`);
+      }
+    } catch (error: unknown) {
+      this.logger.error('Subscription lifecycle processing failed.', error instanceof Error ? error.stack : undefined);
+    } finally {
+      this.running = false;
+    }
+  }
+}

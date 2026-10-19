@@ -1,0 +1,109 @@
+param(
+  [Parameter(Mandatory = $true)]
+  [string]$BackupPath
+)
+
+$ErrorActionPreference = 'Stop'
+$projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$resolvedBackup = Resolve-Path -LiteralPath $BackupPath
+$backup = Get-Item -LiteralPath $resolvedBackup.Path
+if ($backup.PSIsContainer -or $backup.Length -le 0) { throw 'The backup path is invalid.' }
+$checksumPath = "$($backup.FullName).sha256"
+if (-not (Test-Path -LiteralPath $checksumPath -PathType Leaf)) { throw 'The backup checksum file is missing.' }
+$expectedHash = ((Get-Content -LiteralPath $checksumPath -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+if ($expectedHash -notmatch '^[0-9a-f]{64}$') { throw 'The backup checksum file is invalid.' }
+$actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $backup.FullName).Hash.ToLowerInvariant()
+if ($actualHash -ne $expectedHash) { throw 'The backup checksum does not match the backup file.' }
+
+$suffix = ([Guid]::NewGuid().ToString('N')).Substring(0, 12)
+$databaseName = "vazano_restore_verify_$suffix"
+$containerPath = "/tmp/$($backup.Name)-$suffix.dump"
+$countContainerPath = "/tmp/vazano-restore-count-$suffix.txt"
+$countHostPath = Join-Path ([System.IO.Path]::GetTempPath()) "vazano-restore-count-$suffix.txt"
+if ($databaseName -notmatch '^vazano_restore_verify_[a-f0-9]{12}$') { throw 'The temporary database name is invalid.' }
+$originalLocation = Get-Location
+
+function Assert-DockerEngine {
+  $docker = Get-Command docker.exe -ErrorAction Stop
+  $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+  $startInfo.FileName = $docker.Source
+  $startInfo.Arguments = 'info --format "{{.ServerVersion}}"'
+  $startInfo.UseShellExecute = $false
+  $startInfo.RedirectStandardOutput = $true
+  $startInfo.RedirectStandardError = $true
+  $process = New-Object System.Diagnostics.Process
+  $process.StartInfo = $startInfo
+
+  try {
+    [void]$process.Start()
+    if (-not $process.WaitForExit(10000)) {
+      $process.Kill()
+      throw 'Docker Desktop did not become ready within 10 seconds.'
+    }
+    if ($process.ExitCode -ne 0) { throw 'Docker Desktop is not running.' }
+  }
+  finally {
+    $process.Dispose()
+  }
+}
+
+Assert-DockerEngine
+
+try {
+  Set-Location -LiteralPath $projectRoot
+  & docker compose cp $backup.FullName "postgres:$containerPath"
+  if ($LASTEXITCODE -ne 0) { throw 'Copying the backup for restore verification failed.' }
+
+  $createCommand = 'PGPASSWORD="$POSTGRES_PASSWORD" createdb -U "$POSTGRES_USER" "{0}"' -f $databaseName
+  & docker compose exec -T postgres sh -c $createCommand
+  if ($LASTEXITCODE -ne 0) { throw 'Creating the temporary verification database failed.' }
+
+  $restoreCommand = 'PGPASSWORD="$POSTGRES_PASSWORD" pg_restore -U "$POSTGRES_USER" -d "{0}" --no-owner --no-privileges "{1}"' -f $databaseName, $containerPath
+  & docker compose exec -T postgres sh -c $restoreCommand
+  if ($LASTEXITCODE -ne 0) { throw 'Restoring the backup into the temporary database failed.' }
+
+  $countCommand = 'PGPASSWORD="$POSTGRES_PASSWORD" psql -U "$POSTGRES_USER" -d "{0}" -Atc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ''public'';" > "{1}"' -f $databaseName, $countContainerPath
+  $countCommandBase64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($countCommand))
+  $countRunner = "echo $countCommandBase64 | base64 -d | sh"
+  & docker compose exec -T postgres sh -c $countRunner
+  if ($LASTEXITCODE -ne 0) { throw 'Inspecting the restored database failed.' }
+
+  & docker compose cp "postgres:$countContainerPath" $countHostPath
+  if ($LASTEXITCODE -ne 0) { throw 'Copying the restore verification result failed.' }
+  $tableCountText = Get-Content -LiteralPath $countHostPath -Raw
+  $tableCount = 0
+  if (-not [int]::TryParse($tableCountText.Trim(), [ref]$tableCount)) {
+    throw 'The restored database table count is invalid.'
+  }
+  if ($tableCount -lt 10) { throw "The restored table count is unexpectedly low: $tableCount" }
+
+  $verifiedAtUtc = (Get-Date).ToUniversalTime().ToString('o')
+  $verificationPath = "$($backup.FullName).verified.json"
+  $verification = [ordered]@{
+    Version = 1
+    BackupFile = $backup.Name
+    BackupSha256 = $actualHash
+    VerifiedAtUtc = $verifiedAtUtc
+    RestoredTableCount = $tableCount
+  }
+  [System.IO.File]::WriteAllText($verificationPath, ($verification | ConvertTo-Json), [System.Text.UTF8Encoding]::new($false))
+  Write-Output ([pscustomobject]@{
+    Verified = $true
+    BackupPath = $backup.FullName
+    VerificationPath = $verificationPath
+    BackupSha256 = $actualHash
+    RestoredTableCount = $tableCount
+    TemporaryDatabase = $databaseName
+  })
+}
+finally {
+  Set-Location -LiteralPath $projectRoot
+  if ($databaseName -match '^vazano_restore_verify_[a-f0-9]{12}$') {
+    $dropCommand = 'PGPASSWORD="$POSTGRES_PASSWORD" dropdb -U "$POSTGRES_USER" --if-exists --force "{0}"' -f $databaseName
+    try { & docker compose exec -T postgres sh -c $dropCommand 2>$null | Out-Null } catch { }
+  }
+  try { & docker compose exec -T postgres rm -f $containerPath 2>$null | Out-Null } catch { }
+  try { & docker compose exec -T postgres rm -f $countContainerPath 2>$null | Out-Null } catch { }
+  Remove-Item -LiteralPath $countHostPath -Force -ErrorAction SilentlyContinue
+  Set-Location -LiteralPath $originalLocation
+}

@@ -1,0 +1,16 @@
+import { IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+
+export class StartSubscriptionCheckoutDto {
+  @IsString()
+  planId!: string;
+
+  @IsString()
+  @MinLength(8)
+  @MaxLength(120)
+  idempotencyKey!: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^[A-Za-z0-9_-]{3,32}$/)
+  discountCode?: string;
+}

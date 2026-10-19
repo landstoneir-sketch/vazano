@@ -1,43 +1,46 @@
 {
   "name": "vazano",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
+  "description": "Vazano — multi-tenant RFQ marketplace for Iran's building materials industry",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:e2e": "playwright test"
-  },
-  "dependencies": {
-    "@hookform/resolvers": "^5.4.0",
-    "@radix-ui/react-slot": "^1.3.0",
-    "clsx": "^2.1.1",
-    "lucide-react": "^1.25.0",
-    "next": "16.2.10",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "react-hook-form": "^7.82.0",
-    "tailwind-merge": "^3.6.0",
-    "zod": "^4.4.3",
-    "zustand": "^5.0.14"
+    "dev": "concurrently -n api,web -c blue,green \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm run start:dev --workspace @vazano/api",
+    "dev:web": "npm run dev --workspace @vazano/web",
+    "start:e2e:api": "npm run build --workspace @vazano/api && npm run start --workspace @vazano/api",
+    "start:e2e:web": "npm run dev:e2e --workspace @vazano/web",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "pretest:e2e": "node scripts/cleanup-e2e-ports.mjs",
+    "test:e2e": "node scripts/run-playwright-e2e.mjs",
+    "build": "npm run build --workspaces --if-present",
+    "prisma:generate": "npm run prisma:generate --workspace @vazano/api",
+    "prisma:migrate": "npm run prisma:migrate --workspace @vazano/api",
+    "prisma:deploy": "npm run prisma:deploy --workspace @vazano/api",
+    "prisma:seed": "npm run prisma:seed --workspace @vazano/api"
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.1",
-    "@tailwindcss/postcss": "^4",
-    "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.2",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "@vitejs/plugin-react": "^6.0.3",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.10",
-    "jsdom": "^29.1.1",
-    "tailwindcss": "^4",
-    "typescript": "^5",
-    "vitest": "^4.1.10"
+    "@playwright/test": "^1.63.0",
+    "concurrently": "9.2.5",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "allowScripts": {
+    "@parcel/watcher@2.6.0": true,
+    "argon2@0.44.0": true,
+    "esbuild@0.28.2": true,
+    "sharp@0.34.5": true,
+    "unrs-resolver@1.12.2": true,
+    "@prisma/client@6.12.0": true,
+    "@prisma/engines@6.12.0": true,
+    "prisma@6.12.0": true
   }
 }

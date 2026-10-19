@@ -1,0 +1,1576 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum SecurityEventSeverity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum CmsPublicationStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum OrganizationType {
+  INDIVIDUAL
+  COMPANY
+}
+
+enum OrganizationKind {
+  BUYER
+  SUPPLIER
+  PLATFORM
+}
+
+enum OrganizationStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+enum MemberRole {
+  BUYER_OWNER
+  BUYER_MEMBER
+  SUPPLIER_OWNER
+  SUPPLIER_MANAGER
+  SUPPLIER_SALES
+}
+
+enum MemberStatus {
+  INVITED
+  ACTIVE
+  REMOVED
+}
+
+enum OtpPurpose {
+  LOGIN
+  SIGNUP
+  RESET
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+enum RfqEntryMethod {
+  STANDARD
+  CONVERSATIONAL
+  BOQ
+  IMAGE
+  DRAWING
+  NAMEPLATE
+  FILE
+}
+
+enum RfqLifecycleState {
+  DRAFT
+  SUBMITTED
+  PUBLISHED
+  CLOSED
+  CANCELLED
+  EXPIRED
+  ARCHIVED
+}
+
+enum RfqOperationalStatus {
+  DRAFT_INCOMPLETE
+  READY_FOR_REVIEW
+  UNDER_REVIEW
+  NEEDS_CHANGES
+  WAITING_COMMITMENT
+  READY_TO_PUBLISH
+  OPEN_FOR_QUOTES
+  HAS_QUOTES
+  NEGOTIATING
+  SELLER_SELECTED
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum RfqApprovalStatus {
+  NOT_SUBMITTED
+  PENDING
+  NEEDS_CHANGES
+  APPROVED
+  REJECTED
+}
+
+enum RfqSource {
+  BUYER_SELF_SERVICE
+  PLATFORM_OPERATOR
+}
+
+enum CommitmentStatus {
+  NOT_REQUIRED
+  REQUIRED
+  PAYMENT_PENDING
+  HELD
+  RELEASED_TO_WALLET
+  REFUND_PENDING
+  REFUNDED
+  FORFEITED
+}
+
+enum ProductAttributeDataType {
+  TEXT
+  NUMBER
+  SINGLE_SELECT
+  MULTI_SELECT
+  BOOLEAN
+}
+
+enum SubscriptionStatus {
+  DRAFT
+  ACTIVE
+  GRACE
+  EXPIRED
+  SUSPENDED
+  CANCELLED
+}
+
+enum BillingCycle {
+  P1M
+  P3M
+  P6M
+  P1Y
+  CUSTOM
+}
+
+enum ReminderChannel {
+  SMS
+  IN_APP
+  EMAIL
+}
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  CANCELLED
+  FAILED
+}
+
+enum NotificationChannel {
+  IN_APP
+  SMS
+  EMAIL
+  PUSH
+}
+
+enum NotificationStatus {
+  READY
+  DELIVERED
+  FAILED
+  CANCELLED
+}
+
+enum NotificationDispatchStatus {
+  PROCESSED
+  FAILED
+}
+
+enum AttachmentStatus {
+  PENDING_UPLOAD
+  PENDING_SCAN
+  READY
+  QUARANTINED
+  REJECTED
+  DELETED
+}
+
+enum AttachmentPurpose {
+  GENERAL
+  PRODUCT_IMAGE
+  DRAWING
+  BILL_OF_QUANTITIES
+  SPECIFICATION
+  PROFORMA
+  CERTIFICATE
+  PAYMENT_RECEIPT
+}
+
+enum MessageThreadStatus {
+  OPEN
+  CLOSED
+  ARCHIVED
+}
+
+enum MessageKind {
+  USER
+  SYSTEM
+}
+
+enum PaymentProvider {
+  ZARINPAL
+  MOCK
+}
+
+enum PaymentPurpose {
+  SUBSCRIPTION
+  BUYER_COMMITMENT
+  QUALITY_CONTROL
+}
+
+enum PaymentStatus {
+  CREATED
+  REDIRECT_PENDING
+  VERIFY_PENDING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum PaymentReconciliationStatus {
+  NOT_CHECKED
+  MATCHED
+  ACTION_REQUIRED
+  PROVIDER_UNCONFIRMED
+}
+
+enum PaymentReconciliationResolution {
+  CUSTOMER_RETRY_REQUIRED
+  PROVIDER_SUPPORT_REQUIRED
+  REFUND_REVIEW_REQUIRED
+  NO_FINANCIAL_ACTION
+}
+
+enum BillingInvoicePurpose {
+  SUBSCRIPTION
+  QUALITY_CONTROL
+  CONTRACT_SERVICE
+}
+
+enum BillingInvoiceStatus {
+  ISSUED
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum SubscriptionDiscountType {
+  PERCENTAGE
+  FIXED_RIAL
+}
+
+enum DiscountRedemptionStatus {
+  RESERVED
+  REDEEMED
+  CANCELLED
+}
+
+enum CreditEntryType {
+  GRANT
+  RESERVE
+  CONSUME
+  RELEASE
+  REFUND
+  EXPIRE
+  ADJUSTMENT
+}
+
+enum QualityControlStatus {
+  REQUESTED
+  QUOTED
+  ACCEPTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ContractRequestStatus {
+  REQUESTED
+  UNDER_REVIEW
+  TERMS_PREPARED
+  ACCEPTED
+  COMPLETED
+  CANCELLED
+}
+
+enum SupplierVerificationStatus {
+  INCOMPLETE
+  PENDING
+  VERIFIED
+  NEEDS_CORRECTION
+  REJECTED
+  SUSPENDED
+}
+
+enum SupplierProductStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum RfqInvitationStatus {
+  INVITED
+  VIEWED
+  RESPONDED
+  DECLINED
+  EXPIRED
+}
+
+enum QuotationStatus {
+  DRAFT
+  SUBMITTED
+  REVISED
+  WITHDRAWN
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum SupportTicketType {
+  QUESTION
+  SERVICE_REQUEST
+  ISSUE
+  COMPLAINT
+  VIOLATION_REPORT
+  APPEAL
+}
+
+enum SupportTicketCategory {
+  PRODUCT_TECHNICAL
+  ACCOUNT_ACCESS
+  RFQ
+  QUOTATION
+  SUPPLIER_BUYER_CONDUCT
+  BILLING
+  PRIVACY_SECURITY
+  COMMUNICATION
+  POLICY
+  OTHER
+}
+
+enum SupportTicketPriority {
+  P1
+  P2
+  P3
+  P4
+}
+
+enum SupportTicketStatus {
+  SUBMITTED
+  ACKNOWLEDGED
+  IN_REVIEW
+  WAITING_FOR_REQUESTER
+  RESOLVED
+  CLOSED
+  REJECTED
+}
+
+enum SupplierReviewStatus {
+  PUBLISHED
+  HIDDEN
+}
+
+model User {
+  id                             String                      @id @default(cuid())
+  mobile                         String                      @unique
+  email                          String?                     @unique
+  firstName                      String?                     @map("first_name")
+  lastName                       String?                     @map("last_name")
+  locale                         String                      @default("fa-IR")
+  status                         UserStatus                  @default(ACTIVE)
+  mobileVerifiedAt               DateTime?                   @map("mobile_verified_at") @db.Timestamptz(3)
+  emailVerifiedAt                DateTime?                   @map("email_verified_at") @db.Timestamptz(3)
+  createdAt                      DateTime                    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                      DateTime                    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  memberships                    OrganizationMember[]
+  sessions                       Session[]
+  userRoles                      UserRole[]
+  auditLogs                      AuditLog[]
+  createdRfqs                    Rfq[]                       @relation("RfqCreator")
+  buyerContactRfqs               Rfq[]                       @relation("RfqBuyerContact")
+  operatedRfqs                   Rfq[]                       @relation("RfqOperator")
+  createdQuotations              Quotation[]                 @relation("QuotationCreator")
+  notifications                  Notification[]
+  uploadedAttachments            Attachment[]                @relation("AttachmentUploader")
+  sentMessages                   Message[]                   @relation("MessageSender")
+  messageReadStates              MessageThreadReadState[]
+  requestedSupportTickets        SupportTicket[]             @relation("SupportTicketRequester")
+  assignedSupportTickets         SupportTicket[]             @relation("SupportTicketAssignee")
+  supportComments                SupportTicketComment[]      @relation("SupportCommentAuthor")
+  securityEvents                 SecurityEvent[]             @relation("SecurityEventSubject")
+  resolvedSecurityEvents         SecurityEvent[]             @relation("SecurityEventResolver")
+  updatedCmsPages                CmsPage[]                   @relation("CmsPageUpdater")
+  updatedFaqItems                FaqItem[]                   @relation("FaqItemUpdater")
+  requestedContracts             ContractRequest[]           @relation("ContractRequester")
+  resolvedPaymentReconciliations PaymentIntent[]             @relation("PaymentReconciliationResolver")
+  manualSubscriptionRenewals     ManualSubscriptionRenewal[] @relation("ManualSubscriptionRenewalActor")
+  createdSupplierReviews         SupplierReview[]            @relation("SupplierReviewCreator")
+  moderatedSupplierReviews       SupplierReview[]            @relation("SupplierReviewModerator")
+  legalAcceptances               LegalAcceptance[]
+
+  @@map("users")
+}
+
+model LegalAcceptance {
+  id                 String   @id @default(cuid())
+  userId             String   @map("user_id")
+  termsPageId        String   @map("terms_page_id")
+  termsVersion       Int      @map("terms_version")
+  termsContentHash   String   @map("terms_content_hash")
+  privacyPageId      String   @map("privacy_page_id")
+  privacyVersion     Int      @map("privacy_version")
+  privacyContentHash String   @map("privacy_content_hash")
+  ipAddress          String?  @map("ip_address")
+  userAgent          String?  @map("user_agent")
+  acceptedAt         DateTime @default(now()) @map("accepted_at") @db.Timestamptz(3)
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, termsPageId, termsVersion, privacyPageId, privacyVersion], name: "user_legal_versions")
+  @@index([userId, acceptedAt])
+  @@map("legal_acceptances")
+}
+
+model CmsPage {
+  id               String               @id @default(cuid())
+  slug             String               @unique
+  titleFa          String               @map("title_fa")
+  excerptFa        String?              @map("excerpt_fa")
+  bodyFa           String               @map("body_fa") @db.Text
+  seoTitleFa       String?              @map("seo_title_fa")
+  seoDescriptionFa String?              @map("seo_description_fa")
+  status           CmsPublicationStatus @default(DRAFT)
+  version          Int                  @default(1)
+  publishedAt      DateTime?            @map("published_at") @db.Timestamptz(3)
+  updatedByUserId  String               @map("updated_by_user_id")
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  updatedBy        User                 @relation("CmsPageUpdater", fields: [updatedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([status, updatedAt])
+  @@map("cms_pages")
+}
+
+model FaqItem {
+  id              String   @id @default(cuid())
+  questionFa      String   @map("question_fa")
+  answerFa        String   @map("answer_fa") @db.Text
+  category        String?
+  sortOrder       Int      @default(0) @map("sort_order")
+  isPublished     Boolean  @default(false) @map("is_published")
+  version         Int      @default(1)
+  updatedByUserId String   @map("updated_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  updatedBy       User     @relation("FaqItemUpdater", fields: [updatedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([isPublished, sortOrder])
+  @@map("faq_items")
+}
+
+model Organization {
+  id                              String                           @id @default(cuid())
+  kind                            OrganizationKind
+  type                            OrganizationType
+  legalName                       String                           @map("legal_name")
+  displayName                     String                           @map("display_name")
+  nationalId                      String?                          @unique @map("national_id")
+  province                        String?
+  city                            String?
+  status                          OrganizationStatus               @default(PENDING)
+  subscriptionTrialRedeemedAt     DateTime?                        @map("subscription_trial_redeemed_at") @db.Timestamptz(3)
+  createdAt                       DateTime                         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                       DateTime                         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  members                         OrganizationMember[]
+  scopedRoles                     UserRole[]
+  buyerRfqs                       Rfq[]
+  subscriptions                   Subscription[]
+  manualSubscriptionRenewals      ManualSubscriptionRenewal[]
+  billingInvoices                 BillingInvoice[]
+  subscriptionDiscountRedemptions SubscriptionDiscountRedemption[]
+  buyerSupplierReviews            SupplierReview[]                 @relation("BuyerSupplierReviews")
+  receivedSupplierReviews         SupplierReview[]                 @relation("ReceivedSupplierReviews")
+  paymentReceipts                 PaymentReceipt[]
+  creditWallet                    CreditWallet?
+  supplierProfile                 SupplierProfile?
+  rfqInvitations                  RfqInvitation[]                  @relation("InvitedSupplier")
+  quotations                      Quotation[]                      @relation("SupplierQuotations")
+  notifications                   Notification[]
+  attachments                     Attachment[]
+  buyerMessageThreads             MessageThread[]                  @relation("BuyerMessageThreads")
+  supplierMessageThreads          MessageThread[]                  @relation("SupplierMessageThreads")
+  sentMessages                    Message[]                        @relation("MessageSenderOrganization")
+  supportTickets                  SupportTicket[]                  @relation("SupportTicketOrganization")
+  subjectSupportTickets           SupportTicket[]                  @relation("SupportTicketSubjectOrganization")
+  buyerContractRequests           ContractRequest[]                @relation("BuyerContractRequests")
+  supplierContractRequests        ContractRequest[]                @relation("SupplierContractRequests")
+
+  @@index([kind, status])
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
+  userId         String       @map("user_id")
+  role           MemberRole
+  status         MemberStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId, status])
+  @@map("organization_members")
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  key         String           @unique
+  nameFa      String           @map("name_fa")
+  description String?
+  isSystem    Boolean          @default(true) @map("is_system")
+  permissions RolePermission[]
+  userRoles   UserRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  key         String           @unique
+  description String?
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id")
+  permissionId String     @map("permission_id")
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id             String        @id @default(cuid())
+  userId         String        @map("user_id")
+  roleId         String        @map("role_id")
+  organizationId String?       @map("organization_id")
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           Role          @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([userId, organizationId])
+  @@map("user_roles")
+}
+
+model Session {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(3)
+  lastSeenAt DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+  ipAddress  String?   @map("ip_address")
+  userAgent  String?   @map("user_agent")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("sessions")
+}
+
+model OtpCode {
+  id         String     @id @default(cuid())
+  mobile     String
+  purpose    OtpPurpose
+  codeHash   String     @map("code_hash")
+  attempts   Int        @default(0)
+  ipAddress  String?    @map("ip_address")
+  expiresAt  DateTime   @map("expires_at") @db.Timestamptz(3)
+  consumedAt DateTime?  @map("consumed_at") @db.Timestamptz(3)
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([mobile, purpose, createdAt])
+  @@index([ipAddress, createdAt])
+  @@map("otp_codes")
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  actorUserId    String?  @map("actor_user_id")
+  organizationId String?  @map("organization_id")
+  action         String
+  entityType     String   @map("entity_type")
+  entityId       String?  @map("entity_id")
+  metadata       Json?
+  ipAddress      String?  @map("ip_address")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  actor          User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([actorUserId, createdAt])
+  @@map("audit_logs")
+}
+
+model SecurityEvent {
+  id               String                @id @default(cuid())
+  eventType        String                @map("event_type")
+  severity         SecurityEventSeverity @default(INFO)
+  outcome          String
+  userId           String?               @map("user_id")
+  subjectHash      String?               @map("subject_hash")
+  ipAddress        String?               @map("ip_address")
+  userAgent        String?               @map("user_agent")
+  metadata         Json?
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  resolvedAt       DateTime?             @map("resolved_at") @db.Timestamptz(3)
+  resolvedByUserId String?               @map("resolved_by_user_id")
+  user             User?                 @relation("SecurityEventSubject", fields: [userId], references: [id], onDelete: SetNull)
+  resolvedBy       User?                 @relation("SecurityEventResolver", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([severity, createdAt])
+  @@index([eventType, createdAt])
+  @@index([userId, createdAt])
+  @@index([resolvedAt, createdAt])
+  @@map("security_events")
+}
+
+model OutboxEvent {
+  id                     String                 @id @default(cuid())
+  aggregateType          String                 @map("aggregate_type")
+  aggregateId            String                 @map("aggregate_id")
+  eventType              String                 @map("event_type")
+  payload                Json
+  status                 OutboxStatus           @default(PENDING)
+  attempts               Int                    @default(0)
+  availableAt            DateTime               @default(now()) @map("available_at") @db.Timestamptz(3)
+  processedAt            DateTime?              @map("processed_at") @db.Timestamptz(3)
+  createdAt              DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  notifications          Notification[]
+  notificationDispatches NotificationDispatch[]
+
+  @@index([status, availableAt])
+  @@map("outbox_events")
+}
+
+model NotificationTemplate {
+  id                 String              @id @default(cuid())
+  code               String              @unique
+  eventType          String              @map("event_type")
+  channel            NotificationChannel
+  locale             String              @default("fa-IR")
+  titleTemplate      String              @map("title_template")
+  bodyTemplate       String              @map("body_template")
+  actionPathTemplate String?             @map("action_path_template")
+  isActive           Boolean             @default(true) @map("is_active")
+  version            Int                 @default(1)
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  notifications      Notification[]
+
+  @@unique([eventType, channel, locale])
+  @@index([channel, isActive])
+  @@map("notification_templates")
+}
+
+model NotificationDispatch {
+  id             String                     @id @default(cuid())
+  sourceEventId  String                     @map("source_event_id")
+  channel        NotificationChannel
+  status         NotificationDispatchStatus @default(PROCESSED)
+  recipientCount Int                        @default(0) @map("recipient_count")
+  failureReason  String?                    @map("failure_reason")
+  processedAt    DateTime                   @default(now()) @map("processed_at") @db.Timestamptz(3)
+  sourceEvent    OutboxEvent                @relation(fields: [sourceEventId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceEventId, channel])
+  @@index([status, processedAt])
+  @@map("notification_dispatches")
+}
+
+model Notification {
+  id              String                @id @default(cuid())
+  recipientUserId String                @map("recipient_user_id")
+  organizationId  String?               @map("organization_id")
+  sourceEventId   String                @map("source_event_id")
+  templateId      String?               @map("template_id")
+  eventType       String                @map("event_type")
+  channel         NotificationChannel   @default(IN_APP)
+  status          NotificationStatus    @default(DELIVERED)
+  title           String
+  body            String
+  actionPath      String?               @map("action_path")
+  metadata        Json                  @default("{}")
+  readAt          DateTime?             @map("read_at") @db.Timestamptz(3)
+  deliveredAt     DateTime?             @default(now()) @map("delivered_at") @db.Timestamptz(3)
+  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  recipient       User                  @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
+  organization    Organization?         @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  sourceEvent     OutboxEvent           @relation(fields: [sourceEventId], references: [id], onDelete: Cascade)
+  template        NotificationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@unique([sourceEventId, recipientUserId, channel])
+  @@index([recipientUserId, readAt, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([status, createdAt])
+  @@map("notifications")
+}
+
+model Industry {
+  id         String     @id @default(cuid())
+  code       String     @unique
+  nameFa     String     @map("name_fa")
+  nameEn     String?    @map("name_en")
+  isActive   Boolean    @default(true) @map("is_active")
+  sortOrder  Int        @default(0) @map("sort_order")
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  categories Category[]
+  rfqs       Rfq[]
+
+  @@map("industries")
+}
+
+model Category {
+  id                 String              @id @default(cuid())
+  industryId         String              @map("industry_id")
+  parentId           String?             @map("parent_id")
+  code               String              @unique
+  slug               String              @unique
+  nameFa             String              @map("name_fa")
+  nameEn             String?             @map("name_en")
+  isActive           Boolean             @default(true) @map("is_active")
+  sortOrder          Int                 @default(0) @map("sort_order")
+  metadata           Json?
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  industry           Industry            @relation(fields: [industryId], references: [id], onDelete: Restrict)
+  parent             Category?           @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children           Category[]          @relation("CategoryTree")
+  rfqItems           RfqItem[]
+  supplierCategories SupplierCategory[]
+  supplierProducts   SupplierProduct[]
+  attributeBindings  CategoryAttribute[]
+
+  @@index([industryId, parentId, isActive])
+  @@map("categories")
+}
+
+model ProductAttributeDefinition {
+  id            String                   @id @default(cuid())
+  code          String                   @unique
+  nameFa        String                   @map("name_fa")
+  nameEn        String?                  @map("name_en")
+  dataType      ProductAttributeDataType @map("data_type")
+  unitLabelFa   String?                  @map("unit_label_fa")
+  options       Json                     @default("[]")
+  validation    Json                     @default("{}")
+  isActive      Boolean                  @default(true) @map("is_active")
+  version       Int                      @default(1)
+  createdAt     DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+  categoryLinks CategoryAttribute[]
+
+  @@index([isActive, code])
+  @@map("product_attribute_definitions")
+}
+
+model CategoryAttribute {
+  categoryId  String                     @map("category_id")
+  attributeId String                     @map("attribute_id")
+  isRequired  Boolean                    @default(false) @map("is_required")
+  sortOrder   Int                        @default(0) @map("sort_order")
+  category    Category                   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  attribute   ProductAttributeDefinition @relation(fields: [attributeId], references: [id], onDelete: Restrict)
+
+  @@id([categoryId, attributeId])
+  @@index([attributeId])
+  @@map("category_attributes")
+}
+
+model UnitOfMeasure {
+  id           String    @id @default(cuid())
+  code         String    @unique
+  nameFa       String    @map("name_fa")
+  symbolFa     String    @map("symbol_fa")
+  decimalScale Int       @default(2) @map("decimal_scale")
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  rfqItems     RfqItem[]
+
+  @@map("units_of_measure")
+}
+
+model Province {
+  id               String                    @id @default(cuid())
+  code             String                    @unique
+  nameFa           String                    @unique @map("name_fa")
+  nameEn           String?                   @map("name_en")
+  sortOrder        Int                       @default(0) @map("sort_order")
+  isActive         Boolean                   @default(true) @map("is_active")
+  createdAt        DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  cities           City[]
+  rfqs             Rfq[]                     @relation("RfqDeliveryProvince")
+  supplierCoverage SupplierServiceProvince[]
+
+  @@index([isActive, sortOrder])
+  @@map("provinces")
+}
+
+model City {
+  id                String   @id @default(cuid())
+  provinceId        String   @map("province_id")
+  code              String
+  nameFa            String   @map("name_fa")
+  nameEn            String?  @map("name_en")
+  isProvinceCapital Boolean  @default(false) @map("is_province_capital")
+  sortOrder         Int      @default(0) @map("sort_order")
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  province          Province @relation(fields: [provinceId], references: [id], onDelete: Restrict)
+  rfqs              Rfq[]    @relation("RfqDeliveryCity")
+
+  @@unique([provinceId, code])
+  @@unique([provinceId, nameFa])
+  @@index([provinceId, isActive, sortOrder])
+  @@map("cities")
+}
+
+model Rfq {
+  id                        String                 @id @default(cuid())
+  code                      String                 @unique
+  buyerOrganizationId       String                 @map("buyer_organization_id")
+  buyerContactUserId        String                 @map("buyer_contact_user_id")
+  createdByUserId           String                 @map("created_by_user_id")
+  operatorUserId            String?                @map("operator_user_id")
+  primaryDomainId           String                 @map("primary_domain_id")
+  title                     String
+  description               String?
+  entryMethod               RfqEntryMethod         @default(STANDARD) @map("entry_method")
+  lifecycleState            RfqLifecycleState      @default(DRAFT) @map("lifecycle_state")
+  operationalStatus         RfqOperationalStatus   @default(DRAFT_INCOMPLETE) @map("operational_status")
+  approvalStatus            RfqApprovalStatus      @default(NOT_SUBMITTED) @map("approval_status")
+  source                    RfqSource              @default(BUYER_SELF_SERVICE)
+  manualReviewRequired      Boolean                @default(true) @map("manual_review_required")
+  commitmentStatus          CommitmentStatus       @default(NOT_REQUIRED) @map("commitment_status")
+  commitmentAmountRial      BigInt?                @map("commitment_amount_rial")
+  commitmentPolicyVersion   String?                @map("commitment_policy_version")
+  deliveryProvinceId        String?                @map("delivery_province_id")
+  deliveryCityId            String?                @map("delivery_city_id")
+  deliveryProvince          String?                @map("delivery_province")
+  deliveryCity              String?                @map("delivery_city")
+  requiredAt                DateTime?              @map("required_at") @db.Timestamptz(3)
+  responseDeadline          DateTime?              @map("response_deadline") @db.Timestamptz(3)
+  installationRequired      Boolean                @default(false) @map("installation_required")
+  qualityControlRequested   Boolean                @default(false) @map("quality_control_requested")
+  qualityControlFeeBps      Int?                   @map("quality_control_fee_bps")
+  displayPricesTaxInclusive Boolean                @default(false) @map("display_prices_tax_inclusive")
+  submittedAt               DateTime?              @map("submitted_at") @db.Timestamptz(3)
+  publishedAt               DateTime?              @map("published_at") @db.Timestamptz(3)
+  closedAt                  DateTime?              @map("closed_at") @db.Timestamptz(3)
+  createdAt                 DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                 DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  buyerOrganization         Organization           @relation(fields: [buyerOrganizationId], references: [id], onDelete: Restrict)
+  buyerContact              User                   @relation("RfqBuyerContact", fields: [buyerContactUserId], references: [id], onDelete: Restrict)
+  createdBy                 User                   @relation("RfqCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  operator                  User?                  @relation("RfqOperator", fields: [operatorUserId], references: [id], onDelete: Restrict)
+  primaryDomain             Industry               @relation(fields: [primaryDomainId], references: [id], onDelete: Restrict)
+  deliveryProvinceRef       Province?              @relation("RfqDeliveryProvince", fields: [deliveryProvinceId], references: [id], onDelete: Restrict)
+  deliveryCityRef           City?                  @relation("RfqDeliveryCity", fields: [deliveryCityId], references: [id], onDelete: Restrict)
+  items                     RfqItem[]
+  qualityControlRequest     QualityControlRequest?
+  contractRequest           ContractRequest?
+  invitations               RfqInvitation[]
+  quotations                Quotation[]
+  attachments               Attachment[]
+  messageThreads            MessageThread[]
+  supportTickets            SupportTicket[]
+  supplierReview            SupplierReview?
+
+  @@index([buyerOrganizationId, createdAt])
+  @@index([lifecycleState, operationalStatus])
+  @@index([approvalStatus, manualReviewRequired])
+  @@index([deliveryProvinceId, deliveryCityId])
+  @@map("rfqs")
+}
+
+model RfqItem {
+  id                     String          @id @default(cuid())
+  rfqId                  String          @map("rfq_id")
+  categoryId             String          @map("category_id")
+  unitId                 String          @map("unit_id")
+  title                  String
+  quantity               Decimal         @db.Decimal(20, 4)
+  specifications         Json            @default("{}")
+  estimatedLineValueRial BigInt?         @map("estimated_line_value_rial")
+  sortOrder              Int             @default(0) @map("sort_order")
+  createdAt              DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  rfq                    Rfq             @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  category               Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  unit                   UnitOfMeasure   @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  quotationItems         QuotationItem[]
+
+  @@index([rfqId, sortOrder])
+  @@index([categoryId])
+  @@map("rfq_items")
+}
+
+model SupplierProfile {
+  id                            String                     @id @default(cuid())
+  organizationId                String                     @unique @map("organization_id")
+  verificationStatus            SupplierVerificationStatus @default(INCOMPLETE) @map("verification_status")
+  description                   String?
+  productionCapacityDescription String?                    @map("production_capacity_description")
+  minimumOrderDescription       String?                    @map("minimum_order_description")
+  leadTimeDescription           String?                    @map("lead_time_description")
+  officialInvoiceAvailable      Boolean                    @default(false) @map("official_invoice_available")
+  sampleAvailable               Boolean                    @default(false) @map("sample_available")
+  installationAvailable         Boolean                    @default(false) @map("installation_available")
+  nationwideCoverage            Boolean                    @default(false) @map("nationwide_coverage")
+  serviceProvinces              String[]                   @default([]) @map("service_provinces")
+  verificationReason            String?                    @map("verification_reason")
+  verifiedAt                    DateTime?                  @map("verified_at") @db.Timestamptz(3)
+  createdAt                     DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                     DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization                  Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  categories                    SupplierCategory[]
+  products                      SupplierProduct[]
+  serviceProvinceLinks          SupplierServiceProvince[]
+  verificationDocuments         Attachment[]
+
+  @@index([verificationStatus, nationwideCoverage])
+  @@map("supplier_profiles")
+}
+
+model SupplierServiceProvince {
+  supplierProfileId String          @map("supplier_profile_id")
+  provinceId        String          @map("province_id")
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  supplierProfile   SupplierProfile @relation(fields: [supplierProfileId], references: [id], onDelete: Cascade)
+  province          Province        @relation(fields: [provinceId], references: [id], onDelete: Restrict)
+
+  @@id([supplierProfileId, provinceId])
+  @@index([provinceId])
+  @@map("supplier_service_provinces")
+}
+
+model SupplierCategory {
+  supplierProfileId String          @map("supplier_profile_id")
+  categoryId        String          @map("category_id")
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  supplierProfile   SupplierProfile @relation(fields: [supplierProfileId], references: [id], onDelete: Cascade)
+  category          Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@id([supplierProfileId, categoryId])
+  @@index([categoryId])
+  @@map("supplier_categories")
+}
+
+model SupplierProduct {
+  id                      String                @id @default(cuid())
+  supplierProfileId       String                @map("supplier_profile_id")
+  categoryId              String                @map("category_id")
+  nameFa                  String                @map("name_fa")
+  sku                     String?
+  description             String?               @db.Text
+  specifications          Json                  @default("{}")
+  minimumOrderDescription String?               @map("minimum_order_description")
+  leadTimeDescription     String?               @map("lead_time_description")
+  isAvailable             Boolean               @default(true) @map("is_available")
+  status                  SupplierProductStatus @default(DRAFT)
+  version                 Int                   @default(1)
+  createdAt               DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+  supplierProfile         SupplierProfile       @relation(fields: [supplierProfileId], references: [id], onDelete: Cascade)
+  category                Category              @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  attachments             Attachment[]
+
+  @@unique([supplierProfileId, sku])
+  @@index([supplierProfileId, status, updatedAt])
+  @@index([categoryId, status, isAvailable])
+  @@map("supplier_products")
+}
+
+model RfqInvitation {
+  id                     String              @id @default(cuid())
+  rfqId                  String              @map("rfq_id")
+  supplierOrganizationId String              @map("supplier_organization_id")
+  status                 RfqInvitationStatus @default(INVITED)
+  matchReasons           Json                @default("{}") @map("match_reasons")
+  invitedAt              DateTime            @default(now()) @map("invited_at") @db.Timestamptz(3)
+  viewedAt               DateTime?           @map("viewed_at") @db.Timestamptz(3)
+  respondedAt            DateTime?           @map("responded_at") @db.Timestamptz(3)
+  declinedAt             DateTime?           @map("declined_at") @db.Timestamptz(3)
+  rfq                    Rfq                 @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  supplierOrganization   Organization        @relation("InvitedSupplier", fields: [supplierOrganizationId], references: [id], onDelete: Restrict)
+
+  @@unique([rfqId, supplierOrganizationId])
+  @@index([supplierOrganizationId, status, invitedAt])
+  @@map("rfq_invitations")
+}
+
+model Quotation {
+  id                     String                 @id @default(cuid())
+  code                   String                 @unique
+  rfqId                  String                 @map("rfq_id")
+  supplierOrganizationId String                 @map("supplier_organization_id")
+  createdByUserId        String                 @map("created_by_user_id")
+  version                Int                    @default(1)
+  status                 QuotationStatus        @default(DRAFT)
+  currency               String                 @default("IRR")
+  paymentTerms           String?                @map("payment_terms")
+  preparationDays        Int?                   @map("preparation_days")
+  deliveryDate           DateTime?              @map("delivery_date") @db.Timestamptz(3)
+  validUntil             DateTime?              @map("valid_until") @db.Timestamptz(3)
+  subtotalRial           BigInt                 @default(0) @map("subtotal_rial")
+  discountRial           BigInt                 @default(0) @map("discount_rial")
+  taxRial                BigInt                 @default(0) @map("tax_rial")
+  packagingRial          BigInt                 @default(0) @map("packaging_rial")
+  loadingRial            BigInt                 @default(0) @map("loading_rial")
+  shippingRial           BigInt                 @default(0) @map("shipping_rial")
+  otherCostsRial         BigInt                 @default(0) @map("other_costs_rial")
+  finalAmountRial        BigInt                 @default(0) @map("final_amount_rial")
+  submittedAt            DateTime?              @map("submitted_at") @db.Timestamptz(3)
+  withdrawnAt            DateTime?              @map("withdrawn_at") @db.Timestamptz(3)
+  createdAt              DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  rfq                    Rfq                    @relation(fields: [rfqId], references: [id], onDelete: Restrict)
+  supplierOrganization   Organization           @relation("SupplierQuotations", fields: [supplierOrganizationId], references: [id], onDelete: Restrict)
+  createdBy              User                   @relation("QuotationCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  items                  QuotationItem[]
+  attachments            Attachment[]
+  qualityControlRequest  QualityControlRequest?
+  contractRequest        ContractRequest?
+  supplierReview         SupplierReview?
+
+  @@unique([rfqId, supplierOrganizationId, version])
+  @@index([rfqId, status, submittedAt])
+  @@index([supplierOrganizationId, status, createdAt])
+  @@map("quotations")
+}
+
+model SupplierReview {
+  id                     String               @id @default(cuid())
+  rfqId                  String               @unique @map("rfq_id")
+  quotationId            String               @unique @map("quotation_id")
+  buyerOrganizationId    String               @map("buyer_organization_id")
+  supplierOrganizationId String               @map("supplier_organization_id")
+  createdByUserId        String               @map("created_by_user_id")
+  rating                 Int
+  comment                String?              @db.Text
+  status                 SupplierReviewStatus @default(PUBLISHED)
+  moderationReason       String?              @map("moderation_reason") @db.Text
+  moderatedByUserId      String?              @map("moderated_by_user_id")
+  moderatedAt            DateTime?            @map("moderated_at") @db.Timestamptz(3)
+  createdAt              DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  rfq                    Rfq                  @relation(fields: [rfqId], references: [id], onDelete: Restrict)
+  quotation              Quotation            @relation(fields: [quotationId], references: [id], onDelete: Restrict)
+  buyerOrganization      Organization         @relation("BuyerSupplierReviews", fields: [buyerOrganizationId], references: [id], onDelete: Restrict)
+  supplierOrganization   Organization         @relation("ReceivedSupplierReviews", fields: [supplierOrganizationId], references: [id], onDelete: Restrict)
+  createdBy              User                 @relation("SupplierReviewCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  moderatedBy            User?                @relation("SupplierReviewModerator", fields: [moderatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([supplierOrganizationId, status, createdAt])
+  @@index([buyerOrganizationId, createdAt])
+  @@map("supplier_reviews")
+}
+
+model QuotationItem {
+  id                 String    @id @default(cuid())
+  quotationId        String    @map("quotation_id")
+  rfqItemId          String    @map("rfq_item_id")
+  quantity           Decimal   @db.Decimal(20, 4)
+  unitPriceRial      BigInt    @map("unit_price_rial")
+  discountRial       BigInt    @default(0) @map("discount_rial")
+  lineSubtotalRial   BigInt    @map("line_subtotal_rial")
+  lineNetRial        BigInt    @map("line_net_rial")
+  isAlternative      Boolean   @default(false) @map("is_alternative")
+  offeredDescription String?   @map("offered_description")
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  quotation          Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  rfqItem            RfqItem   @relation(fields: [rfqItemId], references: [id], onDelete: Restrict)
+
+  @@unique([quotationId, rfqItemId])
+  @@index([rfqItemId])
+  @@map("quotation_items")
+}
+
+model Attachment {
+  id                String            @id @default(cuid())
+  organizationId    String            @map("organization_id")
+  uploadedByUserId  String            @map("uploaded_by_user_id")
+  rfqId             String?           @map("rfq_id")
+  quotationId       String?           @map("quotation_id")
+  supplierProfileId String?           @map("supplier_profile_id")
+  supplierProductId String?           @map("supplier_product_id")
+  supportTicketId   String?           @map("support_ticket_id")
+  purpose           AttachmentPurpose @default(GENERAL)
+  status            AttachmentStatus  @default(PENDING_UPLOAD)
+  bucket            String
+  storageKey        String            @unique @map("storage_key")
+  originalName      String            @map("original_name")
+  mimeType          String            @map("mime_type")
+  sizeBytes         Int               @map("size_bytes")
+  checksumSha256    String?           @map("checksum_sha256")
+  scanProvider      String?           @map("scan_provider")
+  scanReason        String?           @map("scan_reason")
+  uploadedAt        DateTime?         @map("uploaded_at") @db.Timestamptz(3)
+  scannedAt         DateTime?         @map("scanned_at") @db.Timestamptz(3)
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  uploadedBy        User              @relation("AttachmentUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  rfq               Rfq?              @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  quotation         Quotation?        @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  supplierProfile   SupplierProfile?  @relation(fields: [supplierProfileId], references: [id], onDelete: Cascade)
+  supplierProduct   SupplierProduct?  @relation(fields: [supplierProductId], references: [id], onDelete: Cascade)
+  supportTicket     SupportTicket?    @relation(fields: [supportTicketId], references: [id], onDelete: Cascade)
+
+  @@index([rfqId, status, createdAt])
+  @@index([quotationId, status, createdAt])
+  @@index([supplierProfileId, status, createdAt])
+  @@index([supplierProductId, status, createdAt])
+  @@index([supportTicketId, status, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([status, createdAt])
+  @@map("attachments")
+}
+
+model MessageThread {
+  id                     String                   @id @default(cuid())
+  rfqId                  String                   @map("rfq_id")
+  buyerOrganizationId    String                   @map("buyer_organization_id")
+  supplierOrganizationId String                   @map("supplier_organization_id")
+  status                 MessageThreadStatus      @default(OPEN)
+  lastMessageAt          DateTime?                @map("last_message_at") @db.Timestamptz(3)
+  createdAt              DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+  rfq                    Rfq                      @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  buyerOrganization      Organization             @relation("BuyerMessageThreads", fields: [buyerOrganizationId], references: [id], onDelete: Restrict)
+  supplierOrganization   Organization             @relation("SupplierMessageThreads", fields: [supplierOrganizationId], references: [id], onDelete: Restrict)
+  messages               Message[]
+  readStates             MessageThreadReadState[]
+
+  @@unique([rfqId, supplierOrganizationId])
+  @@index([buyerOrganizationId, lastMessageAt])
+  @@index([supplierOrganizationId, lastMessageAt])
+  @@map("message_threads")
+}
+
+model Message {
+  id                   String        @id @default(cuid())
+  threadId             String        @map("thread_id")
+  senderUserId         String        @map("sender_user_id")
+  senderOrganizationId String        @map("sender_organization_id")
+  kind                 MessageKind   @default(USER)
+  body                 String
+  createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  thread               MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender               User          @relation("MessageSender", fields: [senderUserId], references: [id], onDelete: Restrict)
+  senderOrganization   Organization  @relation("MessageSenderOrganization", fields: [senderOrganizationId], references: [id], onDelete: Restrict)
+
+  @@index([threadId, createdAt])
+  @@index([senderUserId, createdAt])
+  @@map("messages")
+}
+
+model MessageThreadReadState {
+  threadId   String        @map("thread_id")
+  userId     String        @map("user_id")
+  lastReadAt DateTime      @map("last_read_at") @db.Timestamptz(3)
+  thread     MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([threadId, userId])
+  @@index([userId, lastReadAt])
+  @@map("message_thread_read_states")
+}
+
+model SupportTicket {
+  id                    String                 @id @default(cuid())
+  code                  String                 @unique
+  requesterUserId       String                 @map("requester_user_id")
+  organizationId        String?                @map("organization_id")
+  subjectOrganizationId String?                @map("subject_organization_id")
+  relatedRfqId          String?                @map("related_rfq_id")
+  assignedToUserId      String?                @map("assigned_to_user_id")
+  type                  SupportTicketType
+  category              SupportTicketCategory
+  priority              SupportTicketPriority  @default(P4)
+  status                SupportTicketStatus    @default(SUBMITTED)
+  subject               String
+  description           String
+  resolution            String?
+  acknowledgedAt        DateTime?              @map("acknowledged_at") @db.Timestamptz(3)
+  resolvedAt            DateTime?              @map("resolved_at") @db.Timestamptz(3)
+  closedAt              DateTime?              @map("closed_at") @db.Timestamptz(3)
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  requester             User                   @relation("SupportTicketRequester", fields: [requesterUserId], references: [id], onDelete: Restrict)
+  organization          Organization?          @relation("SupportTicketOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  subjectOrganization   Organization?          @relation("SupportTicketSubjectOrganization", fields: [subjectOrganizationId], references: [id], onDelete: Restrict)
+  relatedRfq            Rfq?                   @relation(fields: [relatedRfqId], references: [id], onDelete: SetNull)
+  assignedTo            User?                  @relation("SupportTicketAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  comments              SupportTicketComment[]
+  attachments           Attachment[]
+
+  @@index([requesterUserId, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([status, priority, createdAt])
+  @@index([assignedToUserId, status])
+  @@map("support_tickets")
+}
+
+model SupportTicketComment {
+  id           String        @id @default(cuid())
+  ticketId     String        @map("ticket_id")
+  authorUserId String        @map("author_user_id")
+  body         String
+  isInternal   Boolean       @default(false) @map("is_internal")
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  ticket       SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author       User          @relation("SupportCommentAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+
+  @@index([ticketId, createdAt])
+  @@map("support_ticket_comments")
+}
+
+model SubscriptionPlan {
+  id                 String                     @id @default(cuid())
+  code               String                     @unique
+  nameFa             String                     @map("name_fa")
+  descriptionFa      String?                    @map("description_fa")
+  billingCycle       BillingCycle               @map("billing_cycle")
+  durationIso        String                     @map("duration_iso")
+  priceRial          BigInt                     @map("price_rial")
+  grantCredits       BigInt                     @map("grant_credits")
+  dailyProposalLimit Int                        @default(2) @map("daily_proposal_limit")
+  maxProposalLimit   Int                        @default(6) @map("max_proposal_limit")
+  taxIncluded        Boolean                    @default(false) @map("tax_included")
+  isTrial            Boolean                    @default(false) @map("is_trial")
+  isPublic           Boolean                    @default(true) @map("is_public")
+  isActive           Boolean                    @default(true) @map("is_active")
+  version            Int                        @default(1)
+  entitlements       Json                       @default("{}")
+  createdAt          DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  subscriptions      Subscription[]
+  discountCodes      SubscriptionDiscountCode[]
+
+  @@index([isActive, isPublic])
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id                    String                          @id @default(cuid())
+  organizationId        String                          @map("organization_id")
+  planId                String                          @map("plan_id")
+  status                SubscriptionStatus              @default(DRAFT)
+  startsAt              DateTime?                       @map("starts_at") @db.Timestamptz(3)
+  expiresAt             DateTime?                       @map("expires_at") @db.Timestamptz(3)
+  graceEndsAt           DateTime?                       @map("grace_ends_at") @db.Timestamptz(3)
+  autoRenewEnabled      Boolean                         @default(false) @map("auto_renew_enabled")
+  autoRenewConsentAt    DateTime?                       @map("auto_renew_consent_at") @db.Timestamptz(3)
+  priceRialSnapshot     BigInt                          @map("price_rial_snapshot")
+  listPriceRialSnapshot BigInt                          @map("list_price_rial_snapshot")
+  discountRialSnapshot  BigInt                          @default(0) @map("discount_rial_snapshot")
+  discountCodeSnapshot  String?                         @map("discount_code_snapshot")
+  grantCreditSnapshot   BigInt                          @map("grant_credit_snapshot")
+  planVersionSnapshot   Int                             @map("plan_version_snapshot")
+  isTrialSnapshot       Boolean                         @default(false) @map("is_trial_snapshot")
+  trialActivationKey    String?                         @unique @map("trial_activation_key")
+  createdAt             DateTime                        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime                        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization          Organization                    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  plan                  SubscriptionPlan                @relation(fields: [planId], references: [id], onDelete: Restrict)
+  reminders             SubscriptionReminder[]
+  paymentReceipt        PaymentReceipt?
+  manualRenewal         ManualSubscriptionRenewal?
+  billingInvoice        BillingInvoice?
+  discountRedemption    SubscriptionDiscountRedemption?
+
+  @@index([organizationId, status])
+  @@index([status, expiresAt])
+  @@map("subscriptions")
+}
+
+model SubscriptionDiscountCode {
+  id                   String                           @id @default(cuid())
+  code                 String                           @unique
+  nameFa               String                           @map("name_fa")
+  descriptionFa        String?                          @map("description_fa")
+  type                 SubscriptionDiscountType
+  percentageBps        Int?                             @map("percentage_bps")
+  fixedAmountRial      BigInt?                          @map("fixed_amount_rial")
+  applicablePlanId     String?                          @map("applicable_plan_id")
+  minimumPurchaseRial  BigInt                           @default(0) @map("minimum_purchase_rial")
+  perOrganizationLimit Int                              @default(1) @map("per_organization_limit")
+  maxRedemptions       Int?                             @map("max_redemptions")
+  validFrom            DateTime                         @map("valid_from") @db.Timestamptz(3)
+  validUntil           DateTime                         @map("valid_until") @db.Timestamptz(3)
+  isActive             Boolean                          @default(true) @map("is_active")
+  createdAt            DateTime                         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime                         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  applicablePlan       SubscriptionPlan?                @relation(fields: [applicablePlanId], references: [id], onDelete: Restrict)
+  redemptions          SubscriptionDiscountRedemption[]
+
+  @@index([isActive, validFrom, validUntil])
+  @@index([applicablePlanId, isActive])
+  @@map("subscription_discount_codes")
+}
+
+model SubscriptionDiscountRedemption {
+  id                 String                   @id @default(cuid())
+  discountCodeId     String                   @map("discount_code_id")
+  organizationId     String                   @map("organization_id")
+  subscriptionId     String                   @unique @map("subscription_id")
+  status             DiscountRedemptionStatus @default(RESERVED)
+  discountAmountRial BigInt                   @map("discount_amount_rial")
+  reservedAt         DateTime                 @default(now()) @map("reserved_at") @db.Timestamptz(3)
+  redeemedAt         DateTime?                @map("redeemed_at") @db.Timestamptz(3)
+  cancelledAt        DateTime?                @map("cancelled_at") @db.Timestamptz(3)
+  discountCode       SubscriptionDiscountCode @relation(fields: [discountCodeId], references: [id], onDelete: Restrict)
+  organization       Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  subscription       Subscription             @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+
+  @@index([discountCodeId, status])
+  @@index([discountCodeId, organizationId, status])
+  @@map("subscription_discount_redemptions")
+}
+
+model ManualSubscriptionRenewal {
+  id                String          @id @default(cuid())
+  organizationId    String          @map("organization_id")
+  subscriptionId    String          @unique @map("subscription_id")
+  activatedByUserId String          @map("activated_by_user_id")
+  trackingNumber    String          @unique @map("tracking_number")
+  amountRial        BigInt          @map("amount_rial")
+  paidAt            DateTime        @map("paid_at") @db.Timestamptz(3)
+  note              String          @db.Text
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  subscription      Subscription    @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  activatedBy       User            @relation("ManualSubscriptionRenewalActor", fields: [activatedByUserId], references: [id], onDelete: Restrict)
+  billingInvoice    BillingInvoice?
+
+  @@index([organizationId, paidAt])
+  @@index([activatedByUserId, createdAt])
+  @@map("manual_subscription_renewals")
+}
+
+model SubscriptionReminder {
+  id             String          @id @default(cuid())
+  subscriptionId String          @map("subscription_id")
+  offsetDays     Int             @map("offset_days")
+  channel        ReminderChannel
+  status         ReminderStatus  @default(PENDING)
+  scheduledAt    DateTime        @map("scheduled_at") @db.Timestamptz(3)
+  sentAt         DateTime?       @map("sent_at") @db.Timestamptz(3)
+  cancelledAt    DateTime?       @map("cancelled_at") @db.Timestamptz(3)
+  failureReason  String?         @map("failure_reason")
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  subscription   Subscription    @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriptionId, offsetDays, channel])
+  @@index([status, scheduledAt])
+  @@map("subscription_reminders")
+}
+
+model CreditWallet {
+  id                   String              @id @default(cuid())
+  organizationId       String              @unique @map("organization_id")
+  cachedBalanceCredits BigInt              @default(0) @map("cached_balance_credits")
+  updatedAt            DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization         Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  entries              CreditLedgerEntry[]
+
+  @@map("credit_wallets")
+}
+
+model CreditLedgerEntry {
+  id             String          @id @default(cuid())
+  walletId       String          @map("wallet_id")
+  type           CreditEntryType
+  amountCredits  BigInt          @map("amount_credits")
+  referenceType  String          @map("reference_type")
+  referenceId    String          @map("reference_id")
+  idempotencyKey String          @unique @map("idempotency_key")
+  reasonCode     String?         @map("reason_code")
+  metadata       Json?
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  wallet         CreditWallet    @relation(fields: [walletId], references: [id], onDelete: Restrict)
+
+  @@index([walletId, createdAt])
+  @@index([referenceType, referenceId])
+  @@map("credit_ledger_entries")
+}
+
+model PaymentIntent {
+  id                             String                           @id @default(cuid())
+  provider                       PaymentProvider
+  purpose                        PaymentPurpose
+  status                         PaymentStatus                    @default(CREATED)
+  amountRial                     BigInt                           @map("amount_rial")
+  payerOrganizationId            String?                          @map("payer_organization_id")
+  referenceType                  String                           @map("reference_type")
+  referenceId                    String                           @map("reference_id")
+  authority                      String?                          @unique
+  providerReference              String?                          @map("provider_reference")
+  idempotencyKey                 String                           @unique @map("idempotency_key")
+  callbackPayload                Json?                            @map("callback_payload")
+  verifiedAt                     DateTime?                        @map("verified_at") @db.Timestamptz(3)
+  reconciliationStatus           PaymentReconciliationStatus      @default(NOT_CHECKED) @map("reconciliation_status")
+  lastReconciledAt               DateTime?                        @map("last_reconciled_at") @db.Timestamptz(3)
+  lastProviderCode               Int?                             @map("last_provider_code")
+  reconciliationResolution       PaymentReconciliationResolution? @map("reconciliation_resolution")
+  reconciliationResolutionNote   String?                          @map("reconciliation_resolution_note") @db.Text
+  reconciliationResolvedAt       DateTime?                        @map("reconciliation_resolved_at") @db.Timestamptz(3)
+  reconciliationResolvedByUserId String?                          @map("reconciliation_resolved_by_user_id")
+  createdAt                      DateTime                         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                      DateTime                         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  paymentReceipt                 PaymentReceipt?
+  billingInvoice                 BillingInvoice?
+  reconciliationResolvedBy       User?                            @relation("PaymentReconciliationResolver", fields: [reconciliationResolvedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([referenceType, referenceId])
+  @@index([status, createdAt])
+  @@index([reconciliationStatus, updatedAt])
+  @@index([reconciliationResolvedAt, updatedAt])
+  @@map("payment_intents")
+}
+
+model BillingInvoice {
+  id              String                     @id @default(cuid())
+  invoiceNumber   String                     @unique @map("invoice_number")
+  organizationId  String                     @map("organization_id")
+  purpose         BillingInvoicePurpose
+  status          BillingInvoiceStatus       @default(ISSUED)
+  subscriptionId  String?                    @unique @map("subscription_id")
+  paymentIntentId String?                    @unique @map("payment_intent_id")
+  manualRenewalId String?                    @unique @map("manual_renewal_id")
+  netAmountRial   BigInt                     @map("net_amount_rial")
+  taxRial         BigInt                     @default(0) @map("tax_rial")
+  totalAmountRial BigInt                     @map("total_amount_rial")
+  currency        String                     @default("IRR")
+  descriptionFa   String                     @map("description_fa")
+  issuedAt        DateTime                   @default(now()) @map("issued_at") @db.Timestamptz(3)
+  dueAt           DateTime?                  @map("due_at") @db.Timestamptz(3)
+  paidAt          DateTime?                  @map("paid_at") @db.Timestamptz(3)
+  createdAt       DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization    Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  subscription    Subscription?              @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  paymentIntent   PaymentIntent?             @relation(fields: [paymentIntentId], references: [id], onDelete: Restrict)
+  manualRenewal   ManualSubscriptionRenewal? @relation(fields: [manualRenewalId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, issuedAt])
+  @@index([status, dueAt])
+  @@map("billing_invoices")
+}
+
+model PaymentReceipt {
+  id                      String                 @id @default(cuid())
+  receiptNumber           String                 @unique @map("receipt_number")
+  organizationId          String                 @map("organization_id")
+  subscriptionId          String?                @unique @map("subscription_id")
+  qualityControlRequestId String?                @unique @map("quality_control_request_id")
+  paymentIntentId         String                 @unique @map("payment_intent_id")
+  amountRial              BigInt                 @map("amount_rial")
+  taxRial                 BigInt                 @default(0) @map("tax_rial")
+  currency                String                 @default("IRR")
+  providerReference       String?                @map("provider_reference")
+  paidAt                  DateTime               @map("paid_at") @db.Timestamptz(3)
+  createdAt               DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  organization            Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  subscription            Subscription?          @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  qualityControlRequest   QualityControlRequest? @relation(fields: [qualityControlRequestId], references: [id], onDelete: Restrict)
+  paymentIntent           PaymentIntent          @relation(fields: [paymentIntentId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, paidAt])
+  @@map("payment_receipts")
+}
+
+model QualityControlRequest {
+  id                  String               @id @default(cuid())
+  rfqId               String               @unique @map("rfq_id")
+  selectedQuotationId String?              @unique @map("selected_quotation_id")
+  status              QualityControlStatus @default(REQUESTED)
+  purchaseAmountRial  BigInt?              @map("purchase_amount_rial")
+  feeBps              Int                  @default(300) @map("fee_bps")
+  feeAmountRial       BigInt?              @map("fee_amount_rial")
+  policyVersion       String               @default("QC_V1") @map("policy_version")
+  requestedAt         DateTime             @default(now()) @map("requested_at") @db.Timestamptz(3)
+  acceptedAt          DateTime?            @map("accepted_at") @db.Timestamptz(3)
+  completedAt         DateTime?            @map("completed_at") @db.Timestamptz(3)
+  rfq                 Rfq                  @relation(fields: [rfqId], references: [id], onDelete: Restrict)
+  selectedQuotation   Quotation?           @relation(fields: [selectedQuotationId], references: [id], onDelete: Restrict)
+  paymentReceipt      PaymentReceipt?
+
+  @@index([status, requestedAt])
+  @@map("quality_control_requests")
+}
+
+model ContractRequest {
+  id                     String                @id @default(cuid())
+  code                   String                @unique
+  rfqId                  String                @unique @map("rfq_id")
+  selectedQuotationId    String                @unique @map("selected_quotation_id")
+  buyerOrganizationId    String                @map("buyer_organization_id")
+  supplierOrganizationId String                @map("supplier_organization_id")
+  requestedByUserId      String                @map("requested_by_user_id")
+  status                 ContractRequestStatus @default(REQUESTED)
+  buyerNote              String?               @map("buyer_note") @db.Text
+  termsSummary           String?               @map("terms_summary") @db.Text
+  cancellationReason     String?               @map("cancellation_reason") @db.Text
+  requestedAt            DateTime              @default(now()) @map("requested_at") @db.Timestamptz(3)
+  reviewedAt             DateTime?             @map("reviewed_at") @db.Timestamptz(3)
+  termsPreparedAt        DateTime?             @map("terms_prepared_at") @db.Timestamptz(3)
+  acceptedAt             DateTime?             @map("accepted_at") @db.Timestamptz(3)
+  completedAt            DateTime?             @map("completed_at") @db.Timestamptz(3)
+  cancelledAt            DateTime?             @map("cancelled_at") @db.Timestamptz(3)
+  createdAt              DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+  rfq                    Rfq                   @relation(fields: [rfqId], references: [id], onDelete: Restrict)
+  selectedQuotation      Quotation             @relation(fields: [selectedQuotationId], references: [id], onDelete: Restrict)
+  buyerOrganization      Organization          @relation("BuyerContractRequests", fields: [buyerOrganizationId], references: [id], onDelete: Restrict)
+  supplierOrganization   Organization          @relation("SupplierContractRequests", fields: [supplierOrganizationId], references: [id], onDelete: Restrict)
+  requestedBy            User                  @relation("ContractRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([status, requestedAt])
+  @@index([buyerOrganizationId, requestedAt])
+  @@index([supplierOrganizationId, requestedAt])
+  @@map("contract_requests")
+}
+
+model SystemSetting {
+  id            String   @id @default(cuid())
+  key           String   @unique
+  value         Json
+  descriptionFa String?  @map("description_fa")
+  isEditable    Boolean  @default(true) @map("is_editable")
+  version       Int      @default(1)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("system_settings")
+}
