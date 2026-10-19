@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 :root {
+  --font-vazirmatn: "Vazirmatn Variable";
   --primary: #8a5708;
   --primary-dark: #684005;
   --primary-soft: #fff1c9;
