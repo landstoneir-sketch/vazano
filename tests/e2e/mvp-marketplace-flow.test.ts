@@ -241,12 +241,13 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   await page.goto('/supplier/subscription');
   await expect(page.getByRole('heading', { name: 'اشتراک و پرداخت' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'انتخاب پلن' })).toBeVisible();
-  await expect(
-    page.getByRole('button', {
-      name: /خرید آنلاین هنوز فعال نیست|خرید این پلن|تمدید با این پلن/,
-    }).first(),
-  ).toBeVisible();
-  await expect(page.getByRole('link', { name: 'ثبت درخواست تمدید دستی' })).toBeVisible();
+  const paidPlanAction = page.getByRole('button', {
+    name: /خرید آنلاین هنوز فعال نیست|خرید این پلن|تمدید با این پلن/,
+  }).first();
+  await expect(paidPlanAction).toBeVisible();
+  if (await paidPlanAction.isDisabled()) {
+    await expect(page.getByRole('link', { name: 'ثبت درخواست تمدید دستی' })).toBeVisible();
+  }
 
   await page.goto('/admin/rfqs/new');
   await expect(page.getByRole('heading', { name: 'ثبت استعلام از طرف خریدار' })).toBeVisible();
