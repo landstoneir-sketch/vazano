@@ -9,7 +9,7 @@ type DemoPaymentGatewayProps = {
 
 function formatToman(amountRial: string | null): string {
   if (!amountRial || !/^\d+$/.test(amountRial)) return 'مبلغ در بازگشت مجدد نمایش داده نمی‌شود';
-  return `${(BigInt(amountRial) / 10n).toLocaleString('fa-IR')} تومان`;
+  return `${(BigInt(amountRial) / BigInt(10)).toLocaleString('fa-IR')} تومان`;
 }
 
 export function DemoPaymentGateway(props: DemoPaymentGatewayProps) {
