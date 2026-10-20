@@ -21,10 +21,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <span className="brand-copy"><strong>وازانو</strong><small>بازار حرفه‌ای استعلام</small></span>
           </Link>
           <nav className="primary-navigation" aria-label="منوی اصلی">
-            <Link href="/how-it-works">نحوه کار</Link>
-            <Link href="/plans">پلن‌ها</Link>
-            <Link href={'/suppliers' as Route}>فروشندگان</Link>
-            <Link href={'/faq' as Route}>پرسش‌ها</Link>
+            <Link className="nav-public-link" href="/how-it-works">نحوه کار</Link>
+            <Link className="nav-public-link" href="/plans">پلن‌ها</Link>
+            <Link className="nav-public-link" href={'/suppliers' as Route}>فروشندگان</Link>
+            <Link className="nav-public-link" href={'/faq' as Route}>پرسش‌ها</Link>
             <AccountNavigation />
           </nav>
         </header>

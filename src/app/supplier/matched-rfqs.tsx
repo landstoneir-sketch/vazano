@@ -15,6 +15,7 @@ type Invitation = {
 
 export function MatchedRfqs() {
   const [items, setItems] = useState<Invitation[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busyInvitationId, setBusyInvitationId] = useState('');
@@ -22,7 +23,7 @@ export function MatchedRfqs() {
     let active = true;
     void apiRequest<Invitation[]>('/rfqs/matched').then((data) => { if (active) setItems(data); }).catch((reason: unknown) => {
       if (active) setError(reason instanceof Error ? reason.message : 'دریافت استعلام‌ها انجام نشد.');
-    });
+    }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
 
@@ -38,10 +39,13 @@ export function MatchedRfqs() {
     finally { setBusyInvitationId(''); }
   }
 
-  return <div className="stack">
-    {error && <div className="message message-error">{error}</div>}
+  return <section className="dashboard-section" aria-labelledby="matched-rfqs-title">
+    <header className="dashboard-section-heading"><div><div className="eyebrow">نیازمند اقدام</div><h2 id="matched-rfqs-title">فرصت‌های فروش جدید</h2><p>ابتدا استعلام‌هایی را ببینید که با دسته محصولات و محدوده فعالیت شما هماهنگ هستند.</p></div>{!loading && <span className="count-badge">{items.length.toLocaleString('fa-IR')} فرصت</span>}</header>
+    <div className="stack">
+    {error && <div className="message message-error" role="alert">{error}</div>}
     {message && <div className="message message-success">{message}</div>}
-    {items.length === 0 && !error && <div className="card">فعلاً استعلام متناسبی برای حساب‌های فروشنده شما وجود ندارد.</div>}
+    {loading && <div className="card dashboard-loading" role="status">در حال دریافت فرصت‌های متناسب…</div>}
+    {!loading && items.length === 0 && !error && <div className="card empty-state">فعلاً فرصت جدیدی وجود ندارد. با تکمیل دسته محصولات و محدوده فعالیت، تطبیق دقیق‌تر می‌شود.</div>}
     {items.map((invitation) => <article className="card opportunity-card" key={invitation.id}>
       <div className="eyebrow">{invitation.rfq.code} · برای {invitation.supplierOrganization.displayName}</div><h2>{invitation.rfq.title}</h2>
       <p>{invitation.rfq.deliveryProvince ?? '—'}، {invitation.rfq.deliveryCity ?? '—'} · مهلت: {invitation.rfq.responseDeadline ? new Date(invitation.rfq.responseDeadline).toLocaleDateString('fa-IR') : 'تعیین نشده'}</p>
@@ -51,5 +55,6 @@ export function MatchedRfqs() {
       })}</ul>
       <div className="list-card-actions"><Link className="button button-primary" href={`/supplier/rfqs/${invitation.rfq.id}/quote?organizationId=${invitation.supplierOrganization.id}`}>{invitation.rfq.quotations.length ? 'ثبت نسخه جدید پیشنهاد' : 'ثبت پیشنهاد قیمت'}</Link><Link className="button button-secondary" href={`/messages?rfq=${invitation.rfq.id}&supplier=${invitation.supplierOrganization.id}` as Route}>پیام درباره استعلام</Link>{invitation.rfq.quotations.length === 0 && <button className="button button-ghost" type="button" disabled={busyInvitationId === invitation.id} onClick={() => void decline(invitation)}>{busyInvitationId === invitation.id ? 'در حال ثبت…' : 'رد این فرصت'}</button>}</div>
     </article>)}
-  </div>;
+    </div>
+  </section>;
 }

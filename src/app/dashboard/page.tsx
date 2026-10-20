@@ -4,9 +4,9 @@ export const metadata = { title: 'داشبورد' };
 
 export default function DashboardPage() {
   return <section className="container dashboard">
-    <div className="eyebrow">نسخه MVP</div>
-    <h1>داشبورد وازانو</h1>
-    <p className="muted">ثبت استعلام، توزیع قاعده‌محور، پیشنهاد فروشنده و مقایسه قیمت به هسته عملیاتی متصل است.</p>
+    <div className="eyebrow">مرکز کار شما</div>
+    <h1>امروز چه کاری دارید؟</h1>
+    <p className="muted">وضعیت خرید و فروش را یک‌جا ببینید و کار بعدی را سریع انجام دهید.</p>
     <DashboardOverview />
   </section>;
 }
