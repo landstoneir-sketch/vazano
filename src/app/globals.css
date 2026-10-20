@@ -309,6 +309,23 @@ button, input, select, textarea { font: inherit; }
 .rfq-list-meta .status-badge { background: #fff3d6; color: #6a460b; }
 .rfq-list-meta .status-approval { background: #edf5f0; color: #275844; }
 .rfq-list-meta time { color: var(--muted); font-size: .82rem; }
+.rfq-list-workspace { gap: 16px; }
+.rfq-list-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+.rfq-list-summary > div { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 15px 18px; border: 1px solid var(--border); border-radius: 14px; background: #fffdf9; }
+.rfq-list-summary span { color: var(--muted); font-size: .88rem; }
+.rfq-list-summary strong { color: var(--primary); font-size: 1.35rem; }
+.rfq-list-summary .needs-attention { border-color: #dfb562; background: #fff8e6; }
+.rfq-list-toolbar { display: grid; grid-template-columns: minmax(240px,1fr) minmax(190px,.45fr) auto; align-items: end; gap: 14px; padding: 16px 18px; border: 1px solid var(--border); border-radius: 15px; background: #fff; }
+.rfq-list-toolbar .form-field { margin: 0; }
+.rfq-filter-result { min-width: 80px; padding-bottom: 12px; color: var(--muted); font-size: .88rem; text-align: left; }
+.rfq-list-card { transition: transform .18s ease,border-color .18s ease; }
+.rfq-list-card:hover { transform: translateY(-1px); border-color: #d8bd7d; }
+.rfq-list-card.rfq-needs-action { border-right-color: #c67f16; background: linear-gradient(100deg,#fffdf9,#fff9e9); }
+.count-badge.has-quotes { background: #e7f5ed; color: #246140; }
+.rfq-empty-state { min-height: 260px; }
+.rfq-empty-state > div { max-width: 460px; }
+.rfq-empty-state strong { font-size: 1.25rem; }
+.rfq-empty-state p { margin: 8px 0 20px; }
 .empty-state { min-height: 120px; display: grid; place-items: center; color: var(--muted); text-align: center; }
 .count-badge { border-radius: 999px; padding: 6px 12px; background: var(--primary-soft); color: var(--primary-dark); font-weight: 700; }
 .rfq-detail-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding: 8px 2px; }
@@ -546,6 +563,7 @@ button, input, select, textarea { font: inherit; }
 @media (max-width: 760px) { .auth-shell { padding: 28px 16px; } .auth-layout { grid-template-columns: 1fr; } .auth-intro { padding: 30px 24px; } .auth-intro h1 { font-size: 1.75rem; } .auth-card { padding: 30px 24px; } }
 @media (max-width: 760px) { .nav-management-panel { grid-template-columns: repeat(2,minmax(0,1fr)); max-height: calc(100vh - 145px); overflow-y: auto; } }
 @media (max-width: 760px) { .dashboard-page-heading, .rfq-detail-heading, .comparison-heading { align-items: stretch; flex-direction: column; gap: 16px; } .dashboard-page-heading aside { max-width: none; } .rfq-completion-guide, .rfq-progress { grid-template-columns: repeat(5,max-content); justify-content: start; overflow-x: auto; scrollbar-width: none; } .rfq-completion-guide::-webkit-scrollbar, .rfq-progress::-webkit-scrollbar { display: none; } .rfq-completion-guide li, .rfq-progress li { min-width: 136px; padding: 0 12px; } .rfq-form { padding: 20px 16px; } .rfq-section { padding: 14px 12px; } .rfq-submit { width: 100%; min-width: 0; justify-self: stretch; } .rfq-fact-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .comparison-heading .count-badge { align-self: flex-start; } .quote-key-facts { grid-template-columns: 1fr; } .quote-key-facts > div { min-height: 0; } }
+@media (max-width: 760px) { .rfq-list-summary, .rfq-list-toolbar { grid-template-columns: 1fr; } .rfq-filter-result { padding: 0; text-align: right; } .rfq-list-card .list-card-actions { align-items: stretch; flex-direction: column; } .rfq-list-card .button { width: 100%; } }
 @media (max-width: 760px) { .rfq-wizard { padding: 0; } .rfq-wizard-panel { min-height: 0; padding: 24px 18px 18px; } .rfq-wizard-progress ol { grid-template-columns: repeat(5,132px); min-width: 660px; } .rfq-wizard-progress button { min-height: 72px; padding: 9px; } .rfq-wizard-progress small { display: none; } .rfq-wizard-message { margin: 16px 18px 0; } .rfq-wizard-actions { position: sticky; bottom: 0; z-index: 5; grid-template-columns: auto 1fr; padding: 12px 18px; box-shadow: 0 -9px 26px rgba(59,45,23,.08); } .rfq-wizard-actions > span { display: none; } .rfq-wizard-actions > :last-child { width: 100%; min-width: 0; } .rfq-review-card dl, .rfq-service-options { grid-template-columns: 1fr; } .rfq-live-summary { order: initial; display: block; padding: 18px; } .rfq-live-summary > dl { margin-top: 12px; } .rfq-draft-assurance { margin-top: 12px; } }
 @media (max-width: 760px) { .delivery-metrics, .delivery-estimates { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (max-width: 480px) { .delivery-metrics, .delivery-estimates { grid-template-columns: 1fr; } }
