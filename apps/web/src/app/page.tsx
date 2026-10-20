@@ -1,5 +1,62 @@
 import Link from 'next/link';
 
+const sampleRfqs = [
+  {
+    code: 'نمونه ۰۱', status: 'در حال دریافت پیشنهاد', tone: 'receiving', progress: 2,
+    title: 'تراورتن عباس‌آباد برای نمای مجتمع مسکونی',
+    product: '۴۰ طولی · ضخامت ۲ سانتی‌متر · سابیده · کرم روشن کم‌موج',
+    quantity: '۱٬۸۵۰ مترمربع', destination: 'تهران، منطقه ۴', delivery: 'تحویل طی ۲۵ روز',
+    invited: '۱۲ تأمین‌کننده مرتبط', responses: '۴ پیشنهاد ثبت‌شده',
+    responseLines: ['۳ پیشنهاد مطابق مشخصات اصلی', '۱ پیشنهاد جایگزین با تراورتن آتشکوه', 'اختلاف قیمت هم‌شرط‌ها: حدود ۹٪'],
+    buyerAction: '۲ روز تا پایان مهلت؛ سپس مقایسه پیشنهادها',
+  },
+  {
+    code: 'نمونه ۰۲', status: 'نیازمند پاسخ فروشنده', tone: 'waiting', progress: 2,
+    title: 'گرانیت نهبندان فلیم برای محوطه مجتمع تجاری',
+    product: '۴۰×۴۰ · ضخامت ۳ سانتی‌متر · فلیم · طوسی روشن',
+    quantity: '۳٬۲۰۰ مترمربع', destination: 'مشهد', delivery: 'تحویل مرحله‌ای در ۳ محموله',
+    invited: '۸ کارخانه واجد شرایط', responses: '۲ پاسخ و ۱ پیش‌نویس',
+    responseLines: ['یک پیشنهاد تحویل درب پروژه', 'یک پیشنهاد تحویل درب کارخانه', 'هزینه بارگیری و حمل باید جدا مقایسه شود'],
+    buyerAction: 'فروشندگان تا فردا برای تکمیل پیشنهاد فرصت دارند',
+  },
+  {
+    code: 'نمونه ۰۳', status: 'در حال مقایسه', tone: 'comparing', progress: 3,
+    title: 'اسلب چینی ازنا برای لابی هتل',
+    product: 'اسلب · ضخامت ۲ سانتی‌متر · صیقلی · زمینه سفید با رگه کنترل‌شده',
+    quantity: '۴۲۰ مترمربع', destination: 'جزیره کیش', delivery: 'نمونه و چیدمان اولیه الزامی',
+    invited: '۶ تأمین‌کننده تخصصی اسلب', responses: '۳ پیشنهاد قابل مقایسه',
+    responseLines: ['پیشنهاد اول: آماده‌سازی ۱۲ روزه', 'پیشنهاد دوم: ۶٪ بالاتر با مهلت پرداخت بیشتر', 'پیشنهاد سوم: کنترل کیفیت و بسته‌بندی ویژه'],
+    buyerAction: 'انتخاب پیشنهاد و درخواست کنترل کیفیت ۳٪',
+  },
+  {
+    code: 'نمونه ۰۴', status: 'در انتظار رفع ابهام', tone: 'clarification', progress: 1,
+    title: 'مرمریت لاشتر برای پله و پاگرد ساختمان اداری',
+    product: 'پله ۳ سانتی‌متر · پرداخت هوند · پیشانی و قرنیز هماهنگ',
+    quantity: '۶۸۰ عدد پله', destination: 'شیراز', delivery: 'همراه با نصب',
+    invited: '۵ سنگبری و مجری نصب', responses: '۲ پرسش فنی دریافت‌شده',
+    responseLines: ['ابعاد دقیق شمشیری راه‌پله هنوز پیوست نشده', 'نوع لبه و ابزار پله باید تأیید شود', 'مهلت پاسخ پس از رفع ابهام تمدید می‌شود'],
+    buyerAction: 'خریدار باید نقشه پله و نوع ابزار را تکمیل کند',
+  },
+  {
+    code: 'نمونه ۰۵', status: 'فروشنده منتخب', tone: 'selected', progress: 4,
+    title: 'سنگ مرمر سبز برای دیوار شاخص ویلای مسکونی',
+    product: 'اسلب بوک‌مچ · ضخامت ۲ سانتی‌متر · صیقلی',
+    quantity: '۱۲۰ مترمربع', destination: 'رامسر', delivery: 'بازدید و تأیید چیدمان پیش از برش',
+    invited: '۷ تأمین‌کننده سنگ لوکس', responses: '۵ پیشنهاد دریافت‌شده',
+    responseLines: ['فروشنده بر اساس کیفیت نمونه و زمان تحویل انتخاب شد', 'کمترین قیمت، پیشنهاد منتخب نبود', 'درخواست قرارداد و کنترل کیفیت ثبت شده است'],
+    buyerAction: 'در انتظار هماهنگی بازدید و تأیید نمونه',
+  },
+  {
+    code: 'نمونه ۰۶', status: 'تکمیل‌شده', tone: 'completed', progress: 4,
+    title: 'بازالت کوبیک برای محوطه‌سازی مجموعه گردشگری',
+    product: 'کوبیک ۱۰×۱۰×۵ · سطح گیوتین · رنگ خاکستری تیره',
+    quantity: '۹۵۰ مترمربع', destination: 'تبریز', delivery: 'تحویل درب پروژه؛ نصب نیاز نیست',
+    invited: '۹ تأمین‌کننده منطقه‌ای', responses: '۴ پیشنهاد و یک انتخاب نهایی',
+    responseLines: ['پیشنهاد منتخب ۱۱٪ پایین‌تر از گران‌ترین پیشنهاد هم‌شرط بود', 'تحویل در دو مرحله انجام شد', 'خریدار ارزیابی تعامل را ثبت کرده است'],
+    buyerAction: 'سوابق، پیام‌ها و پیشنهادها در حساب محفوظ است',
+  },
+] as const;
+
 export default function HomePage() {
   return (
     <>
@@ -39,6 +96,47 @@ export default function HomePage() {
         <div className="container coverage-content">
           <strong>پوشش تخصصی سنگ طبیعی</strong>
           <ul><li>تراورتن</li><li>مرمریت</li><li>گرانیت</li><li>چینی و کریستال</li><li>مرمر</li><li>بازالت و آندزیت</li></ul>
+        </div>
+      </section>
+
+      <section className="sample-market-section" aria-labelledby="sample-market-title">
+        <div className="container">
+          <div className="section-heading sample-market-heading">
+            <div><span className="eyebrow">نمای عملی فرایند وازانو</span><h2 id="sample-market-title">استعلام‌های نمونه؛ از ثبت نیاز تا انتخاب فروشنده</h2></div>
+            <p>این اطلاعات ساختگی اما نزدیک به سناریوهای واقعی بازار سنگ هستند. قیمت روز یا پیشنهاد تجاری محسوب نمی‌شوند.</p>
+          </div>
+
+          <ol className="sample-process" aria-label="مراحل پاسخ به استعلام">
+            <li><b>۱</b><span><strong>ثبت نیاز</strong><small>مشخصات، مقدار و مقصد</small></span></li>
+            <li><b>۲</b><span><strong>دریافت پاسخ</strong><small>تأمین‌کنندگان مرتبط</small></span></li>
+            <li><b>۳</b><span><strong>مقایسه</strong><small>قیمت و شرایط هم‌سطح</small></span></li>
+            <li><b>۴</b><span><strong>انتخاب</strong><small>ثبت نتیجه و خدمات تکمیلی</small></span></li>
+          </ol>
+
+          <div className="sample-rfq-grid">
+            {sampleRfqs.map((rfq) => <article className="sample-rfq-card" key={rfq.code}>
+              <header><span className="sample-code">{rfq.code}</span><span className={`sample-status sample-status-${rfq.tone}`}>{rfq.status}</span></header>
+              <h3>{rfq.title}</h3>
+              <p className="sample-product">{rfq.product}</p>
+              <dl className="sample-rfq-facts">
+                <div><dt>مقدار</dt><dd>{rfq.quantity}</dd></div>
+                <div><dt>مقصد</dt><dd>{rfq.destination}</dd></div>
+                <div><dt>شرایط تحویل</dt><dd>{rfq.delivery}</dd></div>
+              </dl>
+              <div className={`sample-progress sample-progress-${rfq.progress}`} aria-label={`مرحله ${rfq.progress.toLocaleString('fa-IR')} از ۴`}><span /></div>
+              <div className="sample-response-summary"><div><span>توزیع</span><strong>{rfq.invited}</strong></div><div><span>پاسخ‌ها</span><strong>{rfq.responses}</strong></div></div>
+              <details className="sample-response-details">
+                <summary>جزئیات وضعیت پاسخ‌ها</summary>
+                <ul>{rfq.responseLines.map((line) => <li key={line}>{line}</li>)}</ul>
+              </details>
+              <p className="sample-next-action"><b>اقدام بعدی:</b> {rfq.buyerAction}</p>
+            </article>)}
+          </div>
+
+          <div className="sample-role-guide">
+            <div><span className="eyebrow">تجربه خریدار</span><h3>پیشنهادهای هم‌شرط را کنار هم ببینید</h3><p>مبلغ نهایی، زمان آماده‌سازی، حمل، مالیات، شرایط پرداخت و پیشنهاد جایگزین جدا نمایش داده می‌شوند.</p><Link className="button button-primary" href="/login">ثبت استعلام رایگان</Link></div>
+            <div><span className="eyebrow">تجربه فروشنده</span><h3>فقط به فرصت‌های مرتبط پاسخ دهید</h3><p>مشخصات فنی و مهلت را بررسی کنید، قیمت را به تفکیک بنویسید و در صورت نیاز محصول جایگزین پیشنهاد دهید.</p><Link className="button button-secondary" href="/plans">آشنایی با حساب فروشنده</Link></div>
+          </div>
         </div>
       </section>
 
