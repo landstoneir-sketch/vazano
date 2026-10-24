@@ -854,6 +854,8 @@ export class RfqsService implements OnApplicationBootstrap, OnApplicationShutdow
     if (units !== unitIds.length) throw new BadRequestException('یک یا چند واحد اندازه‌گیری نامعتبر است.');
 
     for (const item of input.items) {
+      const quantity = new Prisma.Decimal(item.quantity);
+      if (quantity.lte(0)) throw new BadRequestException('مقدار هر ردیف استعلام باید بیشتر از صفر باشد.');
       const bindings = attributeBindings.filter((binding) => binding.categoryId === item.categoryId);
       const specifications = item.specifications ?? {};
       assertValidProductSpecifications(specifications, bindings);

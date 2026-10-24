@@ -24,6 +24,24 @@ describe('RfqsService tenant isolation', () => {
   });
 });
 
+describe('RfqsService item validation', () => {
+  it.each(['0', '-1'])('rejects a non-positive RFQ quantity (%s)', async (quantity) => {
+    const prisma = {
+      category: { count: jest.fn().mockResolvedValue(1) },
+      unitOfMeasure: { count: jest.fn().mockResolvedValue(1) },
+      categoryAttribute: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const service = new RfqsService(prisma as never, {} as never, {} as never, {} as never);
+    const internals = service as unknown as {
+      validateItems: (domainId: string, input: unknown) => Promise<void>;
+    };
+
+    await expect(internals.validateItems('industry-1', {
+      items: [{ categoryId: 'category-1', unitId: 'unit-1', title: 'سنگ تست', quantity }],
+    })).rejects.toThrow('مقدار هر ردیف استعلام باید بیشتر از صفر باشد.');
+  });
+});
+
 describe('RfqsService commitment payment callbacks', () => {
   it('does not verify a buyer commitment that is already terminal', async () => {
     const prisma = {
