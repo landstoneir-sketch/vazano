@@ -1,16 +1,21 @@
 import { defineConfig, devices } from '@playwright/test';
 function resolveE2eDatabaseUrl(): string {
   const configured = process.env.E2E_DATABASE_URL
-    ?? 'postgresql://vazano:vazano_local_only@127.0.0.1:55432/vazano?schema=public';
+    ?? 'postgresql://vazano:vazano_local_only@127.0.0.1:55432/vazano_qa?schema=public';
   const parsed = new URL(configured);
   if (!['127.0.0.1', 'localhost'].includes(parsed.hostname)) {
     throw new Error('E2E_DATABASE_URL باید به دیتابیس محلی و ایزوله اشاره کند.');
+  }
+  const databaseName = parsed.pathname.replace(/^\//, '');
+  if (!databaseName.endsWith('_qa') && !databaseName.endsWith('_test')) {
+    throw new Error('نام دیتابیس E2E باید به _qa یا _test ختم شود تا داده‌های توسعه آسیب نبینند.');
   }
   parsed.hostname = '127.0.0.1';
   return parsed.toString();
 }
 
 const e2eDatabaseUrl = resolveE2eDatabaseUrl();
+const apiOnly = process.env.E2E_API_ONLY === 'true';
 process.env.DATABASE_URL = e2eDatabaseUrl;
 
 export default defineConfig({
@@ -54,7 +59,7 @@ export default defineConfig({
         PAYMENT_PROVIDER: 'mock',
       },
     },
-    {
+    ...(apiOnly ? [] : [{
       command: 'npm run start:e2e:web',
       url: 'http://localhost:3100',
       reuseExistingServer: false,
@@ -64,6 +69,6 @@ export default defineConfig({
         API_INTERNAL_URL: 'http://localhost:3101/v1',
         NEXT_DIST_DIR: '.next-e2e',
       },
-    },
+    }]),
   ],
 });
