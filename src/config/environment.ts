@@ -3,6 +3,10 @@ type Environment = Record<string, string | undefined>;
 export function validateEnvironment(environment: Environment): Environment {
   const nodeEnv = environment.NODE_ENV ?? 'development';
   if (!['development', 'test', 'production'].includes(nodeEnv)) throw new Error('NODE_ENV must be development, test or production.');
+  const deploymentTarget = environment.DEPLOYMENT_TARGET ?? 'container';
+  if (!['container', 'paas'].includes(deploymentTarget)) throw new Error('DEPLOYMENT_TARGET must be container or paas.');
+  if (environment.API_PORT) requirePositiveInteger(environment, 'API_PORT');
+  if (environment.PORT) requirePositiveInteger(environment, 'PORT');
   requireValue(environment, 'DATABASE_URL');
   requireUrl(environment, 'REDIS_URL');
   requireUrl(environment, 'WEB_ORIGIN');
@@ -32,11 +36,13 @@ export function validateEnvironment(environment: Environment): Environment {
   }
 
   if (nodeEnv === 'production') {
-    requireReleaseImage(environment, 'VAZANO_API_IMAGE');
-    requireReleaseImage(environment, 'VAZANO_WEB_IMAGE');
-    requireReleaseImage(environment, 'VAZANO_MIGRATION_IMAGE');
-    requireConsistentApplicationImages(environment);
-    requireDigestImage(environment, 'VAZANO_GATEWAY_IMAGE');
+    if (deploymentTarget === 'container') {
+      requireReleaseImage(environment, 'VAZANO_API_IMAGE');
+      requireReleaseImage(environment, 'VAZANO_WEB_IMAGE');
+      requireReleaseImage(environment, 'VAZANO_MIGRATION_IMAGE');
+      requireConsistentApplicationImages(environment);
+      requireDigestImage(environment, 'VAZANO_GATEWAY_IMAGE');
+    }
     assertNotPlaceholder('DATABASE_URL', environment.DATABASE_URL!);
     assertNotPlaceholder('REDIS_URL', environment.REDIS_URL!);
     requireHttpsOrigin(environment, 'WEB_ORIGIN');
