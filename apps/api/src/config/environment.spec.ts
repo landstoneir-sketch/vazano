@@ -30,6 +30,29 @@ describe('production environment validation', () => {
     expect(() => validateEnvironment(paasEnvironment)).not.toThrow();
   });
 
+  it('accepts explicit single-instance PaaS fallbacks without Redis or ClamAV', () => {
+    const paasEnvironment = {
+      ...productionEnvironment,
+      DEPLOYMENT_TARGET: 'paas',
+      PORT: '3001',
+      RATE_LIMIT_BACKEND: 'memory',
+      FILE_SCAN_MODE: 'disabled',
+    };
+    delete (paasEnvironment as Partial<typeof productionEnvironment>).REDIS_URL;
+    delete (paasEnvironment as Partial<typeof productionEnvironment>).CLAMAV_HOST;
+    delete (paasEnvironment as Partial<typeof productionEnvironment>).CLAMAV_PORT;
+    delete (paasEnvironment as Partial<typeof productionEnvironment>).CLAMAV_TIMEOUT_MS;
+    delete (paasEnvironment as Partial<typeof productionEnvironment>).VAZANO_API_IMAGE;
+    delete (paasEnvironment as Partial<typeof productionEnvironment>).VAZANO_WEB_IMAGE;
+    delete (paasEnvironment as Partial<typeof productionEnvironment>).VAZANO_MIGRATION_IMAGE;
+    delete (paasEnvironment as Partial<typeof productionEnvironment>).VAZANO_GATEWAY_IMAGE;
+    expect(() => validateEnvironment(paasEnvironment)).not.toThrow();
+  });
+
+  it('rejects in-memory rate limiting outside PaaS', () => {
+    expect(() => validateEnvironment({ ...productionEnvironment, RATE_LIMIT_BACKEND: 'memory' })).toThrow(/single-instance PaaS/);
+  });
+
   it.each(['invalid', 'serverless'])('rejects unsupported deployment target %s', (value) => {
     expect(() => validateEnvironment({ ...productionEnvironment, DEPLOYMENT_TARGET: value })).toThrow(/DEPLOYMENT_TARGET/);
   });
