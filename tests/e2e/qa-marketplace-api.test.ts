@@ -114,7 +114,16 @@ test('validates RFQ input, distributes only to eligible suppliers, and isolates 
   expect(reviewed.status()).toBe(201);
   const published = await admin.post(`rfqs/${created.id}/publish`);
   expect(published.status()).toBe(201);
-  expect((await published.json() as { data: { invitedSupplierCount: number } }).data.invitedSupplierCount).toBe(1);
+  const publishedData = (await published.json() as { data: { invitedSupplierCount: number } }).data;
+  const generatedInvitations = await prisma.rfqInvitation.findMany({
+    where: { rfqId: created.id },
+    select: { supplierOrganizationId: true },
+  });
+  const invitedOrganizationIds = generatedInvitations.map(({ supplierOrganizationId }) => supplierOrganizationId);
+  expect(publishedData.invitedSupplierCount).toBe(generatedInvitations.length);
+  expect(invitedOrganizationIds).toContain('qa-org-supplier-alborz');
+  expect(invitedOrganizationIds).not.toContain('qa-org-supplier-sepahan');
+  expect(invitedOrganizationIds).not.toContain('qa-org-supplier-edge');
 
   const invitedSupplierView = await supplierA.get(`rfqs/${created.id}`);
   expect(invitedSupplierView.status()).toBe(200);

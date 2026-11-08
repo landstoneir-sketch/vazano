@@ -70,6 +70,6 @@ export function PublicSupplierProfile({ organizationId }: { organizationId: stri
     })}</section>
     {!profile.supplierProfile.nationwideCoverage && <article className="card"><h2>استان‌های تحت پوشش</h2><p>{profile.supplierProfile.serviceProvinceLinks.map(({ province }) => province.nameFa).join('، ') || 'ثبت نشده'}</p></article>}
     <section className="stack"><h2>تجربه خریداران</h2>{profile.recentReviews.length === 0 && <div className="card">هنوز ارزیابی معتبری برای این فروشنده منتشر نشده است.</div>}{profile.recentReviews.map((review) => <article className="card" key={review.id}><div className="admin-card-title"><strong className="price" aria-label={`${review.rating} از ۵`}>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</strong><span className="muted">{new Date(review.createdAt).toLocaleDateString('fa-IR')}</span></div><p>{review.comment ?? 'خریدار فقط امتیاز عددی ثبت کرده است.'}</p><small className="muted">خرید معتبر ثبت‌شده در وازانو</small></article>)}</section>
-    <div className="actions"><Link className="button button-primary" href="/login">ثبت استعلام جدید</Link><Link className="button button-secondary" href={'/suppliers' as Route}>بازگشت به فروشندگان</Link></div>
+    <div className="actions"><Link className="button button-primary" href="/dashboard/rfqs/new">ثبت استعلام جدید</Link><Link className="button button-secondary" href={'/suppliers' as Route}>بازگشت به فروشندگان</Link></div>
   </div>;
 }

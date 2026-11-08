@@ -855,55 +855,71 @@ model City {
 }
 
 model Rfq {
-  id                        String                 @id @default(cuid())
-  code                      String                 @unique
-  buyerOrganizationId       String                 @map("buyer_organization_id")
-  buyerContactUserId        String                 @map("buyer_contact_user_id")
-  createdByUserId           String                 @map("created_by_user_id")
-  operatorUserId            String?                @map("operator_user_id")
-  primaryDomainId           String                 @map("primary_domain_id")
-  title                     String
-  description               String?
-  entryMethod               RfqEntryMethod         @default(STANDARD) @map("entry_method")
-  lifecycleState            RfqLifecycleState      @default(DRAFT) @map("lifecycle_state")
-  operationalStatus         RfqOperationalStatus   @default(DRAFT_INCOMPLETE) @map("operational_status")
-  approvalStatus            RfqApprovalStatus      @default(NOT_SUBMITTED) @map("approval_status")
-  source                    RfqSource              @default(BUYER_SELF_SERVICE)
-  manualReviewRequired      Boolean                @default(true) @map("manual_review_required")
-  commitmentStatus          CommitmentStatus       @default(NOT_REQUIRED) @map("commitment_status")
-  commitmentAmountRial      BigInt?                @map("commitment_amount_rial")
-  commitmentPolicyVersion   String?                @map("commitment_policy_version")
-  deliveryProvinceId        String?                @map("delivery_province_id")
-  deliveryCityId            String?                @map("delivery_city_id")
-  deliveryProvince          String?                @map("delivery_province")
-  deliveryCity              String?                @map("delivery_city")
-  requiredAt                DateTime?              @map("required_at") @db.Timestamptz(3)
-  responseDeadline          DateTime?              @map("response_deadline") @db.Timestamptz(3)
-  installationRequired      Boolean                @default(false) @map("installation_required")
-  qualityControlRequested   Boolean                @default(false) @map("quality_control_requested")
-  qualityControlFeeBps      Int?                   @map("quality_control_fee_bps")
-  displayPricesTaxInclusive Boolean                @default(false) @map("display_prices_tax_inclusive")
-  submittedAt               DateTime?              @map("submitted_at") @db.Timestamptz(3)
-  publishedAt               DateTime?              @map("published_at") @db.Timestamptz(3)
-  closedAt                  DateTime?              @map("closed_at") @db.Timestamptz(3)
-  createdAt                 DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt                 DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
-  buyerOrganization         Organization           @relation(fields: [buyerOrganizationId], references: [id], onDelete: Restrict)
-  buyerContact              User                   @relation("RfqBuyerContact", fields: [buyerContactUserId], references: [id], onDelete: Restrict)
-  createdBy                 User                   @relation("RfqCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
-  operator                  User?                  @relation("RfqOperator", fields: [operatorUserId], references: [id], onDelete: Restrict)
-  primaryDomain             Industry               @relation(fields: [primaryDomainId], references: [id], onDelete: Restrict)
-  deliveryProvinceRef       Province?              @relation("RfqDeliveryProvince", fields: [deliveryProvinceId], references: [id], onDelete: Restrict)
-  deliveryCityRef           City?                  @relation("RfqDeliveryCity", fields: [deliveryCityId], references: [id], onDelete: Restrict)
-  items                     RfqItem[]
-  qualityControlRequest     QualityControlRequest?
-  contractRequest           ContractRequest?
-  invitations               RfqInvitation[]
-  quotations                Quotation[]
-  attachments               Attachment[]
-  messageThreads            MessageThread[]
-  supportTickets            SupportTicket[]
-  supplierReview            SupplierReview?
+  id                         String                 @id @default(cuid())
+  code                       String                 @unique
+  buyerOrganizationId        String                 @map("buyer_organization_id")
+  buyerContactUserId         String                 @map("buyer_contact_user_id")
+  createdByUserId            String                 @map("created_by_user_id")
+  operatorUserId             String?                @map("operator_user_id")
+  primaryDomainId            String                 @map("primary_domain_id")
+  title                      String
+  description                String?
+  projectName                String?                @map("project_name")
+  deliveryAddress            String?                @map("delivery_address")
+  paymentTerm                String?                @map("payment_term")
+  paymentDetail              String?                @map("payment_detail")
+  deliveryTimeMode           String?                @map("delivery_time_mode")
+  deliverySchedule           String?                @map("delivery_schedule")
+  deliveryScheduleDetail     String?                @map("delivery_schedule_detail")
+  shippingMode               String?                @map("shipping_mode")
+  transportCoordinator       String?                @map("transport_coordinator")
+  freightPayer               String?                @map("freight_payer")
+  unloadingPayer             String?                @map("unloading_payer")
+  purchaseQualityTerms       Json                   @default("[]") @map("purchase_quality_terms")
+  purchaseQualityTermsOther  String?                @map("purchase_quality_terms_other")
+  financialGuaranteeRequired Boolean                @default(false) @map("financial_guarantee_required")
+  financialGuaranteeDetail   String?                @map("financial_guarantee_detail")
+  formSchemaVersion          Int                    @default(2) @map("form_schema_version")
+  entryMethod                RfqEntryMethod         @default(STANDARD) @map("entry_method")
+  lifecycleState             RfqLifecycleState      @default(DRAFT) @map("lifecycle_state")
+  operationalStatus          RfqOperationalStatus   @default(DRAFT_INCOMPLETE) @map("operational_status")
+  approvalStatus             RfqApprovalStatus      @default(NOT_SUBMITTED) @map("approval_status")
+  source                     RfqSource              @default(BUYER_SELF_SERVICE)
+  manualReviewRequired       Boolean                @default(true) @map("manual_review_required")
+  commitmentStatus           CommitmentStatus       @default(NOT_REQUIRED) @map("commitment_status")
+  commitmentAmountRial       BigInt?                @map("commitment_amount_rial")
+  commitmentPolicyVersion    String?                @map("commitment_policy_version")
+  deliveryProvinceId         String?                @map("delivery_province_id")
+  deliveryCityId             String?                @map("delivery_city_id")
+  deliveryProvince           String?                @map("delivery_province")
+  deliveryCity               String?                @map("delivery_city")
+  requiredAt                 DateTime?              @map("required_at") @db.Timestamptz(3)
+  responseDeadline           DateTime?              @map("response_deadline") @db.Timestamptz(3)
+  installationRequired       Boolean                @default(false) @map("installation_required")
+  qualityControlRequested    Boolean                @default(false) @map("quality_control_requested")
+  qualityControlFeeBps       Int?                   @map("quality_control_fee_bps")
+  displayPricesTaxInclusive  Boolean                @default(false) @map("display_prices_tax_inclusive")
+  submittedAt                DateTime?              @map("submitted_at") @db.Timestamptz(3)
+  publishedAt                DateTime?              @map("published_at") @db.Timestamptz(3)
+  closedAt                   DateTime?              @map("closed_at") @db.Timestamptz(3)
+  createdAt                  DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                  DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  buyerOrganization          Organization           @relation(fields: [buyerOrganizationId], references: [id], onDelete: Restrict)
+  buyerContact               User                   @relation("RfqBuyerContact", fields: [buyerContactUserId], references: [id], onDelete: Restrict)
+  createdBy                  User                   @relation("RfqCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  operator                   User?                  @relation("RfqOperator", fields: [operatorUserId], references: [id], onDelete: Restrict)
+  primaryDomain              Industry               @relation(fields: [primaryDomainId], references: [id], onDelete: Restrict)
+  deliveryProvinceRef        Province?              @relation("RfqDeliveryProvince", fields: [deliveryProvinceId], references: [id], onDelete: Restrict)
+  deliveryCityRef            City?                  @relation("RfqDeliveryCity", fields: [deliveryCityId], references: [id], onDelete: Restrict)
+  items                      RfqItem[]
+  qualityControlRequest      QualityControlRequest?
+  contractRequest            ContractRequest?
+  invitations                RfqInvitation[]
+  quotations                 Quotation[]
+  attachments                Attachment[]
+  messageThreads             MessageThread[]
+  supportTickets             SupportTicket[]
+  supplierReview             SupplierReview?
 
   @@index([buyerOrganizationId, createdAt])
   @@index([lifecycleState, operationalStatus])

@@ -7,7 +7,7 @@ import { formatProductSpecifications, type ProductAttributeBinding, type Product
 
 type Organization = { id: string; displayName: string; kind: string; status: string };
 type RfqItem = { id: string; title: string; quantity: string; specifications: ProductSpecifications; category: { id: string; nameFa: string; attributeBindings: ProductAttributeBinding[] }; unit: { symbolFa: string } };
-type Rfq = { id: string; code: string; title: string; description: string | null; deliveryProvince: string | null; deliveryCity: string | null; requiredAt: string | null; responseDeadline: string | null; installationRequired: boolean; items: RfqItem[] };
+type Rfq = { id: string; code: string; title: string; description: string | null; projectName: string | null; deliveryProvince: string | null; deliveryCity: string | null; deliveryAddress: string | null; requiredAt: string | null; responseDeadline: string | null; paymentTerm: string | null; paymentDetail: string | null; deliverySchedule: string | null; deliveryScheduleDetail: string | null; shippingMode: string | null; transportCoordinator: string | null; freightPayer: string | null; unloadingPayer: string | null; purchaseQualityTerms: string[]; purchaseQualityTermsOther: string | null; financialGuaranteeRequired: boolean; financialGuaranteeDetail: string | null; installationRequired: boolean; items: RfqItem[] };
 type GuidanceProfile = { requiredChecks: string[]; comparisonCriteria: string[]; suggestedFamilies: string[] };
 type CategoryGuidance = {
   profile: string | null;
@@ -33,6 +33,12 @@ type SupplierQuotation = CreatedQuotation & {
 };
 type ProposalFeePolicy = { version: string; rate: string; minToman: number; maxToman: number; refundFractionIfEligible: string };
 type Attachment = { id: string; originalName: string; status: string; sizeBytes: number };
+
+const rfqTermLabels: Record<string, string> = {
+  CASH: 'نقدی', ADVANCE: 'پیش‌پرداخت', AFTER_DELIVERY: 'پس از تحویل', CHEQUE: 'چک', BARTER: 'تهاتر', NEGOTIABLE: 'قابل مذاکره',
+  ONCE: 'یک‌مرحله‌ای', STAGED: 'مرحله‌ای', FACTORY: 'درب کارخانه', DESTINATION: 'تحویل در مقصد', BUYER: 'خریدار', SELLER: 'فروشنده', INCLUDED: 'داخل قیمت پیشنهادی',
+  SAMPLE_APPROVAL: 'تأیید نمونه پیش از خرید', PRE_LOADING_INSPECTION: 'بازرسی پیش از بارگیری', DIMENSION_TOLERANCE: 'کنترل ابعاد و تلرانس', SORT_CONSISTENCY: 'یکنواختی سورت و رنگ', NONCONFORMING_RETURN: 'مرجوعی کالای نامنطبق', QUALITY_GUARANTEE: 'تضمین کیفیت', OTHER: 'سایر',
+};
 type UploadIntent = { attachment: Attachment; upload: { url: string; method: 'PUT'; headers: Record<string, string> } };
 
 const toRial = (toman: string) => Math.round(Number(toman || '0') * 10).toString();
@@ -245,7 +251,7 @@ export function QuoteForm({ rfqId, initialOrganizationId }: { rfqId: string; ini
     if (created?.status === 'DRAFT' && (!(event.target instanceof HTMLInputElement) || event.target.type !== 'file')) setDraftDirty(true);
   }}>
     {message && <div className={`message ${created?.status === 'SUBMITTED' ? 'message-success' : ''}`}>{message}</div>}
-    <div className="full quote-rfq-summary"><div className="eyebrow">{rfq.code}</div><h2>{rfq.title}</h2>{rfq.description && <p>{rfq.description}</p>}<div className="specification-summary"><span>تحویل: {rfq.deliveryProvince ?? 'نامشخص'}، {rfq.deliveryCity ?? 'نامشخص'}</span><span>مهلت پاسخ: {rfq.responseDeadline ? new Date(rfq.responseDeadline).toLocaleString('fa-IR') : 'تعیین نشده'}</span><span>زمان موردنیاز: {rfq.requiredAt ? new Date(rfq.requiredAt).toLocaleString('fa-IR') : 'تعیین نشده'}</span><span>نصب: {rfq.installationRequired ? 'موردنیاز است' : 'موردنیاز نیست'}</span></div></div>
+    <div className="full quote-rfq-summary"><div className="eyebrow">{rfq.code}</div><h2>{rfq.title}</h2>{rfq.projectName && <p><strong>پروژه:</strong> {rfq.projectName}</p>}{rfq.description && <p>{rfq.description}</p>}<div className="specification-summary"><span>تحویل: {[rfq.deliveryProvince, rfq.deliveryCity, rfq.deliveryAddress].filter(Boolean).join('، ') || 'نامشخص'}</span><span>مهلت پاسخ: {rfq.responseDeadline ? new Date(rfq.responseDeadline).toLocaleString('fa-IR') : 'تعیین نشده'}</span><span>زمان موردنیاز: {rfq.requiredAt ? new Date(rfq.requiredAt).toLocaleString('fa-IR') : 'تعیین نشده'}</span><span>برنامه تحویل: {rfqTermLabels[rfq.deliverySchedule ?? ''] ?? 'تعیین نشده'}{rfq.deliveryScheduleDetail ? ` · ${rfq.deliveryScheduleDetail}` : ''}</span><span>پرداخت: {rfqTermLabels[rfq.paymentTerm ?? ''] ?? 'تعیین نشده'}{rfq.paymentDetail ? ` · ${rfq.paymentDetail}` : ''}</span><span>مبنای تحویل: {rfqTermLabels[rfq.shippingMode ?? ''] ?? 'تعیین نشده'}</span>{rfq.shippingMode === 'DESTINATION' && <span>حمل/کرایه/تخلیه: {rfqTermLabels[rfq.transportCoordinator ?? ''] ?? '—'} / {rfqTermLabels[rfq.freightPayer ?? ''] ?? '—'} / {rfqTermLabels[rfq.unloadingPayer ?? ''] ?? '—'}</span>}<span>نصب: {rfq.installationRequired ? 'موردنیاز است' : 'موردنیاز نیست'}</span><span>تضمین مالی: {rfq.financialGuaranteeRequired ? rfq.financialGuaranteeDetail ?? 'لازم است' : 'لازم نیست'}</span>{rfq.purchaseQualityTerms.map((term) => <span key={term}>شرط خرید: {rfqTermLabels[term] ?? term}</span>)}{rfq.purchaseQualityTermsOther && <span>شرط تکمیلی: {rfq.purchaseQualityTermsOther}</span>}</div></div>
     <div className="rfq-form-section-title full"><b>۱</b><div><strong>حساب فروشنده و شرایط تحویل</strong><span>اعتبار زمانی و روش پرداخت این پیشنهاد را مشخص کنید.</span></div></div>
     <label className="form-field"><span>حساب فروشنده</span><select value={organizationId} disabled={Boolean(created)} onChange={(event) => { setQuotationHistoryState('LOADING'); setOrganizationId(event.target.value); }} required>{organizations.map((item) => <option key={item.id} value={item.id}>{item.displayName} · {item.status}</option>)}</select></label>
     <label className="form-field"><span>مدت آماده‌سازی (روز)</span><input type="number" min="0" value={preparationDays} onChange={(event) => setPreparationDays(event.target.value)} required /></label>

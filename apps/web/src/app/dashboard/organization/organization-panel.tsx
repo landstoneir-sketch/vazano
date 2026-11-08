@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
-import { apiRequest } from '../../../lib/api';
+import { apiRequest, digitsOnly, normalizeIranianMobileInput } from '../../../lib/api';
 
 type MemberRole = 'BUYER_OWNER' | 'BUYER_MEMBER' | 'SUPPLIER_OWNER' | 'SUPPLIER_MANAGER' | 'SUPPLIER_SALES';
 type Organization = {
@@ -23,7 +23,7 @@ const roleLabels: Record<MemberRole, string> = {
 };
 const statusLabels: Record<string, string> = { ACTIVE: 'فعال', PENDING: 'در انتظار بررسی', SUSPENDED: 'تعلیق‌شده', INVITED: 'دعوت‌شده' };
 
-export function OrganizationPanel() {
+export function OrganizationPanel({ returnTo }: { returnTo?: string }) {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [members, setMembers] = useState<OrganizationMember[]>([]);
@@ -93,6 +93,7 @@ export function OrganizationPanel() {
       setDisplayName(''); setNationalId(''); setProvinceId(''); setCityId(''); setCities([]);
       setMessage(kind === 'BUYER' ? 'حساب خریدار با موفقیت ایجاد شد.' : 'حساب فروشنده ایجاد شد؛ اکنون توانمندی‌های آن را تکمیل کنید.');
       await loadOrganizations();
+      if (kind === 'BUYER' && returnTo) window.location.assign(returnTo);
     } catch (reason: unknown) { setError(reason instanceof Error ? reason.message : 'ایجاد حساب انجام نشد.'); }
     finally { setBusy(false); }
   }
@@ -156,13 +157,13 @@ export function OrganizationPanel() {
       const memberAssignableRoles = assignableRoles.filter((role) => role !== member.role);
       const canEdit = !['BUYER_OWNER', 'SUPPLIER_OWNER'].includes(member.role) && assignableRoles.includes(member.role);
       return <div className="organization-member-row" key={member.id}><div><strong>{memberName}</strong><p>{roleLabels[member.role]} · {statusLabels[member.status] ?? member.status}{member.user.email ? ` · ${member.user.email}` : ''}</p></div>{canEdit && <div className="list-card-actions">{memberAssignableRoles.length > 0 && <select aria-label="تغییر نقش عضو" value={member.role} disabled={busy} onChange={(event) => void changeRole(member.id, event.target.value as MemberRole)}><option value={member.role}>{roleLabels[member.role]}</option>{memberAssignableRoles.map((role) => <option value={role} key={role}>{roleLabels[role]}</option>)}</select>}<button className="button button-danger" type="button" disabled={busy} onClick={() => void removeMember(member.id)}>حذف</button></div>}</div>;
-    })}{assignableRoles.length > 0 && <form className="organization-invite-form" onSubmit={invite}><label className="form-field"><span>شماره موبایل عضو جدید</span><input value={inviteMobile} onChange={(event) => setInviteMobile(event.target.value)} inputMode="tel" placeholder="09121234567" required /></label><label className="form-field"><span>نقش</span><select value={assignableRoles.includes(inviteRole) ? inviteRole : assignableRoles[0]} onChange={(event) => setInviteRole(event.target.value as MemberRole)}>{assignableRoles.map((role) => <option value={role} key={role}>{roleLabels[role]}</option>)}</select></label><button className="button button-primary" disabled={busy}>دعوت عضو</button></form>}</section>}
+    })}{assignableRoles.length > 0 && <form className="organization-invite-form" onSubmit={invite}><label className="form-field"><span>شماره موبایل عضو جدید</span><input type="tel" value={inviteMobile} onChange={(event) => setInviteMobile(normalizeIranianMobileInput(event.target.value))} inputMode="numeric" autoComplete="tel" dir="ltr" pattern="09[0-9]{9}" minLength={11} maxLength={11} placeholder="مثال: 09123456789" required /><small>شماره ۱۱ رقمی با ۰۹ آغاز می‌شود.</small></label><label className="form-field"><span>نقش</span><select value={assignableRoles.includes(inviteRole) ? inviteRole : assignableRoles[0]} onChange={(event) => setInviteRole(event.target.value as MemberRole)}>{assignableRoles.map((role) => <option value={role} key={role}>{roleLabels[role]}</option>)}</select></label><button className="button button-primary" disabled={busy}>دعوت عضو</button></form>}</section>}
 
     <form className="card form-grid" onSubmit={submit}>
       <h2>ایجاد حساب خریدار یا فروشنده</h2>
       <label className="form-field"><span>نوع حساب</span><select value={kind} onChange={(event) => setKind(event.target.value as 'BUYER' | 'SUPPLIER')}><option value="BUYER">خریدار</option><option value="SUPPLIER">فروشنده / تولیدکننده</option></select></label>
-      <label className="form-field"><span>نام شخص یا مجموعه</span><input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required minLength={2} /></label>
-      <label className="form-field"><span>شناسه ملی شرکت (اختیاری)</span><input value={nationalId} onChange={(event) => setNationalId(event.target.value)} inputMode="numeric" /></label>
+      <label className="form-field"><span>نام شخص یا مجموعه</span><input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required minLength={2} maxLength={160} placeholder="مثال: شرکت سازه گستر ایرانیان" /></label>
+      <label className="form-field"><span>شناسه ملی شرکت (اختیاری)</span><input value={nationalId} onChange={(event) => setNationalId(digitsOnly(event.target.value, 11))} inputMode="numeric" dir="ltr" pattern="[0-9]{11}" minLength={11} maxLength={11} placeholder="مثال: 10101234567" /><small>برای حساب شخصی این بخش را خالی بگذارید.</small></label>
       <label className="form-field"><span>استان</span><select value={provinceId} onChange={(event) => { setProvinceId(event.target.value); setCityId(''); setCities([]); }} required><option value="">انتخاب استان</option>{provinces.map((province) => <option value={province.id} key={province.id}>{province.nameFa}</option>)}</select></label>
       <label className="form-field"><span>شهر</span><select value={cityId} onChange={(event) => setCityId(event.target.value)} disabled={!provinceId} required><option value="">{provinceId ? 'انتخاب شهر' : 'ابتدا استان را انتخاب کنید'}</option>{cities.map((city) => <option value={city.id} key={city.id}>{city.nameFa}{city.isProvinceCapital ? ' · مرکز استان' : ''}</option>)}</select></label>
       <button className="button button-primary" disabled={busy || !provinceId || !cityId}>{busy ? 'در حال ثبت…' : `ایجاد حساب ${kind === 'BUYER' ? 'خریدار' : 'فروشنده'}`}</button>

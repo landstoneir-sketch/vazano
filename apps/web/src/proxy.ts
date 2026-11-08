@@ -10,6 +10,8 @@ function loginRedirect(request: NextRequest): NextResponse {
 }
 
 export async function proxy(request: NextRequest): Promise<NextResponse> {
+  const isPublicRfqStart = request.nextUrl.pathname === '/dashboard/rfqs/new' && !request.nextUrl.searchParams.has('edit');
+  if (isPublicRfqStart) return NextResponse.next();
   if (!request.cookies.has('vazano_session')) return loginRedirect(request);
 
   const apiBaseUrl = process.env.API_INTERNAL_URL

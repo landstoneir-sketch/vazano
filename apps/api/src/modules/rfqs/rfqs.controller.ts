@@ -87,3 +87,13 @@ export class RfqsController {
     return this.rfqs.createCommitmentPayment(user, id, input.idempotencyKey);
   }
 }
+
+@Controller('public/rfqs')
+export class PublicRfqsController {
+  constructor(private readonly rfqs: RfqsService) {}
+
+  @Get('active-policy')
+  activePolicy() {
+    return this.rfqs.getActivePolicy();
+  }
+}

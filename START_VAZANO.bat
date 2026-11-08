@@ -3,6 +3,8 @@ setlocal EnableExtensions
 chcp 65001 >nul
 cd /d "%~dp0"
 
+if not exist "%~dp0.env" goto :missing_env
+
 powershell.exe -NoProfile -Command "$active = @(3000, 3001 | Where-Object { Get-NetTCPConnection -LocalPort $_ -State Listen -ErrorAction SilentlyContinue }); if ($active.Count -eq 2) { exit 10 }; if ($active.Count -gt 0) { exit 11 }"
 if errorlevel 11 goto :partial_running
 if errorlevel 10 goto :already_running
@@ -46,6 +48,13 @@ exit /b 0
 echo.
 echo [Vazano] Only part of the development environment is running on port 3000 or 3001.
 echo Close the old Vazano command windows, then run START_VAZANO.bat again.
+pause
+exit /b 1
+
+:missing_env
+echo.
+echo [Vazano] The local environment file is missing: %~dp0.env
+echo Copy .env.example to .env and complete the required development settings.
 pause
 exit /b 1
 

@@ -1,0 +1,17 @@
+ALTER TABLE "rfqs"
+  ADD COLUMN "project_name" TEXT,
+  ADD COLUMN "delivery_address" TEXT,
+  ADD COLUMN "payment_term" TEXT,
+  ADD COLUMN "payment_detail" TEXT,
+  ADD COLUMN "delivery_time_mode" TEXT,
+  ADD COLUMN "delivery_schedule" TEXT,
+  ADD COLUMN "delivery_schedule_detail" TEXT,
+  ADD COLUMN "shipping_mode" TEXT,
+  ADD COLUMN "transport_coordinator" TEXT,
+  ADD COLUMN "freight_payer" TEXT,
+  ADD COLUMN "unloading_payer" TEXT,
+  ADD COLUMN "purchase_quality_terms" JSONB NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN "purchase_quality_terms_other" TEXT,
+  ADD COLUMN "financial_guarantee_required" BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN "financial_guarantee_detail" TEXT,
+  ADD COLUMN "form_schema_version" INTEGER NOT NULL DEFAULT 2;

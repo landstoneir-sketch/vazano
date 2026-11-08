@@ -82,7 +82,6 @@ test('کد تخفیف در خرید اشتراک اعمال و پرداخت قط
   await page.getByLabel('پذیرش قوانین و حریم خصوصی').check();
   await page.getByRole('button', { name: 'ارسال کد تأیید' }).click();
   await page.getByLabel('کد تأیید').fill('11111');
-  await page.getByRole('button', { name: 'ورود' }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
   const legalAcceptance = await prisma.legalAcceptance.findFirst({ where: { userId: TEST_USER_ID } });
   expect(legalAcceptance).toMatchObject({ termsVersion: expect.any(Number), privacyVersion: expect.any(Number) });

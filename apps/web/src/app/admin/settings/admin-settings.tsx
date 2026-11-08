@@ -92,6 +92,11 @@ function SettingValueEditor({ settingKey, rawValue, provinces, onChange, disable
     return <label className="form-field"><span>کارمزد کنترل کیفیت (درصد)</span><input type="number" min="0" max="100" step="0.01" disabled={disabled} value={basisPoints / 100} onChange={(event) => setParsed(Math.round(Number(event.target.value) * 100))} /><small>برای استعلام‌های جدید ذخیره می‌شود؛ پیش‌فرض مصوب ۳٪ است.</small></label>;
   }
 
+  if (settingKey === 'rfq.buyer_commitment_enabled') {
+    const enabled = typeof parsed === 'boolean' ? parsed : false;
+    return <label className="check-field"><input type="checkbox" disabled={disabled} checked={enabled} onChange={(event) => setParsed(event.target.checked)} /><span>{enabled ? 'تعهد مالی خریدار فعال است' : 'ثبت استعلام برای خریدار رایگان است'}</span><small>برای عرضه عمومی خاموش بماند. خدمت اختیاری کنترل کیفیت مستقل از این گزینه است.</small></label>;
+  }
+
   if (settingKey === 'rfq.buyer_commitment_amount_rial') {
     const rial = typeof parsed === 'number' ? parsed : 2_500_000;
     return <label className="form-field"><span>مبلغ تعهد خریدار جدید (تومان)</span><input type="number" min="0" step="1000" disabled={disabled} value={rial / 10} onChange={(event) => setParsed(Math.round(Number(event.target.value) * 10))} /><small>صفر به معنای بدون مبلغ است؛ تغییر فقط بر استعلام‌های جدید اعمال می‌شود.</small></label>;

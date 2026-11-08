@@ -20,6 +20,7 @@
     "test:e2e": "node scripts/run-playwright-e2e.mjs",
     "build": "npm run build --workspaces --if-present",
     "prisma:generate": "npm run prisma:generate --workspace @vazano/api",
+    "prisma:validate": "npm run prisma:validate --workspace @vazano/api",
     "prisma:migrate": "npm run prisma:migrate --workspace @vazano/api",
     "prisma:deploy": "npm run prisma:deploy --workspace @vazano/api",
     "prisma:seed": "npm run prisma:seed --workspace @vazano/api"
@@ -42,5 +43,10 @@
     "@prisma/client@6.12.0": true,
     "@prisma/engines@6.12.0": true,
     "prisma@6.12.0": true
+  },
+  "overrides": {
+    "@nestjs/platform-express@11.2.7": {
+      "multer": "2.5.0"
+    }
   }
 }

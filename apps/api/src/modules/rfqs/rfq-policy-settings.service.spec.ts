@@ -6,7 +6,7 @@ describe('RFQ policy settings', () => {
       marketCountry: 'IR', marketCoverageMode: 'NATIONWIDE', marketCoverageProvinceCodes: [], displayPricesTaxInclusive: false,
       legalRole: 'INFORMATION_INTERMEDIARY', qualityControl: { enabled: true, feeBps: 300 },
       operatorEntryEnabled: true, pilotManualReview: true,
-      buyerCommitment: { amountRial: 2_500_000n, policyVersion: 'BUYER_PRICE_V1_0' },
+      buyerCommitment: { enabled: false, amountRial: 2_500_000n, policyVersion: 'BUYER_PRICE_V1_0' },
     });
   });
 
@@ -15,13 +15,19 @@ describe('RFQ policy settings', () => {
       'quality_control.enabled': false,
       'quality_control.fee_bps': 250,
       'rfq.pilot_manual_review': false,
+      'rfq.buyer_commitment_enabled': true,
       'rfq.buyer_commitment_amount_rial': 5_000_000,
-    })).toMatchObject({ qualityControl: { enabled: false, feeBps: 250 }, pilotManualReview: false });
+    })).toMatchObject({
+      qualityControl: { enabled: false, feeBps: 250 },
+      pilotManualReview: false,
+      buyerCommitment: { enabled: true, amountRial: 5_000_000n },
+    });
   });
 
   it('rejects invalid money and percentage values', () => {
     expect(() => assertValidRfqPolicySetting('quality_control.fee_bps', 10_001)).toThrow();
     expect(() => assertValidRfqPolicySetting('rfq.buyer_commitment_amount_rial', -1)).toThrow();
+    expect(() => assertValidRfqPolicySetting('rfq.buyer_commitment_enabled', 'false')).toThrow();
   });
 
   it('requires an allowlist when selected-province coverage is enabled', () => {

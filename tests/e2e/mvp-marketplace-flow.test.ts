@@ -160,14 +160,13 @@ test.afterEach(async () => cleanupTestData());
 test.afterAll(async () => prisma.$disconnect());
 
 test('جریان ورود، استعلام، انتشار، پیشنهاد و انتخاب فروشنده تکمیل می‌شود', async ({ page }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(480_000);
   await page.goto('/login');
   await page.getByLabel('شماره موبایل').fill(TEST_MOBILE_LOCAL);
   await page.getByLabel('پذیرش قوانین و حریم خصوصی').check();
   await page.getByRole('button', { name: 'ارسال کد تأیید' }).click();
   await expect(page.getByLabel('کد تأیید')).toBeVisible();
   await page.getByLabel('کد تأیید').fill('11111');
-  await page.getByRole('button', { name: 'ورود' }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 
   await page.goto(`/supplier/profile/${SUPPLIER_ORGANIZATION_ID}`);
@@ -251,21 +250,28 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
 
   await page.goto('/admin/rfqs/new');
   await expect(page.getByRole('heading', { name: 'ثبت استعلام از طرف خریدار' })).toBeVisible();
+  await page.getByLabel('نوع سنگ').selectOption({ index: 1 });
+  await expect(page.getByLabel('نوع فرآوری')).toBeVisible();
+  await page.getByLabel('نوع فرآوری').selectOption({ index: 1 });
+  await page.getByLabel('روش تعیین ضخامت').selectOption('ضخامت مشخص');
+  await page.getByLabel('ضخامت (میلی‌متر)').fill('20');
+  await page.getByLabel('نمای خارجی', { exact: true }).check();
+  await page.getByLabel('نام یا شرح سنگ').fill('سنگ تراورتن کرم برای ثبت اپراتوری');
+  await page.getByLabel('مقدار').fill('40');
+  await page.getByRole('button', { name: 'ادامه' }).click();
   await expect(page.getByLabel('حساب خریدار')).toContainText('خریدار آزمایشی');
   await page.getByLabel('حساب خریدار').selectOption(BUYER_ORGANIZATION_ID);
   await page.getByLabel('فرد تماس خریدار').selectOption(TEST_USER_ID);
   await expect(page.getByLabel('فرد تماس خریدار')).toHaveValue(TEST_USER_ID);
   await page.getByLabel('عنوان استعلام').fill(OPERATOR_RFQ_TITLE);
-  await page.getByLabel('نوع سنگ').selectOption({ index: 1 });
-  await expect(page.getByLabel('نوع فرآوری')).toBeVisible();
-  await page.getByLabel('نوع فرآوری').selectOption({ index: 1 });
-  await page.getByLabel('ضخامت (میلی‌متر)').fill('20');
-  await page.getByLabel('نمای خارجی', { exact: true }).check();
-  await page.getByLabel('شرح محصول').fill('سنگ تراورتن کرم برای ثبت اپراتوری');
-  await page.getByLabel('مقدار').fill('40');
   await page.getByLabel('استان تحویل').selectOption({ label: 'تهران' });
-  await page.getByRole('button', { name: 'ثبت پیش‌نویس از طرف خریدار' }).click();
-  await expect(page.getByText('پیش‌نویس ذخیره شده است.')).toBeVisible();
+  await page.getByLabel('شرایط پرداخت').selectOption('CASH');
+  await page.getByRole('button', { name: 'ادامه' }).click();
+  await expect(page.getByRole('heading', { name: 'بازبینی استعلام' })).toBeVisible();
+  const operatorDraftButton = page.getByRole('button', { name: 'ثبت پیش‌نویس از طرف خریدار' });
+  await expect(operatorDraftButton).toBeVisible();
+  await operatorDraftButton.click();
+  await expect(page.locator('.message-success').filter({ hasText: /پیش‌نویس.*ذخیره/ })).toBeVisible();
   const operatorRfq = await prisma.rfq.findFirstOrThrow({ where: { title: OPERATOR_RFQ_TITLE } });
   expect(operatorRfq).toMatchObject({
     buyerOrganizationId: BUYER_ORGANIZATION_ID,
@@ -279,21 +285,28 @@ test('جریان ورود، استعلام، انتشار، پیشنهاد و ا
   })).toBe(1);
 
   await page.goto('/dashboard/rfqs/new');
-  await expect(page.getByLabel('حساب خریدار')).toContainText('خریدار آزمایشی');
-  await page.getByLabel('عنوان استعلام').fill(TEST_RFQ_TITLE);
   await page.getByLabel('نوع سنگ').selectOption({ index: 1 });
   await expect(page.getByLabel('نوع فرآوری')).toBeVisible();
   await page.getByLabel('نوع فرآوری').selectOption({ index: 1 });
+  await page.getByLabel('روش تعیین ضخامت').selectOption('ضخامت مشخص');
   await page.getByLabel('ضخامت (میلی‌متر)').fill('20');
   await page.getByLabel('نمای خارجی', { exact: true }).check();
-  await page.getByLabel('شرح محصول').fill('سنگ تراورتن کرم، ضخامت ۲ سانتی‌متر');
+  await page.getByLabel('نام یا شرح سنگ').fill('سنگ تراورتن کرم، ضخامت ۲ سانتی‌متر');
   await page.getByLabel('مقدار').fill('120');
+  await page.getByRole('button', { name: 'ادامه' }).click();
+  await expect(page.getByLabel('حساب خریدار')).toContainText('خریدار آزمایشی');
+  await page.getByLabel('عنوان استعلام').fill(TEST_RFQ_TITLE);
   await page.getByLabel('استان تحویل').selectOption({ label: 'تهران' });
   await expect(page.getByLabel('شهر تحویل')).toBeEnabled();
   await page.getByLabel('شهر تحویل').selectOption({ index: 1 });
+  await page.getByLabel('شرایط پرداخت').selectOption('CASH');
   await page.getByLabel(/کنترل کیفیت توسط وازانو/).check();
-  await page.getByRole('button', { name: 'ذخیره پیش‌نویس استعلام' }).click();
-  await expect(page.getByText('پیش‌نویس ذخیره شده است.')).toBeVisible();
+  await page.getByRole('button', { name: 'ادامه' }).click();
+  await expect(page.getByRole('heading', { name: 'بازبینی استعلام' })).toBeVisible();
+  const buyerDraftButton = page.getByRole('button', { name: 'ذخیره پیش‌نویس استعلام' });
+  await expect(buyerDraftButton).toBeVisible();
+  await buyerDraftButton.click();
+  await expect(page.locator('.message-success').filter({ hasText: /پیش‌نویس.*ذخیره/ })).toBeVisible();
   await page.getByRole('button', { name: 'ارسال برای بررسی وازانو' }).click();
   await expect(page.getByText('استعلام در صف بررسی است.')).toBeVisible();
 

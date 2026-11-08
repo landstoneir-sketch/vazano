@@ -63,10 +63,10 @@ export function UserProfileForm() {
   return <form className="card form-grid" onSubmit={submit}>
     {error && <div className="message message-error full" role="alert">{error}</div>}
     {message && <div className="message message-success full" role="status">{message}</div>}
-    <label className="form-field"><span>شماره موبایل تأییدشده</span><input dir="ltr" value={profile?.mobile ?? ''} disabled /></label>
-    <label className="form-field"><span>نام</span><input autoComplete="given-name" minLength={2} maxLength={80} value={firstName} onChange={(event) => setFirstName(event.target.value)} /></label>
-    <label className="form-field"><span>نام خانوادگی</span><input autoComplete="family-name" minLength={2} maxLength={80} value={lastName} onChange={(event) => setLastName(event.target.value)} /></label>
-    <label className="form-field"><span>ایمیل</span><input dir="ltr" type="email" autoComplete="email" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" /></label>
+    <label className="form-field"><span>شماره موبایل تأییدشده</span><input type="tel" dir="ltr" value={profile?.mobile ?? ''} disabled /></label>
+    <label className="form-field"><span>نام</span><input autoComplete="given-name" minLength={2} maxLength={80} value={firstName} onChange={(event) => setFirstName(event.target.value)} placeholder="مثال: علی" /></label>
+    <label className="form-field"><span>نام خانوادگی</span><input autoComplete="family-name" minLength={2} maxLength={80} value={lastName} onChange={(event) => setLastName(event.target.value)} placeholder="مثال: رضایی" /></label>
+    <label className="form-field"><span>ایمیل</span><input dir="ltr" type="email" autoComplete="email" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} placeholder="مثال: name@example.com" /></label>
     <p className="muted full">تغییر شماره موبایل به احراز مجدد نیاز دارد و در نسخه بعدی از مسیر امن جداگانه ارائه می‌شود.</p>
     <div className="actions full">
       <button className="button button-primary" disabled={busy || !profile}>{busy ? 'در حال ذخیره…' : 'ذخیره اطلاعات'}</button>
