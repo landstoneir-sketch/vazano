@@ -51,10 +51,11 @@ export function AccountNavigation() {
 
   return (
     <span className="nav-account">
-      <Link href="/dashboard">داشبورد</Link>
+      <Link href="/dashboard" prefetch={false}>داشبورد</Link>
+      <Link href="/dashboard/rfqs" prefetch={false}>درخواست‌ها</Link>
       {hasSupplierArea && <Link href="/supplier">فروشنده</Link>}
-      <Link href={'/messages' as Route}>پیام‌ها</Link>
-      <Link href="/notifications">اعلان‌ها</Link>
+      <Link href={'/messages' as Route} prefetch={false}>پیام‌ها</Link>
+      <Link href="/notifications" prefetch={false}>اعلان‌ها</Link>
       {managementLinks.length > 0 && <details className="nav-management">
         <summary>مدیریت</summary>
         <span className="nav-management-panel" aria-label="بخش‌های مدیریتی">

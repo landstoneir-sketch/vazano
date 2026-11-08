@@ -1,161 +1,130 @@
+import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
+import { HomeRfqSlider } from './home-rfq-slider';
+import styles from './home.module.css';
 
-const sampleRfqs = [
-  {
-    code: 'نمونه ۰۱', status: 'در حال دریافت پیشنهاد', tone: 'receiving', progress: 2,
-    title: 'تراورتن عباس‌آباد برای نمای مجتمع مسکونی',
-    product: '۴۰ طولی · ضخامت ۲ سانتی‌متر · سابیده · کرم روشن کم‌موج',
-    quantity: '۱٬۸۵۰ مترمربع', destination: 'تهران، منطقه ۴', delivery: 'تحویل طی ۲۵ روز',
-    invited: '۱۲ تأمین‌کننده مرتبط', responses: '۴ پیشنهاد ثبت‌شده',
-    responseLines: ['۳ پیشنهاد مطابق مشخصات اصلی', '۱ پیشنهاد جایگزین با تراورتن آتشکوه', 'اختلاف قیمت هم‌شرط‌ها: حدود ۹٪'],
-    buyerAction: '۲ روز تا پایان مهلت؛ سپس مقایسه پیشنهادها',
-  },
-  {
-    code: 'نمونه ۰۲', status: 'نیازمند پاسخ فروشنده', tone: 'waiting', progress: 2,
-    title: 'گرانیت نهبندان فلیم برای محوطه مجتمع تجاری',
-    product: '۴۰×۴۰ · ضخامت ۳ سانتی‌متر · فلیم · طوسی روشن',
-    quantity: '۳٬۲۰۰ مترمربع', destination: 'مشهد', delivery: 'تحویل مرحله‌ای در ۳ محموله',
-    invited: '۸ کارخانه واجد شرایط', responses: '۲ پاسخ و ۱ پیش‌نویس',
-    responseLines: ['یک پیشنهاد تحویل درب پروژه', 'یک پیشنهاد تحویل درب کارخانه', 'هزینه بارگیری و حمل باید جدا مقایسه شود'],
-    buyerAction: 'فروشندگان تا فردا برای تکمیل پیشنهاد فرصت دارند',
-  },
-  {
-    code: 'نمونه ۰۳', status: 'در حال مقایسه', tone: 'comparing', progress: 3,
-    title: 'اسلب چینی ازنا برای لابی هتل',
-    product: 'اسلب · ضخامت ۲ سانتی‌متر · صیقلی · زمینه سفید با رگه کنترل‌شده',
-    quantity: '۴۲۰ مترمربع', destination: 'جزیره کیش', delivery: 'نمونه و چیدمان اولیه الزامی',
-    invited: '۶ تأمین‌کننده تخصصی اسلب', responses: '۳ پیشنهاد قابل مقایسه',
-    responseLines: ['پیشنهاد اول: آماده‌سازی ۱۲ روزه', 'پیشنهاد دوم: ۶٪ بالاتر با مهلت پرداخت بیشتر', 'پیشنهاد سوم: کنترل کیفیت و بسته‌بندی ویژه'],
-    buyerAction: 'انتخاب پیشنهاد و درخواست کنترل کیفیت ۳٪',
-  },
-  {
-    code: 'نمونه ۰۴', status: 'در انتظار رفع ابهام', tone: 'clarification', progress: 1,
-    title: 'مرمریت لاشتر برای پله و پاگرد ساختمان اداری',
-    product: 'پله ۳ سانتی‌متر · پرداخت هوند · پیشانی و قرنیز هماهنگ',
-    quantity: '۶۸۰ عدد پله', destination: 'شیراز', delivery: 'همراه با نصب',
-    invited: '۵ سنگبری و مجری نصب', responses: '۲ پرسش فنی دریافت‌شده',
-    responseLines: ['ابعاد دقیق شمشیری راه‌پله هنوز پیوست نشده', 'نوع لبه و ابزار پله باید تأیید شود', 'مهلت پاسخ پس از رفع ابهام تمدید می‌شود'],
-    buyerAction: 'خریدار باید نقشه پله و نوع ابزار را تکمیل کند',
-  },
-  {
-    code: 'نمونه ۰۵', status: 'فروشنده منتخب', tone: 'selected', progress: 4,
-    title: 'سنگ مرمر سبز برای دیوار شاخص ویلای مسکونی',
-    product: 'اسلب بوک‌مچ · ضخامت ۲ سانتی‌متر · صیقلی',
-    quantity: '۱۲۰ مترمربع', destination: 'رامسر', delivery: 'بازدید و تأیید چیدمان پیش از برش',
-    invited: '۷ تأمین‌کننده سنگ لوکس', responses: '۵ پیشنهاد دریافت‌شده',
-    responseLines: ['فروشنده بر اساس کیفیت نمونه و زمان تحویل انتخاب شد', 'کمترین قیمت، پیشنهاد منتخب نبود', 'درخواست قرارداد و کنترل کیفیت ثبت شده است'],
-    buyerAction: 'در انتظار هماهنگی بازدید و تأیید نمونه',
-  },
-  {
-    code: 'نمونه ۰۶', status: 'تکمیل‌شده', tone: 'completed', progress: 4,
-    title: 'بازالت کوبیک برای محوطه‌سازی مجموعه گردشگری',
-    product: 'کوبیک ۱۰×۱۰×۵ · سطح گیوتین · رنگ خاکستری تیره',
-    quantity: '۹۵۰ مترمربع', destination: 'تبریز', delivery: 'تحویل درب پروژه؛ نصب نیاز نیست',
-    invited: '۹ تأمین‌کننده منطقه‌ای', responses: '۴ پیشنهاد و یک انتخاب نهایی',
-    responseLines: ['پیشنهاد منتخب ۱۱٪ پایین‌تر از گران‌ترین پیشنهاد هم‌شرط بود', 'تحویل در دو مرحله انجام شد', 'خریدار ارزیابی تعامل را ثبت کرده است'],
-    buyerAction: 'سوابق، پیام‌ها و پیشنهادها در حساب محفوظ است',
-  },
+export const metadata: Metadata = {
+  title: 'بازار هوشمند استعلام مصالح ساختمانی',
+  description: 'درخواست خرید مصالح را دقیق ثبت کنید و پیشنهاد تأمین‌کنندگان مرتبط را در یک مسیر روشن مقایسه کنید.',
+};
+
+const categories = [
+  { name: 'سنگ طبیعی', description: 'تراورتن، مرمریت، گرانیت، چینی، مرمر و خانواده‌های تخصصی سنگ', position: '0% 0%', active: true },
+  { name: 'سیمان و بتن', description: 'سیمان، بتن آماده، قطعات پیش‌ساخته و افزودنی‌های مرتبط', position: '33.333% 0%', active: false },
+  { name: 'آجر و بلوک', description: 'آجر نما، سفال، بلوک سیمانی و مصالح بنایی پروژه', position: '66.666% 0%', active: false },
+  { name: 'کاشی و سرامیک', description: 'محصولات کف و دیوار، پرسلان و ملزومات نصب', position: '100% 0%', active: false },
+  { name: 'آهن و فولاد', description: 'میلگرد، تیرآهن، ورق، پروفیل و مقاطع سازه‌ای', position: '0% 100%', active: false },
+  { name: 'چوب و صفحات', description: 'چوب ساختمانی، صفحات مهندسی‌شده و فرآورده‌های چوبی', position: '33.333% 100%', active: false },
+  { name: 'عایق و شیمی ساختمان', description: 'عایق حرارتی و رطوبتی، چسب، ملات و مواد تکمیلی', position: '66.666% 100%', active: false },
+  { name: 'لوله و تأسیسات', description: 'لوله، اتصالات، کانال و تجهیزات پایه تأسیساتی', position: '100% 100%', active: false },
+] as const;
+
+const faqs = [
+  'آیا ثبت درخواست خرید هزینه دارد؟',
+  'در حال حاضر کدام دسته مصالح فعال است؟',
+  'درخواست من برای چه تأمین‌کنندگانی ارسال می‌شود؟',
+  'اطلاعات پیش‌نویس هنگام ورود حفظ می‌شود؟',
+  'فروشنده چگونه به فرصت‌ها دسترسی پیدا می‌کند؟',
 ] as const;
 
 export default function HomePage() {
   return (
-    <>
-      <section className="hero-shell">
-        <div className="hero-glow" aria-hidden="true" />
-        <div className="container hero">
-          <div className="hero-content">
-            <div className="eyebrow"><span aria-hidden="true">◆</span> بازار تخصصی استعلام مصالح ساختمانی</div>
-            <h1>خرید سنگ را از یک <span>استعلام دقیق</span> شروع کنید</h1>
-            <p className="hero-lead">نیاز پروژه را یک‌بار ثبت کنید؛ پیشنهاد تولیدکنندگان و فروشندگان واجد شرایط را در یک ساختار شفاف مقایسه کنید و مطمئن‌تر تصمیم بگیرید.</p>
-            <div className="actions">
-              <Link className="button button-primary" href="/login">ثبت استعلام رایگان <span aria-hidden="true">←</span></Link>
-              <Link className="button button-secondary" href="/how-it-works">ببینید چگونه کار می‌کند</Link>
+    <div className={styles.homePage}>
+      <section className={styles.hero}>
+        <div className={styles.container}>
+          <div className={styles.heroGrid}>
+            <div className={`${styles.glass} ${styles.videoShell}`} aria-label="پیش‌نمایش ویدئوی معرفی وازانو">
+              <div className={styles.videoFrame}>
+                <Image src="/home/video-poster-materials.png" alt="مجموعه‌ای از مصالح ساختمانی شامل سنگ، آجر، فولاد، چوب، عایق و لوله" fill priority sizes="(max-width: 980px) 100vw, 45vw" />
+                <div className={styles.videoTop}><span>ویدئوی معرفی وازانو</span><span>CC فارسی</span></div>
+                <Link className={styles.play} href="/how-it-works" aria-label="مشاهده نحوه کار وازانو" />
+                <div className={styles.videoCaption}><strong>از نیاز پروژه تا پیشنهاد قابل مقایسه</strong><span>معرفی کوتاه مسیر وازانو</span></div>
+              </div>
             </div>
-            <ul className="trust-points" aria-label="ویژگی‌های اصلی وازانو">
-              <li><span aria-hidden="true">✓</span> پوشش سراسر ایران</li>
-              <li><span aria-hidden="true">✓</span> رایگان برای خریدار</li>
-              <li><span aria-hidden="true">✓</span> مقایسه استاندارد پیشنهادها</li>
-            </ul>
-          </div>
-          <aside className="trust-card" aria-label="مسیر استعلام در وازانو">
-            <div className="trust-card-heading">
-              <span className="stone-symbol" aria-hidden="true"><i /><i /><i /></span>
-              <div><span className="muted">مسیر یک خرید مطمئن</span><strong>از نیاز تا انتخاب</strong></div>
+
+            <div className={styles.heroCopy}>
+              <div className={styles.eyebrow}>بازار هوشمند استعلام مصالح ساختمانی</div>
+              <h1>نیاز پروژه را دقیق ثبت کنید.<span>پیشنهادها را روشن مقایسه کنید.</span></h1>
+              <p>وازانو درخواست خرید مصالح را ساختاریافته می‌کند، آن را به تأمین‌کنندگان مرتبط می‌رساند و شرایط قیمت، حمل، زمان تحویل و پرداخت را در یک مسیر قابل پیگیری کنار هم قرار می‌دهد.</p>
+              <div className={styles.heroActions}>
+                <Link className={`${styles.button} ${styles.buttonPrimary}`} href="/dashboard/rfqs/new">شروع درخواست خرید</Link>
+                <Link className={`${styles.button} ${styles.buttonGhost}`} href="/plans">برای تأمین‌کنندگان</Link>
+              </div>
+              <div className={styles.microNote}><span>رایگان برای خریدار</span><span>ورود امن با پیامک</span><span>نگهداری سوابق در حساب</span></div>
             </div>
-            <ol className="journey-list">
-              <li><b>۱</b><div><strong>مشخصات پروژه</strong><span>نوع سنگ، مقدار، ابعاد و زمان تحویل</span></div></li>
-              <li><b>۲</b><div><strong>پیشنهادهای مرتبط</strong><span>دریافت قیمت از تأمین‌کنندگان واجد شرایط</span></div></li>
-              <li><b>۳</b><div><strong>مقایسه و انتخاب</strong><span>قیمت، تحویل و شرایط پرداخت در یک نگاه</span></div></li>
-            </ol>
-            <div className="trust-note"><span aria-hidden="true">●</span> اطلاعات تماس و پروژه تحت کنترل شماست.</div>
-          </aside>
+          </div>
+
+          <HomeRfqSlider />
         </div>
       </section>
 
-      <section className="stone-coverage" aria-label="گروه‌های سنگ تحت پوشش">
-        <div className="container coverage-content">
-          <strong>پوشش تخصصی سنگ طبیعی</strong>
-          <ul><li>تراورتن</li><li>مرمریت</li><li>گرانیت</li><li>چینی و کریستال</li><li>مرمر</li><li>بازالت و آندزیت</li></ul>
-        </div>
-      </section>
-
-      <section className="sample-market-section" aria-labelledby="sample-market-title">
-        <div className="container">
-          <div className="section-heading sample-market-heading">
-            <div><span className="eyebrow">نمای عملی فرایند وازانو</span><h2 id="sample-market-title">استعلام‌های نمونه؛ از ثبت نیاز تا انتخاب فروشنده</h2></div>
-            <p>این اطلاعات ساختگی اما نزدیک به سناریوهای واقعی بازار سنگ هستند. قیمت روز یا پیشنهاد تجاری محسوب نمی‌شوند.</p>
+      <section className={styles.taxonomySection} id="categories">
+        <div className={styles.container}>
+          <div className={styles.sectionHead}>
+            <div className={styles.eyebrow}>طبقه‌بندی بازار وازانو</div>
+            <h2>یک بازار برای همه مصالح؛<br />فعالیت از سنگ طبیعی آغاز شده است</h2>
+            <p>معماری محصول برای توسعه به خانواده‌های مختلف مصالح آماده است. در نسخه فعلی، فقط سنگ طبیعی قابل استعلام است و سایر دسته‌ها به‌صورت شفاف در وضعیت «به‌زودی» نمایش داده می‌شوند.</p>
           </div>
-
-          <ol className="sample-process" aria-label="مراحل پاسخ به استعلام">
-            <li><b>۱</b><span><strong>ثبت نیاز</strong><small>مشخصات، مقدار و مقصد</small></span></li>
-            <li><b>۲</b><span><strong>دریافت پاسخ</strong><small>تأمین‌کنندگان مرتبط</small></span></li>
-            <li><b>۳</b><span><strong>مقایسه</strong><small>قیمت و شرایط هم‌سطح</small></span></li>
-            <li><b>۴</b><span><strong>انتخاب</strong><small>ثبت نتیجه و خدمات تکمیلی</small></span></li>
-          </ol>
-
-          <div className="sample-rfq-grid">
-            {sampleRfqs.map((rfq) => <article className="sample-rfq-card" key={rfq.code}>
-              <header><span className="sample-code">{rfq.code}</span><span className={`sample-status sample-status-${rfq.tone}`}>{rfq.status}</span></header>
-              <h3>{rfq.title}</h3>
-              <p className="sample-product">{rfq.product}</p>
-              <dl className="sample-rfq-facts">
-                <div><dt>مقدار</dt><dd>{rfq.quantity}</dd></div>
-                <div><dt>مقصد</dt><dd>{rfq.destination}</dd></div>
-                <div><dt>شرایط تحویل</dt><dd>{rfq.delivery}</dd></div>
-              </dl>
-              <div className={`sample-progress sample-progress-${rfq.progress}`} aria-label={`مرحله ${rfq.progress.toLocaleString('fa-IR')} از ۴`}><span /></div>
-              <div className="sample-response-summary"><div><span>توزیع</span><strong>{rfq.invited}</strong></div><div><span>پاسخ‌ها</span><strong>{rfq.responses}</strong></div></div>
-              <details className="sample-response-details">
-                <summary>جزئیات وضعیت پاسخ‌ها</summary>
-                <ul>{rfq.responseLines.map((line) => <li key={line}>{line}</li>)}</ul>
-              </details>
-              <p className="sample-next-action"><b>اقدام بعدی:</b> {rfq.buyerAction}</p>
-            </article>)}
-          </div>
-
-          <div className="sample-role-guide">
-            <div><span className="eyebrow">تجربه خریدار</span><h3>پیشنهادهای هم‌شرط را کنار هم ببینید</h3><p>مبلغ نهایی، زمان آماده‌سازی، حمل، مالیات، شرایط پرداخت و پیشنهاد جایگزین جدا نمایش داده می‌شوند.</p><Link className="button button-primary" href="/login">ثبت استعلام رایگان</Link></div>
-            <div><span className="eyebrow">تجربه فروشنده</span><h3>فقط به فرصت‌های مرتبط پاسخ دهید</h3><p>مشخصات فنی و مهلت را بررسی کنید، قیمت را به تفکیک بنویسید و در صورت نیاز محصول جایگزین پیشنهاد دهید.</p><Link className="button button-secondary" href="/plans">آشنایی با حساب فروشنده</Link></div>
+          <div className={styles.taxonomyNote}><b>راهنمای وضعیت:</b><span>کارت طلایی «فعال» قابل انتخاب است. کارت‌های کم‌رنگ مسیر توسعه محصول را نشان می‌دهند و فعلاً اقدام ندارند.</span></div>
+          <div className={styles.taxonomyGrid}>
+            {categories.map((category) => (
+              <article className={`${styles.taxCard} ${category.active ? styles.activeTaxCard : ''}`} key={category.name}>
+                <div className={styles.taxArt} style={{ backgroundPosition: category.position }}><span className={styles.taxStatus}>{category.active ? 'فعال' : 'به‌زودی'}</span></div>
+                <div className={styles.taxBody}>
+                  <h3>{category.name}</h3><p>{category.description}</p>
+                  {category.active ? <Link className={styles.taxLink} href="/dashboard/rfqs/new">ثبت استعلام سنگ ←</Link> : <span className={styles.taxLink}>در برنامه توسعه</span>}
+                </div>
+              </article>
+            ))}
           </div>
         </div>
       </section>
 
-      <section className="container benefits-section" aria-labelledby="benefits-title">
-        <div className="section-heading">
-          <div><span className="eyebrow">شفافیت در فرایند خرید</span><h2 id="benefits-title">کمتر پیگیری کنید، دقیق‌تر انتخاب کنید</h2></div>
-          <p>وازانو گفت‌وگوهای پراکنده و قیمت‌های غیرقابل‌مقایسه را به یک فرایند روشن و قابل پیگیری تبدیل می‌کند.</p>
-        </div>
-        <div className="feature-grid" aria-label="مزایای وازانو">
-          <article className="card feature-card"><span className="feature-number">۰۱</span><h3>درخواست ساختاریافته</h3><p>مشخصات فنی، مقدار، ابعاد، فایل‌ها و شرایط خرید را دقیق و یکجا ثبت کنید.</p></article>
-          <article className="card feature-card"><span className="feature-number">۰۲</span><h3>توزیع هدفمند</h3><p>استعلام برای تأمین‌کنندگانی ارسال می‌شود که با محصول و محدوده پروژه تناسب دارند.</p></article>
-          <article className="card feature-card"><span className="feature-number">۰۳</span><h3>مقایسه قابل اتکا</h3><p>قیمت، زمان تحویل، مالیات، شرایط پرداخت و جزئیات پیشنهادها را کنار هم ببینید.</p></article>
+      <section className={styles.process} id="how">
+        <div className={styles.container}>
+          <div className={styles.sectionHead}>
+            <div className={styles.eyebrow}>مسیر واقعی محصول</div>
+            <h2>ثبت نیاز تا انتخاب پیشنهاد،<br />در چهار گام روشن</h2>
+            <p>منطق صفحه با جریان فعلی سامانه هماهنگ است: انتخاب حوزه و دسته، تکمیل مشخصات، بازبینی و انتشار، سپس دریافت پیشنهادهای مرتبط.</p>
+          </div>
+          <div className={styles.processGrid}>
+            <article><b>۰۱</b><h3>نیاز را تعریف کنید</h3><p>حوزه خرید، عنوان پروژه، مقصد و زمان موردنیاز را مشخص کنید.</p></article>
+            <article><b>۰۲</b><h3>مشخصات محصول را کامل کنید</h3><p>دسته فعال، مقدار، واحد، ویژگی‌های فنی و فایل‌های پروژه را وارد کنید.</p></article>
+            <article><b>۰۳</b><h3>بازبینی و انتشار</h3><p>درخواست پس از تکمیل الزامات و کنترل‌های لازم برای شبکه تأمین منتشر می‌شود.</p></article>
+            <article><b>۰۴</b><h3>پیشنهادها را مقایسه کنید</h3><p>قیمت نهایی، آماده‌سازی، حمل، مالیات و شرایط پرداخت را کنار هم ببینید.</p></article>
+          </div>
+          <div className={styles.comparison}>
+            <div className={styles.comparisonCopy}><div className={styles.eyebrow}>مقایسه هم‌سطح</div><h3>جزئیات مالی و اجرایی، جدا و قابل بررسی</h3><p>عدد پایین‌تر همیشه پیشنهاد بهتر نیست. وازانو مؤلفه‌های اثرگذار را تفکیک می‌کند تا تصمیم براساس شرایط واقعی پروژه انجام شود.</p><Link className={`${styles.button} ${styles.buttonPrimary}`} href="/dashboard/rfqs/new">ساخت پیش‌نویس درخواست</Link></div>
+            <div className={styles.quoteTable} aria-label="نمونه مقایسه پیشنهادها">
+              <div className={`${styles.quoteRow} ${styles.quoteHeader}`}><span>تأمین‌کننده</span><span>مبلغ نهایی</span><span>تحویل</span><span>پرداخت</span></div>
+              <div className={styles.quoteRow}><strong>تأمین‌کننده الف</strong><span>۴۸۶ میلیون</span><span className={styles.best}>۱۲ روز</span><span>۴۰ / ۶۰</span></div>
+              <div className={styles.quoteRow}><strong>تأمین‌کننده ب</strong><span className={styles.best}>۴۷۲ میلیون</span><span>۱۸ روز</span><span>نقدی</span></div>
+              <div className={styles.quoteRow}><strong>تأمین‌کننده ج</strong><span>۴۹۸ میلیون</span><span>۱۴ روز</span><span className={styles.best}>۳۰ / ۷۰</span></div>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section className="container buyer-supplier-callout">
-        <div><span className="eyebrow">برای خریداران</span><h2>استعلام بعدی پروژه را حرفه‌ای مدیریت کنید</h2><p>ثبت درخواست برای خریدار رایگان است و سوابق پروژه و پیشنهادها همیشه در حساب شما باقی می‌ماند.</p><Link className="text-link" href="/login">شروع ثبت استعلام <span aria-hidden="true">←</span></Link></div>
-        <div><span className="eyebrow">برای تأمین‌کنندگان</span><h2>به درخواست‌های متناسب با توان خود پاسخ دهید</h2><p>پروفایل تخصصی بسازید، دسته‌های قابل تأمین را مشخص کنید و پیشنهادهای فروش را منظم پیگیری کنید.</p><Link className="text-link" href="/plans">مشاهده پلن‌های فروشندگان <span aria-hidden="true">←</span></Link></div>
+      <section className={styles.audienceSection} id="seller">
+        <div className={styles.container}>
+          <div className={styles.sectionHead}><div className={styles.eyebrow}>دو نقش، دو مسیر</div><h2>هر کاربر فقط آنچه برای تصمیمش لازم است می‌بیند</h2><p>صفحه نخست مشترک است، اما اقدام خریدار و تأمین‌کننده از همین بخش به دو جریان مستقل و سازگار با نقش‌های سامانه تقسیم می‌شود.</p></div>
+          <div className={styles.audienceGrid}>
+            <article className={`${styles.audienceCard} ${styles.buyerCard} ${styles.glass}`}><div><div className={styles.eyebrow}>برای خریداران</div><h3>درخواست خرید را دقیق آغاز کنید</h3><p>ابتدا اطلاعات پروژه را کامل کنید؛ ورود امن فقط در پایان و برای ذخیره و پیگیری درخواست انجام می‌شود.</p></div><div><div className={styles.checkList}><span>رایگان برای خریدار</span><span>سوابق قابل پیگیری</span><span>مقایسه روشن</span></div><Link className={`${styles.button} ${styles.buttonDark}`} href="/dashboard/rfqs/new">شروع ثبت درخواست</Link></div></article>
+            <article className={`${styles.audienceCard} ${styles.sellerCard}`}><div><div className={styles.eyebrow}>برای تأمین‌کنندگان</div><h3>فقط به فرصت‌های متناسب با توان خود پاسخ دهید</h3><p>پروفایل تخصصی، دسته‌های قابل تأمین و محدوده خدمت‌رسانی را مشخص کنید؛ سپس فرصت‌های مرتبط و پلن دسترسی را مدیریت کنید.</p></div><div><div className={styles.checkList}><span>احراز سازمان</span><span>فرصت‌های مرتبط</span><span>پیشنهاد تفکیکی</span></div><Link className={`${styles.button} ${styles.buttonDark}`} href="/plans">مشاهده پلن‌های فروشندگان</Link></div></article>
+          </div>
+        </div>
       </section>
-    </>
+
+      <section className={styles.supplierBand} id="suppliers">
+        <div className={styles.container}><div className={styles.supplierHead}><div><div className={styles.eyebrow}>شبکه تأمین</div><h2>تأمین‌کنندگان حاضر در وازانو</h2></div><p>لوگوها فقط پس از احراز حضور و دریافت مجوز انتشار نمایش داده می‌شوند.</p></div><div className={styles.logos} aria-label="جایگاه لوگوی تأمین‌کنندگان تأییدشده"><div><strong>لوگوی تأییدشده</strong></div><div>نام تأمین‌کننده</div><div>نام تأمین‌کننده</div><div>نام تأمین‌کننده</div><div>نام تأمین‌کننده</div><div>نام تأمین‌کننده</div></div></div>
+      </section>
+
+      <section className={styles.faqSection} id="faq">
+        <div className={`${styles.container} ${styles.faqWrap}`}><div className={styles.faqIntro}><div className={styles.eyebrow}>پیش از شروع</div><h2>پاسخ‌های روشن به پرسش‌های مهم</h2><p>هزینه، احراز، حریم اطلاعات و حدود مسئولیت وازانو باید پیش از اقدام قابل مشاهده باشند.</p><Link className={styles.taxLink} href="/faq">مشاهده همه پرسش‌ها ←</Link></div><div className={styles.faqList}>{faqs.map((question) => <Link className={styles.faqItem} href="/faq" key={question}><span>{question}</span><b aria-hidden="true">＋</b></Link>)}</div></div>
+      </section>
+
+      <section className={styles.finalCta} id="start"><div className={styles.container}><div className={`${styles.ctaBox} ${styles.glass}`}><div><div className={styles.eyebrow}>شروع مسیر خرید</div><h2>نیاز پروژه بعدی را همین حالا ساختاریافته کنید</h2><p>اطلاعات خرید را در فرم مرحله‌ای کامل کنید؛ برای ذخیره نهایی در پایان وارد می‌شوید.</p></div><Link className={`${styles.button} ${styles.buttonPrimary}`} href="/dashboard/rfqs/new">شروع درخواست خرید</Link></div></div></section>
+    </div>
   );
 }
