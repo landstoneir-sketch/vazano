@@ -21,6 +21,19 @@ describe('production environment validation', () => {
     expect(validateEnvironment({ ...productionEnvironment })).toEqual(productionEnvironment);
   });
 
+  it('accepts a PaaS production baseline without container image references', () => {
+    const paasEnvironment = { ...productionEnvironment, DEPLOYMENT_TARGET: 'paas', PORT: '3000' };
+    delete (paasEnvironment as Partial<typeof productionEnvironment>).VAZANO_API_IMAGE;
+    delete (paasEnvironment as Partial<typeof productionEnvironment>).VAZANO_WEB_IMAGE;
+    delete (paasEnvironment as Partial<typeof productionEnvironment>).VAZANO_MIGRATION_IMAGE;
+    delete (paasEnvironment as Partial<typeof productionEnvironment>).VAZANO_GATEWAY_IMAGE;
+    expect(() => validateEnvironment(paasEnvironment)).not.toThrow();
+  });
+
+  it.each(['invalid', 'serverless'])('rejects unsupported deployment target %s', (value) => {
+    expect(() => validateEnvironment({ ...productionEnvironment, DEPLOYMENT_TARGET: value })).toThrow(/DEPLOYMENT_TARGET/);
+  });
+
   it.each([
     ['OTP_DEBUG_ENABLED', 'true'],
     ['API_DOCS_ENABLED', 'true'],

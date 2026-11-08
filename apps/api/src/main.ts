@@ -42,7 +42,8 @@ async function bootstrap(): Promise<void> {
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalInterceptors(new ResponseInterceptor());
   app.enableShutdownHooks();
-  await app.listen(config.get<number>('API_PORT', 3001), '0.0.0.0');
+  const port = Number(config.get<string>('PORT') ?? config.get<string>('API_PORT') ?? '3001');
+  await app.listen(port, '0.0.0.0');
 }
 
 void bootstrap();

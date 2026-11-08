@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "scripts": {
-    "build": "nest build",
+    "build": "prisma generate && nest build",
     "start": "node dist/src/main.js",
     "start:dev": "nest start --watch",
     "lint": "eslint \"{src,prisma,test}/**/*.ts\"",
@@ -13,7 +13,7 @@
     "prisma:validate": "node --env-file-if-exists=../../.env ./node_modules/prisma/build/index.js validate",
     "prisma:migrate": "node --env-file-if-exists=../../.env ./node_modules/prisma/build/index.js migrate dev",
     "prisma:deploy": "node --env-file-if-exists=../../.env ./node_modules/prisma/build/index.js migrate deploy",
-    "prisma:seed": "node --env-file-if-exists=../../.env ../../node_modules/tsx/dist/cli.mjs prisma/seed.ts",
+    "prisma:seed": "node --env-file-if-exists=../../.env ./node_modules/tsx/dist/cli.mjs prisma/seed.ts",
     "qa:marketplace": "tsx prisma/qa-marketplace.ts",
     "legal:inspect": "node dist/src/operations/publish-legal-pages.js inspect",
     "legal:publish": "node dist/src/operations/publish-legal-pages.js publish"
