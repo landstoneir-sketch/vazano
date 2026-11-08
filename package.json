@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "prisma generate && nest build",
-    "start": "node dist/src/main.js",
+    "start": "prisma migrate deploy && prisma db seed && node dist/src/main.js",
     "start:dev": "nest start --watch",
     "lint": "eslint \"{src,prisma,test}/**/*.ts\"",
     "typecheck": "tsc --noEmit -p tsconfig.json",
