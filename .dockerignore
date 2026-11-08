@@ -2,6 +2,8 @@
 .github
 .next
 **/.next
+**/.next-e2e
+**/.turbo
 **/dist
 node_modules
 **/node_modules
