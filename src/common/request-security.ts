@@ -7,6 +7,7 @@ import { createClient } from 'redis';
 export type RequestWithId = Request & { requestId?: string };
 type RateLimitResult = { allowed: boolean; limit: number; remaining: number; retryAfterSeconds: number };
 type RateLimitConsumer = { consume(key: string, limit: number, windowMilliseconds: number): Promise<RateLimitResult> };
+type MemoryWindow = { count: number; expiresAt: number };
 
 const RATE_LIMIT_SCRIPT = `
 local current = redis.call('INCR', KEYS[1])
@@ -20,35 +21,46 @@ return { current, ttl }
 @Injectable()
 export class RedisRuntime implements OnApplicationBootstrap, OnApplicationShutdown, RateLimitConsumer {
   private readonly logger = new Logger(RedisRuntime.name);
-  private readonly client;
+  private readonly backend: 'redis' | 'memory';
+  private readonly client: ReturnType<typeof createClient> | null;
+  private readonly memoryWindows = new Map<string, MemoryWindow>();
   private lastErrorLogAt = 0;
 
   constructor(config: ConfigService) {
-    this.client = createClient({
-      url: config.getOrThrow<string>('REDIS_URL'),
-      disableOfflineQueue: true,
-      socket: { connectTimeout: 5_000, reconnectStrategy: (retries) => Math.min(250 * 2 ** retries, 5_000) },
-    });
-    this.client.on('error', () => this.logConnectionFailure());
+    this.backend = config.get<'redis' | 'memory'>('RATE_LIMIT_BACKEND', 'redis');
+    this.client = this.backend === 'redis'
+      ? createClient({
+          url: config.getOrThrow<string>('REDIS_URL'),
+          disableOfflineQueue: true,
+          socket: { connectTimeout: 5_000, reconnectStrategy: (retries) => Math.min(250 * 2 ** retries, 5_000) },
+        })
+      : null;
+    this.client?.on('error', () => this.logConnectionFailure());
   }
 
   async onApplicationBootstrap(): Promise<void> {
+    if (!this.client) {
+      this.logger.warn('Using the single-instance in-memory rate-limit backend.');
+      return;
+    }
     if (!this.client.isOpen) await this.client.connect();
     await this.ping();
   }
 
   async onApplicationShutdown(): Promise<void> {
-    if (!this.client.isOpen) return;
+    if (!this.client?.isOpen) return;
     try { await this.client.quit(); }
     catch { this.client.destroy(); }
   }
 
   async ping(): Promise<void> {
+    if (!this.client) return;
     const response = await this.client.ping();
     if (response !== 'PONG') throw new Error('Redis health check failed.');
   }
 
   async consume(key: string, limit: number, windowMilliseconds: number): Promise<RateLimitResult> {
+    if (!this.client) return this.consumeMemory(key, limit, windowMilliseconds);
     const result = await this.client.sendCommand(['EVAL', RATE_LIMIT_SCRIPT, '1', key, String(windowMilliseconds)]);
     if (!Array.isArray(result) || result.length < 2) throw new Error('Unexpected Redis rate-limit response.');
     const current = Number(result[0]);
@@ -58,6 +70,27 @@ export class RedisRuntime implements OnApplicationBootstrap, OnApplicationShutdo
       limit,
       remaining: Math.max(0, limit - current),
       retryAfterSeconds: Math.max(1, Math.ceil(ttlMilliseconds / 1_000)),
+    };
+  }
+
+  private consumeMemory(key: string, limit: number, windowMilliseconds: number): RateLimitResult {
+    const now = Date.now();
+    const existing = this.memoryWindows.get(key);
+    const window = !existing || existing.expiresAt <= now
+      ? { count: 1, expiresAt: now + windowMilliseconds }
+      : { count: existing.count + 1, expiresAt: existing.expiresAt };
+    this.memoryWindows.set(key, window);
+    if (this.memoryWindows.size > 10_000) {
+      for (const [entryKey, value] of this.memoryWindows) {
+        if (value.expiresAt <= now) this.memoryWindows.delete(entryKey);
+      }
+    }
+    const retryAfterSeconds = Math.max(1, Math.ceil((window.expiresAt - now) / 1_000));
+    return {
+      allowed: window.count <= limit,
+      limit,
+      remaining: Math.max(0, limit - window.count),
+      retryAfterSeconds,
     };
   }
 

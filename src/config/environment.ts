@@ -5,10 +5,15 @@ export function validateEnvironment(environment: Environment): Environment {
   if (!['development', 'test', 'production'].includes(nodeEnv)) throw new Error('NODE_ENV must be development, test or production.');
   const deploymentTarget = environment.DEPLOYMENT_TARGET ?? 'container';
   if (!['container', 'paas'].includes(deploymentTarget)) throw new Error('DEPLOYMENT_TARGET must be container or paas.');
+  const rateLimitBackend = environment.RATE_LIMIT_BACKEND ?? 'redis';
+  if (!['redis', 'memory'].includes(rateLimitBackend)) throw new Error('RATE_LIMIT_BACKEND must be redis or memory.');
+  if (rateLimitBackend === 'memory' && deploymentTarget !== 'paas') {
+    throw new Error('The memory rate-limit backend is only allowed for a single-instance PaaS deployment.');
+  }
   if (environment.API_PORT) requirePositiveInteger(environment, 'API_PORT');
   if (environment.PORT) requirePositiveInteger(environment, 'PORT');
   requireValue(environment, 'DATABASE_URL');
-  requireUrl(environment, 'REDIS_URL');
+  if (rateLimitBackend === 'redis') requireUrl(environment, 'REDIS_URL');
   requireUrl(environment, 'WEB_ORIGIN');
   requireValue(environment, 'OTP_PEPPER', 32);
   if (environment.OTP_IP_REQUESTS_PER_MINUTE) requirePositiveInteger(environment, 'OTP_IP_REQUESTS_PER_MINUTE');
@@ -44,7 +49,7 @@ export function validateEnvironment(environment: Environment): Environment {
       requireDigestImage(environment, 'VAZANO_GATEWAY_IMAGE');
     }
     assertNotPlaceholder('DATABASE_URL', environment.DATABASE_URL!);
-    assertNotPlaceholder('REDIS_URL', environment.REDIS_URL!);
+    if (rateLimitBackend === 'redis') assertNotPlaceholder('REDIS_URL', environment.REDIS_URL!);
     requireHttpsOrigin(environment, 'WEB_ORIGIN');
     if (environment.OTP_DEBUG_ENABLED === 'true') throw new Error('OTP debug mode must be disabled in production.');
     if (environment.API_DOCS_ENABLED === 'true') throw new Error('API documentation must be disabled in production.');
@@ -61,11 +66,16 @@ export function validateEnvironment(environment: Environment): Environment {
     requireProductionSecret(environment, 'OTP_PEPPER', 32);
     requireProductionSecret(environment, 'SMSIR_API_KEY', 16);
     requirePositiveInteger(environment, 'SMSIR_TEMPLATE_ID');
-    if (environment.FILE_SCAN_MODE !== 'clamav') throw new Error('FILE_SCAN_MODE must be clamav in production.');
+    const fileScanMode = environment.FILE_SCAN_MODE;
+    if (fileScanMode !== 'clamav' && !(deploymentTarget === 'paas' && fileScanMode === 'disabled')) {
+      throw new Error('FILE_SCAN_MODE must be clamav, except for an explicitly disabled single-instance PaaS deployment.');
+    }
     if (paymentProvider !== 'zarinpal') throw new Error('Mock payment provider must be disabled in production.');
-    requireValue(environment, 'CLAMAV_HOST');
-    requirePositiveInteger(environment, 'CLAMAV_PORT');
-    requirePositiveInteger(environment, 'CLAMAV_TIMEOUT_MS');
+    if (fileScanMode === 'clamav') {
+      requireValue(environment, 'CLAMAV_HOST');
+      requirePositiveInteger(environment, 'CLAMAV_PORT');
+      requirePositiveInteger(environment, 'CLAMAV_TIMEOUT_MS');
+    }
     requireValue(environment, 'S3_ENDPOINT');
     requireValue(environment, 'S3_BUCKET');
     requireProductionSecret(environment, 'S3_ACCESS_KEY');
