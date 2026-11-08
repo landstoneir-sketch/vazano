@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsDateString,
@@ -10,6 +11,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   MinLength,
   ValidateNested,
@@ -31,6 +33,7 @@ export class CreateRfqItemDto {
   title!: string;
 
   @IsNumberString()
+  @Matches(/^\d{1,9}(\.\d{1,3})?$/, { message: 'مقدار باید حداکثر ۹ رقم صحیح و ۳ رقم اعشار داشته باشد.' })
   quantity!: string;
 
   @IsObject()
@@ -64,6 +67,81 @@ export class CreateRfqDto {
   @MaxLength(2000)
   @IsOptional()
   description?: string;
+
+  @IsString()
+  @MaxLength(160)
+  @IsOptional()
+  projectName?: string;
+
+  @IsString()
+  @MaxLength(500)
+  @IsOptional()
+  deliveryAddress?: string;
+
+  @IsString()
+  @MaxLength(40)
+  @IsOptional()
+  paymentTerm?: string;
+
+  @IsString()
+  @MaxLength(500)
+  @IsOptional()
+  paymentDetail?: string;
+
+  @IsString()
+  @MaxLength(40)
+  @IsOptional()
+  deliveryTimeMode?: string;
+
+  @IsString()
+  @MaxLength(40)
+  @IsOptional()
+  deliverySchedule?: string;
+
+  @IsString()
+  @MaxLength(500)
+  @IsOptional()
+  deliveryScheduleDetail?: string;
+
+  @IsString()
+  @MaxLength(40)
+  @IsOptional()
+  shippingMode?: string;
+
+  @IsString()
+  @MaxLength(40)
+  @IsOptional()
+  transportCoordinator?: string;
+
+  @IsString()
+  @MaxLength(40)
+  @IsOptional()
+  freightPayer?: string;
+
+  @IsString()
+  @MaxLength(40)
+  @IsOptional()
+  unloadingPayer?: string;
+
+  @IsArray()
+  @ArrayMaxSize(12)
+  @IsString({ each: true })
+  @IsOptional()
+  purchaseQualityTerms?: string[];
+
+  @IsString()
+  @MaxLength(500)
+  @IsOptional()
+  purchaseQualityTermsOther?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  financialGuaranteeRequired?: boolean;
+
+  @IsString()
+  @MaxLength(500)
+  @IsOptional()
+  financialGuaranteeDetail?: string;
 
   @IsEnum(RfqEntryMethod)
   @IsOptional()
@@ -105,6 +183,7 @@ export class CreateRfqDto {
 
   @IsArray()
   @ArrayMinSize(1)
+  @ArrayMaxSize(20)
   @ValidateNested({ each: true })
   @Type(() => CreateRfqItemDto)
   items!: CreateRfqItemDto[];

@@ -28,7 +28,7 @@ describe('RfqsService item validation', () => {
   it.each(['0', '-1'])('rejects a non-positive RFQ quantity (%s)', async (quantity) => {
     const prisma = {
       category: { count: jest.fn().mockResolvedValue(1) },
-      unitOfMeasure: { count: jest.fn().mockResolvedValue(1) },
+      unitOfMeasure: { findMany: jest.fn().mockResolvedValue([{ id: 'unit-1', code: 'square-meter', decimalScale: 3 }]) },
       categoryAttribute: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const service = new RfqsService(prisma as never, {} as never, {} as never, {} as never);
@@ -40,9 +40,61 @@ describe('RfqsService item validation', () => {
       items: [{ categoryId: 'category-1', unitId: 'unit-1', title: 'سنگ تست', quantity }],
     })).rejects.toThrow('مقدار هر ردیف استعلام باید بیشتر از صفر باشد.');
   });
+
+  it('rejects fractional quantities for a piece unit', async () => {
+    const prisma = {
+      category: { count: jest.fn().mockResolvedValue(1) },
+      unitOfMeasure: { findMany: jest.fn().mockResolvedValue([{ id: 'unit-1', code: 'piece', decimalScale: 0 }]) },
+      categoryAttribute: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const service = new RfqsService(prisma as never, {} as never, {} as never, {} as never);
+    const internals = service as unknown as { validateItems: (domainId: string, input: unknown) => Promise<void> };
+
+    await expect(internals.validateItems('industry-1', {
+      items: [{ categoryId: 'category-1', unitId: 'unit-1', title: 'سنگ تست', quantity: '2.5' }],
+    })).rejects.toThrow('اعشار نامعتبر دارد');
+  });
+});
+
+describe('RfqsService multiline commercial terms', () => {
+  it('requires destination logistics responsibilities', () => {
+    const service = new RfqsService({} as never, {} as never, {} as never, {} as never);
+    const internals = service as unknown as { validateCommercialTerms: (input: unknown, requiredAt?: Date) => void };
+
+    expect(() => internals.validateCommercialTerms({ shippingMode: 'DESTINATION', deliveryAddress: 'تهران' }))
+      .toThrow('هماهنگ‌کننده حمل، پرداخت‌کننده کرایه و مسئول تخلیه را مشخص کنید.');
+  });
+
+  it('accepts a complete fixed and staged delivery request', () => {
+    const service = new RfqsService({} as never, {} as never, {} as never, {} as never);
+    const internals = service as unknown as { validateCommercialTerms: (input: unknown, requiredAt?: Date) => void };
+
+    expect(() => internals.validateCommercialTerms({
+      paymentTerm: 'ADVANCE', paymentDetail: '۳۰ درصد پیش‌پرداخت', deliveryTimeMode: 'FIXED',
+      deliverySchedule: 'STAGED', deliveryScheduleDetail: 'دو محموله', shippingMode: 'DESTINATION', deliveryAddress: 'تهران',
+      transportCoordinator: 'SELLER', freightPayer: 'BUYER', unloadingPayer: 'BUYER',
+      purchaseQualityTerms: ['SAMPLE_APPROVAL'], financialGuaranteeRequired: true, financialGuaranteeDetail: 'چک تضمین',
+    }, new Date('2027-01-01T00:00:00.000Z'))).not.toThrow();
+  });
 });
 
 describe('RfqsService commitment payment callbacks', () => {
+  const enabledCommitmentPolicy = {
+    get: jest.fn().mockResolvedValue({ buyerCommitment: { enabled: true, amountRial: 5_000_000n, policyVersion: 'TEST_V1' } }),
+  };
+
+  it('rejects a stale buyer payment when public buyer registration is free', async () => {
+    const payments = { create: jest.fn() };
+    const policySettings = {
+      get: jest.fn().mockResolvedValue({ buyerCommitment: { enabled: false, amountRial: 0n, policyVersion: 'FREE_V1' } }),
+    };
+    const service = new RfqsService({} as never, payments as never, {} as never, policySettings as never);
+
+    await expect(service.createCommitmentPayment({ mobile: '09120000000' } as never, 'rfq-1', 'free-key'))
+      .rejects.toThrow('ثبت استعلام برای خریدار رایگان است');
+    expect(payments.create).not.toHaveBeenCalled();
+  });
+
   it('does not verify a buyer commitment that is already terminal', async () => {
     const prisma = {
       paymentIntent: { findFirst: jest.fn().mockResolvedValue({
@@ -139,7 +191,7 @@ describe('RfqsService commitment payment callbacks', () => {
       }) },
     };
     const payments = { provider: 'TEST_GATEWAY', create: jest.fn() };
-    const service = new RfqsService(prisma as never, payments as never, { get: jest.fn() } as never, {} as never);
+    const service = new RfqsService(prisma as never, payments as never, { get: jest.fn() } as never, enabledCommitmentPolicy as never);
     (service as unknown as { findAuthorizedRfq: jest.Mock }).findAuthorizedRfq = jest.fn().mockResolvedValue({
       id: 'rfq-1', approvalStatus: 'APPROVED', commitmentStatus: 'REQUIRED', commitmentAmountRial: 5_000_000n,
       buyerOrganizationId: 'buyer-1', code: 'RFQ-1',
@@ -157,7 +209,7 @@ describe('RfqsService commitment payment callbacks', () => {
       }) },
     };
     const payments = { provider: 'TEST_GATEWAY', create: jest.fn() };
-    const service = new RfqsService(prisma as never, payments as never, { get: jest.fn().mockReturnValue('http://localhost:3001') } as never, {} as never);
+    const service = new RfqsService(prisma as never, payments as never, { get: jest.fn().mockReturnValue('http://localhost:3001') } as never, enabledCommitmentPolicy as never);
     (service as unknown as { findAuthorizedRfq: jest.Mock }).findAuthorizedRfq = jest.fn().mockResolvedValue({
       id: 'rfq-1', approvalStatus: 'APPROVED', commitmentStatus: 'REQUIRED', commitmentAmountRial: 5_000_000n,
       buyerOrganizationId: 'buyer-1', code: 'RFQ-1',

@@ -11,7 +11,7 @@ export type RfqPolicySettings = {
   qualityControl: { enabled: boolean; feeBps: number };
   operatorEntryEnabled: boolean;
   pilotManualReview: boolean;
-  buyerCommitment: { amountRial: bigint; policyVersion: string };
+  buyerCommitment: { enabled: boolean; amountRial: bigint; policyVersion: string };
 };
 
 const DEFAULT_POLICY: RfqPolicySettings = {
@@ -23,7 +23,7 @@ const DEFAULT_POLICY: RfqPolicySettings = {
   qualityControl: { enabled: true, feeBps: QUALITY_CONTROL_FEE_BPS },
   operatorEntryEnabled: true,
   pilotManualReview: true,
-  buyerCommitment: { amountRial: BUYER_COMMITMENT_AMOUNT_RIAL, policyVersion: BUYER_COMMITMENT_POLICY_VERSION },
+  buyerCommitment: { enabled: false, amountRial: BUYER_COMMITMENT_AMOUNT_RIAL, policyVersion: BUYER_COMMITMENT_POLICY_VERSION },
 };
 
 const POLICY_KEYS = [
@@ -36,6 +36,7 @@ const POLICY_KEYS = [
   'quality_control.fee_bps',
   'rfq.operator_entry_enabled',
   'rfq.pilot_manual_review',
+  'rfq.buyer_commitment_enabled',
   'rfq.buyer_commitment_amount_rial',
   'rfq.buyer_commitment_policy_version',
 ] as const;
@@ -64,6 +65,7 @@ export function resolveRfqPolicySettings(values: Record<string, unknown>): RfqPo
     qualityControlFeeBps: values['quality_control.fee_bps'] ?? DEFAULT_POLICY.qualityControl.feeBps,
     operatorEntryEnabled: values['rfq.operator_entry_enabled'] ?? DEFAULT_POLICY.operatorEntryEnabled,
     pilotManualReview: values['rfq.pilot_manual_review'] ?? DEFAULT_POLICY.pilotManualReview,
+    buyerCommitmentEnabled: values['rfq.buyer_commitment_enabled'] ?? DEFAULT_POLICY.buyerCommitment.enabled,
     buyerCommitmentAmountRial: values['rfq.buyer_commitment_amount_rial'] ?? Number(DEFAULT_POLICY.buyerCommitment.amountRial),
     buyerCommitmentPolicyVersion: values['rfq.buyer_commitment_policy_version'] ?? DEFAULT_POLICY.buyerCommitment.policyVersion,
   };
@@ -77,6 +79,7 @@ export function resolveRfqPolicySettings(values: Record<string, unknown>): RfqPo
   assertValidRfqPolicySetting('quality_control.fee_bps', merged.qualityControlFeeBps);
   assertValidRfqPolicySetting('rfq.operator_entry_enabled', merged.operatorEntryEnabled);
   assertValidRfqPolicySetting('rfq.pilot_manual_review', merged.pilotManualReview);
+  assertValidRfqPolicySetting('rfq.buyer_commitment_enabled', merged.buyerCommitmentEnabled);
   assertValidRfqPolicySetting('rfq.buyer_commitment_amount_rial', merged.buyerCommitmentAmountRial);
   assertValidRfqPolicySetting('rfq.buyer_commitment_policy_version', merged.buyerCommitmentPolicyVersion);
   if (merged.marketCoverageMode === 'SELECTED_PROVINCES' && (merged.marketCoverageProvinceCodes as string[]).length === 0) {
@@ -92,6 +95,7 @@ export function resolveRfqPolicySettings(values: Record<string, unknown>): RfqPo
     operatorEntryEnabled: merged.operatorEntryEnabled as boolean,
     pilotManualReview: merged.pilotManualReview as boolean,
     buyerCommitment: {
+      enabled: merged.buyerCommitmentEnabled as boolean,
       amountRial: BigInt(merged.buyerCommitmentAmountRial as number),
       policyVersion: merged.buyerCommitmentPolicyVersion as string,
     },
@@ -114,7 +118,7 @@ export function assertValidRfqPolicySetting(key: string, value: unknown): void {
   else if (key === 'platform.legal_role') {
     if (!['INFORMATION_INTERMEDIARY', 'MARKETPLACE_OPERATOR', 'CONTRACTING_AGENT'].includes(String(value))) throw new RangeError('نقش حقوقی پلتفرم معتبر نیست.');
   }
-  else if (['pricing.display_tax_inclusive', 'quality_control.enabled', 'rfq.operator_entry_enabled', 'rfq.pilot_manual_review'].includes(key)) {
+  else if (['pricing.display_tax_inclusive', 'quality_control.enabled', 'rfq.operator_entry_enabled', 'rfq.pilot_manual_review', 'rfq.buyer_commitment_enabled'].includes(key)) {
     if (typeof value !== 'boolean') throw new RangeError('مقدار این تنظیم باید فعال یا غیرفعال باشد.');
   }
   else if (key === 'quality_control.fee_bps') {

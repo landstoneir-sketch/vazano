@@ -106,6 +106,7 @@ export class RfqsService implements OnApplicationBootstrap, OnApplicationShutdow
       qualityControlFeeBps: policy.qualityControl.feeBps,
       operatorEntryEnabled: policy.operatorEntryEnabled,
       pilotManualReview: policy.pilotManualReview,
+      buyerCommitmentEnabled: policy.buyerCommitment.enabled,
       buyerCommitmentAmountRial: policy.buyerCommitment.amountRial.toString(),
     };
   }
@@ -398,6 +399,7 @@ export class RfqsService implements OnApplicationBootstrap, OnApplicationShutdow
     if (requiredAt && responseDeadline && responseDeadline >= requiredAt) {
       throw new BadRequestException('مهلت دریافت پیشنهاد باید پیش از زمان موردنیاز باشد.');
     }
+    this.validateCommercialTerms(input, requiredAt);
     const qualityControlRequest = await this.prisma.qualityControlRequest.findUnique({ where: { rfqId } });
     if (!input.qualityControlRequested && qualityControlRequest && qualityControlRequest.status !== 'REQUESTED') {
       throw new ConflictException('پس از شروع فرایند کنترل کیفیت، لغو آن فقط توسط پشتیبانی امکان‌پذیر است.');
@@ -416,6 +418,22 @@ export class RfqsService implements OnApplicationBootstrap, OnApplicationShutdow
           primaryDomainId: input.primaryDomainId,
           title: input.title,
           description: input.description === undefined ? rfq.description : input.description,
+          projectName: input.projectName,
+          deliveryAddress: input.deliveryAddress,
+          paymentTerm: input.paymentTerm,
+          paymentDetail: input.paymentDetail,
+          deliveryTimeMode: input.deliveryTimeMode,
+          deliverySchedule: input.deliverySchedule,
+          deliveryScheduleDetail: input.deliveryScheduleDetail,
+          shippingMode: input.shippingMode,
+          transportCoordinator: input.transportCoordinator,
+          freightPayer: input.freightPayer,
+          unloadingPayer: input.unloadingPayer,
+          purchaseQualityTerms: input.purchaseQualityTerms ?? [],
+          purchaseQualityTermsOther: input.purchaseQualityTermsOther,
+          financialGuaranteeRequired: input.financialGuaranteeRequired ?? false,
+          financialGuaranteeDetail: input.financialGuaranteeDetail,
+          formSchemaVersion: 2,
           entryMethod: input.entryMethod ?? rfq.entryMethod,
           deliveryProvinceId: deliveryLocation.provinceId,
           deliveryCityId: deliveryLocation.cityId,
@@ -578,6 +596,10 @@ export class RfqsService implements OnApplicationBootstrap, OnApplicationShutdow
   }
 
   async createCommitmentPayment(user: AuthenticatedUser, rfqId: string, idempotencyKey: string) {
+    const policy = await this.policySettings.get();
+    if (!policy.buyerCommitment.enabled) {
+      throw new ConflictException('ثبت استعلام برای خریدار رایگان است و پرداخت تعهد فعال نیست.');
+    }
     const rfq = await this.findAuthorizedRfq(user, rfqId);
     if (rfq.approvalStatus !== 'APPROVED' || rfq.commitmentStatus !== 'REQUIRED' || !rfq.commitmentAmountRial) {
       throw new ConflictException('این استعلام اکنون نیازمند ایجاد پرداخت تعهد نیست.');
@@ -738,11 +760,16 @@ export class RfqsService implements OnApplicationBootstrap, OnApplicationShutdow
     if (requiredAt && responseDeadline && responseDeadline >= requiredAt) {
       throw new BadRequestException('مهلت دریافت پیشنهاد باید پیش از زمان موردنیاز باشد.');
     }
+    this.validateCommercialTerms(input, requiredAt);
 
-    const previousPublishedCount = await this.prisma.rfq.count({
-      where: { buyerOrganizationId: input.buyerOrganizationId, lifecycleState: { in: ['PUBLISHED', 'CLOSED'] } },
-    });
-    const commitmentRequired = previousPublishedCount === 0;
+    const previousPublishedCount = policy.buyerCommitment.enabled && policy.buyerCommitment.amountRial > 0n
+      ? await this.prisma.rfq.count({
+        where: { buyerOrganizationId: input.buyerOrganizationId, lifecycleState: { in: ['PUBLISHED', 'CLOSED'] } },
+      })
+      : 0;
+    const commitmentRequired = policy.buyerCommitment.enabled
+      && policy.buyerCommitment.amountRial > 0n
+      && previousPublishedCount === 0;
     const code = `VZ-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${randomUUID().slice(0, 8).toUpperCase()}`;
 
     return this.prisma.$transaction(async (tx) => {
@@ -756,6 +783,22 @@ export class RfqsService implements OnApplicationBootstrap, OnApplicationShutdow
           primaryDomainId: input.primaryDomainId,
           title: input.title,
           description: input.description,
+          projectName: input.projectName,
+          deliveryAddress: input.deliveryAddress,
+          paymentTerm: input.paymentTerm,
+          paymentDetail: input.paymentDetail,
+          deliveryTimeMode: input.deliveryTimeMode,
+          deliverySchedule: input.deliverySchedule,
+          deliveryScheduleDetail: input.deliveryScheduleDetail,
+          shippingMode: input.shippingMode,
+          transportCoordinator: input.transportCoordinator,
+          freightPayer: input.freightPayer,
+          unloadingPayer: input.unloadingPayer,
+          purchaseQualityTerms: input.purchaseQualityTerms ?? [],
+          purchaseQualityTermsOther: input.purchaseQualityTermsOther,
+          financialGuaranteeRequired: input.financialGuaranteeRequired ?? false,
+          financialGuaranteeDetail: input.financialGuaranteeDetail,
+          formSchemaVersion: 2,
           entryMethod: input.entryMethod ?? 'STANDARD',
           source,
           manualReviewRequired: policy.pilotManualReview,
@@ -844,21 +887,51 @@ export class RfqsService implements OnApplicationBootstrap, OnApplicationShutdow
     const unitIds = [...new Set(input.items.map((item) => item.unitId))];
     const [categories, units, attributeBindings] = await Promise.all([
       this.prisma.category.count({ where: { id: { in: categoryIds }, industryId: primaryDomainId, isActive: true } }),
-      this.prisma.unitOfMeasure.count({ where: { id: { in: unitIds }, isActive: true } }),
+      this.prisma.unitOfMeasure.findMany({ where: { id: { in: unitIds }, isActive: true }, select: { id: true, code: true, decimalScale: true } }),
       this.prisma.categoryAttribute.findMany({
         where: { categoryId: { in: categoryIds }, attribute: { isActive: true } },
         include: { attribute: true },
       }),
     ]);
     if (categories !== categoryIds.length) throw new BadRequestException('یک یا چند دسته‌بندی نامعتبر است.');
-    if (units !== unitIds.length) throw new BadRequestException('یک یا چند واحد اندازه‌گیری نامعتبر است.');
+    if (units.length !== unitIds.length) throw new BadRequestException('یک یا چند واحد اندازه‌گیری نامعتبر است.');
+    const unitById = new Map(units.map((unit) => [unit.id, unit]));
 
     for (const item of input.items) {
       const quantity = new Prisma.Decimal(item.quantity);
       if (quantity.lte(0)) throw new BadRequestException('مقدار هر ردیف استعلام باید بیشتر از صفر باشد.');
+      if (quantity.gt('999999999.999')) throw new BadRequestException('مقدار هر ردیف از سقف مجاز بیشتر است.');
+      const unit = unitById.get(item.unitId);
+      if (!unit) throw new BadRequestException('واحد اندازه‌گیری ردیف معتبر نیست.');
+      if (quantity.decimalPlaces() > Math.min(unit.decimalScale, 3)) throw new BadRequestException(`مقدار واحد «${unit.code}» اعشار نامعتبر دارد.`);
       const bindings = attributeBindings.filter((binding) => binding.categoryId === item.categoryId);
       const specifications = item.specifications ?? {};
       assertValidProductSpecifications(specifications, bindings);
+    }
+  }
+
+  private validateCommercialTerms(input: CreateRfqDto, requiredAt?: Date | null): void {
+    const detailRequiredTerms = new Set(['ADVANCE', 'AFTER_DELIVERY', 'CHEQUE', 'BARTER']);
+    if (input.paymentTerm && detailRequiredTerms.has(input.paymentTerm) && !input.paymentDetail?.trim()) {
+      throw new BadRequestException('جزئیات شرایط پرداخت انتخاب‌شده را وارد کنید.');
+    }
+    if (input.deliveryTimeMode === 'FIXED' && !requiredAt) {
+      throw new BadRequestException('برای تحویل در تاریخ مشخص، تاریخ موردنیاز را وارد کنید.');
+    }
+    if (input.deliverySchedule === 'STAGED' && !input.deliveryScheduleDetail?.trim()) {
+      throw new BadRequestException('برنامه تحویل مرحله‌ای را توضیح دهید.');
+    }
+    if (input.shippingMode === 'DESTINATION') {
+      if (!input.deliveryAddress?.trim()) throw new BadRequestException('نشانی محل تحویل را وارد کنید.');
+      if (!input.transportCoordinator || !input.freightPayer || !input.unloadingPayer) {
+        throw new BadRequestException('هماهنگ‌کننده حمل، پرداخت‌کننده کرایه و مسئول تخلیه را مشخص کنید.');
+      }
+    }
+    if (input.purchaseQualityTerms?.includes('OTHER') && !input.purchaseQualityTermsOther?.trim()) {
+      throw new BadRequestException('شرط کنترل کیفیت «سایر» را توضیح دهید.');
+    }
+    if (input.financialGuaranteeRequired && !input.financialGuaranteeDetail?.trim()) {
+      throw new BadRequestException('نوع و شرایط تضمین مالی را توضیح دهید.');
     }
   }
 
