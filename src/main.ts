@@ -7,6 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { basename, resolve } from 'node:path';
+import type { Request, Response } from 'express';
 import { HttpExceptionFilter } from './common/http-exception.filter';
 import { ResponseInterceptor } from './common/response.interceptor';
 import { apiRateLimitGuard, RedisRuntime, requestContext, sessionOriginGuard } from './common/request-security';
@@ -36,6 +37,7 @@ async function bootstrap(): Promise<void> {
   app.use(helmet());
   app.use(cookieParser());
   const webOrigin = config.getOrThrow<string>('WEB_ORIGIN');
+  app.getHttpAdapter().getInstance().get('/', (_request: Request, response: Response) => response.redirect(302, webOrigin));
   app.use(sessionOriginGuard(webOrigin));
   app.enableCors({ origin: webOrigin, credentials: true });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
