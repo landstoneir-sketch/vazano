@@ -758,14 +758,22 @@ async function main(): Promise<void> {
     }
 
     if (!isProduction && process.env.SEED_DEMO_DATA !== 'false') {
+      const demoMobile = normalizeIranianMobile(process.env.SEED_DEMO_MOBILE ?? adminMobile);
+      const demoUser = demoMobile === user.mobile
+        ? user
+        : await prisma.user.upsert({
+          where: { mobile: demoMobile },
+          create: { mobile: demoMobile, mobileVerifiedAt: new Date() },
+          update: { status: 'ACTIVE', mobileVerifiedAt: new Date() },
+        });
       const buyer = await prisma.organization.upsert({
         where: { id: 'demo-buyer-organization' },
         create: { id: 'demo-buyer-organization', kind: 'BUYER', type: 'COMPANY', legalName: 'خریدار آزمایشی وازانو', displayName: 'خریدار آزمایشی', province: 'تهران', city: 'تهران', status: 'ACTIVE' },
         update: { status: 'ACTIVE' },
       });
       await prisma.organizationMember.upsert({
-        where: { organizationId_userId: { organizationId: buyer.id, userId: user.id } },
-        create: { organizationId: buyer.id, userId: user.id, role: 'BUYER_OWNER' },
+        where: { organizationId_userId: { organizationId: buyer.id, userId: demoUser.id } },
+        create: { organizationId: buyer.id, userId: demoUser.id, role: 'BUYER_OWNER' },
         update: { role: 'BUYER_OWNER', status: 'ACTIVE' },
       });
       const demoCategory = await prisma.category.findFirstOrThrow({ where: { parentId: naturalStone.id }, orderBy: { sortOrder: 'asc' } });
@@ -773,7 +781,7 @@ async function main(): Promise<void> {
       await prisma.rfq.upsert({
         where: { id: 'demo-historical-rfq' },
         create: {
-          id: 'demo-historical-rfq', code: 'VZ-DEMO-HISTORY', buyerOrganizationId: buyer.id, buyerContactUserId: user.id, createdByUserId: user.id,
+          id: 'demo-historical-rfq', code: 'VZ-DEMO-HISTORY', buyerOrganizationId: buyer.id, buyerContactUserId: demoUser.id, createdByUserId: demoUser.id,
           primaryDomainId: industry.id, title: 'سابقه آزمایشی تکمیل‌شده', lifecycleState: 'CLOSED', operationalStatus: 'COMPLETED', approvalStatus: 'APPROVED',
           source: 'PLATFORM_OPERATOR', manualReviewRequired: false, commitmentStatus: 'NOT_REQUIRED', displayPricesTaxInclusive: false, closedAt: new Date(),
           items: { create: { id: 'demo-historical-rfq-item', categoryId: demoCategory.id, unitId: demoUnit.id, title: 'ردیف آزمایشی سابقه', quantity: '1' } },
@@ -787,8 +795,8 @@ async function main(): Promise<void> {
         update: { status: 'ACTIVE' },
       });
       await prisma.organizationMember.upsert({
-        where: { organizationId_userId: { organizationId: supplier.id, userId: user.id } },
-        create: { organizationId: supplier.id, userId: user.id, role: 'SUPPLIER_OWNER' },
+        where: { organizationId_userId: { organizationId: supplier.id, userId: demoUser.id } },
+        create: { organizationId: supplier.id, userId: demoUser.id, role: 'SUPPLIER_OWNER' },
         update: { role: 'SUPPLIER_OWNER', status: 'ACTIVE' },
       });
       const supplierProfile = await prisma.supplierProfile.upsert({
